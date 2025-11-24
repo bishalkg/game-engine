@@ -1,0 +1,8 @@
+[
+{
+  "directory": "/Users/bishalgautam/VSCode_C++/game_engine/build",
+  "command": "/usr/bin/clang++  -I/opt/homebrew/opt/sdl3/include -g -std=gnu++2b -arch arm64 -o CMakeFiles/game_engine.dir/main.cpp.o -c /Users/bishalgautam/VSCode_C++/game_engine/main.cpp",
+  "file": "/Users/bishalgautam/VSCode_C++/game_engine/main.cpp",
+  "output": "CMakeFiles/game_engine.dir/main.cpp.o"
+}
+]

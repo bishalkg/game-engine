@@ -1,0 +1,3 @@
+/Users/bishalgautam/VSCode_C++/game_engine/build/CMakeFiles/game_engine.dir
+/Users/bishalgautam/VSCode_C++/game_engine/build/CMakeFiles/edit_cache.dir
+/Users/bishalgautam/VSCode_C++/game_engine/build/CMakeFiles/rebuild_cache.dir
