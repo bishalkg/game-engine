@@ -39,14 +39,21 @@ int main(int argc, char *argv[]) {
   // SDL_CreateWindow("SDL Game Engine",width, height, fullscreen ? SDL_WINDOW_FULLSCREEN : 0),
   // SDL_CreateRenderer(sdlstate.window, nullptr)
 
-  if (!SDL_CreateWindowAndRenderer("SDL Game Engine", width, height, fullscreen ? SDL_WINDOW_FULLSCREEN : 0, &sdlstate.window, &sdlstate.renderer)) {
+  if (!SDL_CreateWindowAndRenderer("SDL Game Engine", width, height, fullscreen ? SDL_WINDOW_FULLSCREEN : SDL_WINDOW_RESIZABLE, &sdlstate.window, &sdlstate.renderer)) {
 
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL init error", SDL_GetError(), nullptr);
 
     cleanup(sdlstate);
   }
 
+  // configure presentation
+  int logW = 640;
+  int logH = 320;
+  SDL_SetRenderLogicalPresentation(sdlstate.renderer, logW, logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
+  // load game assets
+  SDL_Texture *idleTex = IMG_LoadTexture(sdlstate.renderer, "data/idle.png"); // textures on gpu, surface in cpu memory (we can access)
+  SDL_SetTextureScaleMode(idleTex, SDL_SCALEMODE_NEAREST); // scale so pixels aren't blended
 
   // start the game loop
   bool running = true;
@@ -63,14 +70,31 @@ int main(int argc, char *argv[]) {
     }
 
     // perform drawing commands
-    SDL_SetRenderDrawColor(sdlstate.renderer, 255, 255, 255, 255);
+    SDL_SetRenderDrawColor(sdlstate.renderer, 20, 10, 30, 255);
     SDL_RenderClear(sdlstate.renderer);
+
+    SDL_FRect src{
+      .x = 0,
+      .y = 0,
+      .w = 32,
+      .h = 32
+    };
+
+    SDL_FRect dst{
+      .x = 0,
+      .y = 0,
+      .w = 32,
+      .h = 32,
+    };
+
+    SDL_RenderTexture(sdlstate.renderer, idleTex, &src, &dst);
 
     // swap buffer
     SDL_RenderPresent(sdlstate.renderer);
 
   };
 
+  SDL_DestroyTexture(idleTex);
   cleanup(sdlstate); // Clean up SDL
 
   std::cout << "Exited cleanly." << std::endl;
