@@ -1,1 +1,0 @@
-/usr/bin/clang++ -g -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/game_engine.dir/main.cpp.o -o game_engine  -Wl,-rpath,/opt/homebrew/opt/sdl3/lib /opt/homebrew/opt/sdl3/lib/libSDL3.0.dylib
