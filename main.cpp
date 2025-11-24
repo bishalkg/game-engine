@@ -4,6 +4,7 @@
 #include <format>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <SDL3_image/SDL_image.h>
 
 using namespace std;
 
@@ -22,7 +23,7 @@ void cleanup(SDLState &state) {
 
 int main(int argc, char *argv[]) {
 
-  if (!SDL_Init(SDL_INIT_VIDEO)) {
+  if (!SDL_Init(SDL_INIT_VIDEO)) { // later to add audio we'll also need SDL_INIT_AUDIO
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL Init Error", "Failed to initialize SDL.", nullptr);
     return 1;
   };
@@ -33,16 +34,18 @@ int main(int argc, char *argv[]) {
   bool fullscreen = false;
 
   // create SDL state
-  SDLState sdlstate{
-    SDL_CreateWindow("SDL Game Engine",width, height, fullscreen ? SDL_WINDOW_FULLSCREEN : 0),
-    SDL_CreateRenderer(sdlstate.window, nullptr)
-  };
+  SDLState sdlstate;
 
-  if (!sdlstate.window) {
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Window Creation Error", "Failed to create SDL window.", nullptr);
+  // SDL_CreateWindow("SDL Game Engine",width, height, fullscreen ? SDL_WINDOW_FULLSCREEN : 0),
+  // SDL_CreateRenderer(sdlstate.window, nullptr)
+
+  if (!SDL_CreateWindowAndRenderer("SDL Game Engine", width, height, fullscreen ? SDL_WINDOW_FULLSCREEN : 0, &sdlstate.window, &sdlstate.renderer)) {
+
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL init error", SDL_GetError(), nullptr);
+
     cleanup(sdlstate);
-    return 1;
   }
+
 
 
   // start the game loop
@@ -58,8 +61,15 @@ int main(int argc, char *argv[]) {
         }
       }
     }
-  }
 
+    // perform drawing commands
+    SDL_SetRenderDrawColor(sdlstate.renderer, 255, 255, 255, 255);
+    SDL_RenderClear(sdlstate.renderer);
+
+    // swap buffer
+    SDL_RenderPresent(sdlstate.renderer);
+
+  };
 
   cleanup(sdlstate); // Clean up SDL
 
