@@ -66,3 +66,7 @@
 
 # debug information files
 *.dwo
+
+
+/data/idle_*
+/data/move*

@@ -7,7 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 find_package(SDL3 REQUIRED CONFIG)
 find_package(SDL3_image REQUIRED CONFIG)
+find_package(glm REQUIRED CONFIG)
 
 add_executable(game_engine main.cpp)
-target_link_libraries(game_engine PRIVATE SDL3::SDL3 SDL3_image::SDL3_image) # add sdl3 and sdl3_image to the compiler header link paths
+target_link_libraries(game_engine PRIVATE SDL3::SDL3 SDL3_image::SDL3_image glm::glm) # add sdl3 and sdl3_image to the compiler header link paths
 target_compile_features(game_engine PRIVATE cxx_std_23)
