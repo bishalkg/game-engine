@@ -19,6 +19,9 @@ struct SDLState {
   SDL_Window *window;
   SDL_Renderer *renderer;
   int width, height, logW, logH;
+  const bool *keys;
+
+  SDLState() : keys(SDL_GetKeyboardState(nullptr)) {}
 };
 
 // sips -z 42 42 data/idle_marie.png --out data/idle_marie_42.png --> resize
@@ -38,9 +41,10 @@ struct GameState {
 
 struct Resources {
   const int ANIM_PLAYER_IDLE = 0;
+  const int ANIM_PLAYER_RUN = 1;
   std::vector<Animation> playerAnims;
   std::vector<SDL_Texture*> textures;
-  SDL_Texture *texIdle;
+  SDL_Texture *texIdle, *texRun;
 
   SDL_Texture *loadTexture(SDL_Renderer *renderer, const std::string &filepath){
 
@@ -54,8 +58,12 @@ struct Resources {
   void load(SDLState &state){
     playerAnims.resize(5); // not reserve
     playerAnims[ANIM_PLAYER_IDLE] = Animation(8, 1.6f); // 8 frames in 1.6 sec
+    playerAnims[ANIM_PLAYER_RUN] = Animation(4, 0.5f);
 
     texIdle = loadTexture(state.renderer,  "data/idle.png");
+    // texIdle = loadTexture(state.renderer,  "data/move_helmet_marie_42.png");
+    texRun = loadTexture(state.renderer, "data/run.png");
+    // texRun = loadTexture(state.renderer, "data/move_helmet_marie_42.png");
   };
 
   void unload() {
@@ -71,6 +79,7 @@ struct Resources {
 bool initalize(SDLState &state);
 void cleanup(SDLState &state); // can be ref or pointer; if using pointer, need to use -> instead of .
 void drawObject(const SDLState &state, GameState &gs, GameObject &obj, float deltaTime);
+void update(const SDLState &state, GameState &gs, Resources &res, GameObject &obj, float deltaTime);
 int main(int argc, char *argv[]) {
 
 
@@ -100,13 +109,15 @@ int main(int argc, char *argv[]) {
 
   // create the player
   GameObject player;
+  player.data.player = PlayerData();
   player.type = ObjectType::player;
   player.texture = res.texIdle;
   player.animations = res.playerAnims; // copies via std::vector copy assignment
   player.currentAnimation = res.ANIM_PLAYER_IDLE;
+  player.acceleration = glm::vec2(300, 0);
+  player.maxSpeedX = 100;
   gs.layers[LAYER_IDX_CHARACTERS].push_back(player);
 
-  const bool *keys = SDL_GetKeyboardState(nullptr);
 
   uint64_t prevTime = SDL_GetTicks();
 
@@ -138,6 +149,7 @@ int main(int argc, char *argv[]) {
     // update all objects
     for (auto &layer : gs.layers) {
       for (GameObject &obj : layer) { // for each obj in layer
+        update(sdlstate, gs, res, obj, deltaTime);
         if (obj.currentAnimation != -1) {
           obj.animations[obj.currentAnimation].step(deltaTime);
         }
@@ -200,7 +212,7 @@ void cleanup(SDLState &state) {
 }
 
 void drawObject(const SDLState &state, GameState &gs, GameObject &obj, float deltaTime) {
-    const float spriteSize = 32; // TODO need size of images
+    const float spriteSize = 32; // TODO need size of images; set on game obj
 
 
     // pull out specific sprite frame from sprite sheet
@@ -223,4 +235,68 @@ void drawObject(const SDLState &state, GameState &gs, GameObject &obj, float del
     SDL_FlipMode flipMode = obj.direction == -1 ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
 
     SDL_RenderTextureRotated(state.renderer, obj.texture, &src, &dst, 0, nullptr, flipMode);
+}
+
+void update(const SDLState &state, GameState &gs, Resources &res, GameObject &obj, float deltaTime) {
+  if (obj.type == ObjectType::player) {
+
+    // update direction
+    float currDirection = 0;
+    if (state.keys[SDL_SCANCODE_LEFT]) {
+      currDirection += -1;
+    }
+    if (state.keys[SDL_SCANCODE_RIGHT]) {
+      currDirection += 1;
+    }
+    if (currDirection) {
+      obj.direction = currDirection;
+    }
+
+
+    // update animation state
+    switch (obj.data.player.state) {
+      case PlayerState::idle:
+      {
+        if (currDirection != 0) {
+          obj.data.player.state = PlayerState::running;
+          obj.texture = res.texRun;
+          obj.currentAnimation = res.ANIM_PLAYER_RUN;
+        } else {
+          // decelerate faster than we speed up
+          if (obj.velocity.x) {
+            const float factor = obj.velocity.x > 0 ? -1.5f : 1.5f;
+            float amount = factor * obj.acceleration.x * deltaTime;
+            if (std::abs(obj.velocity.x) < std::abs(amount)) {
+              obj.velocity.x = 0;
+            } else {
+              obj.velocity.x += amount;
+            }
+          }
+        }
+        break;
+      }
+      case PlayerState::running:
+      {
+        if (currDirection == 0) {
+          obj.data.player.state = PlayerState::idle;
+          obj.texture = res.texIdle;
+          obj.currentAnimation = res.ANIM_PLAYER_IDLE;
+        }
+        break;
+      }
+      case PlayerState::jumping:
+      {
+        break;
+      }
+    }
+
+    // update velocity based on acceleration and deltaTime
+    obj.velocity += currDirection * obj.acceleration * deltaTime;
+    if (std::abs(obj.velocity.x) > obj.maxSpeedX) {
+      obj.velocity.x = currDirection * obj.maxSpeedX;
+    }
+
+    // update position based on velocity
+    obj.position += obj.velocity * deltaTime;
+  }
 }
