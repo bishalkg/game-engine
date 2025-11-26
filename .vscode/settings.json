@@ -41,6 +41,15 @@
     "variant": "cpp",
     "algorithm": "cpp",
     "format": "cpp",
-    "vector": "cpp"
+    "vector": "cpp",
+    "iomanip": "cpp",
+    "__tree": "cpp",
+    "array": "cpp",
+    "__node_handle": "cpp",
+    "deque": "cpp",
+    "unordered_map": "cpp",
+    "map": "cpp",
+    "set": "cpp",
+    "unordered_set": "cpp"
   }
 }
