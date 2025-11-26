@@ -36,9 +36,16 @@ const int TILE_SIZE = 32; // TODO all tiles are 32 right now
 struct GameState {
   std::array<std::vector<GameObject>, 2> layers;
   int playerIndex;
+  SDL_FRect mapViewport; // viewable part of map
+  float bg2scroll, bg3scroll, bg4scroll;
 
-  GameState() {
+  GameState(const SDLState &state): bg2scroll(0), bg3scroll(0), bg4scroll(0) {
     playerIndex = -1;
+    mapViewport = SDL_FRect{
+      .x = 0, .y = 0,
+      .w = static_cast<float>(state.logW),
+      .h = static_cast<float>(state.logH)
+    };
   }
 
   // get current player
@@ -51,7 +58,9 @@ struct Resources {
   const int ANIM_PLAYER_SLIDE = 2;
   std::vector<Animation> playerAnims;
   std::vector<SDL_Texture*> textures;
-  SDL_Texture *texIdle, *texRun, *texSlide, *texBrick, *texGrass, *texGround, *texPanel;
+  SDL_Texture *texIdle, *texRun, *texSlide, *texBrick,
+    *texGrass, *texGround, *texPanel,
+    *texBg1, *texBg2, *texBg3, *texBg4;
 
   SDL_Texture *loadTexture(SDL_Renderer *renderer, const std::string &filepath){
     SDL_Texture *tex = IMG_LoadTexture(renderer, filepath.c_str()); // textures on gpu, surface in cpu memory (we can access)
@@ -75,6 +84,10 @@ struct Resources {
     texGrass = loadTexture(state.renderer, "data/tiles/grass.png");
     texGround = loadTexture(state.renderer, "data/tiles/ground.png");
     texPanel = loadTexture(state.renderer, "data/tiles/panel.png");
+    texBg1 = loadTexture(state.renderer, "data/bg/bg_layer1.png");
+    texBg2 = loadTexture(state.renderer, "data/bg/bg_layer2.png");
+    texBg3 = loadTexture(state.renderer, "data/bg/bg_layer3.png");
+    texBg4 = loadTexture(state.renderer, "data/bg/bg_layer4.png");
   };
 
   void unload() {
@@ -95,6 +108,7 @@ void createTiles(const SDLState &state, GameState &gs, const Resources &res);
 void handleCollision(const SDLState &state, GameState &gs, Resources &res, GameObject &a, GameObject &b, float deltaTime);
 void collisionResponse(const SDLState &state, GameState &gs, Resources &res, const SDL_FRect &rectA, const SDL_FRect &rectB, const SDL_FRect &rectC, GameObject &objA, GameObject &objB, float deltaTime);
 void handleKeyInput(const SDLState &state, GameState &gs, GameObject &obj, SDL_Scancode key, bool keyDown);
+void drawParalaxBackground(SDL_Renderer *renderer, SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime);
 
 int main(int argc, char *argv[]) {
 
@@ -119,7 +133,7 @@ int main(int argc, char *argv[]) {
   }
 
   // setup game data
-  GameState gs;
+  GameState gs(sdlstate);
   createTiles(sdlstate, gs, res);
 
   // start the game loop
@@ -168,9 +182,19 @@ int main(int argc, char *argv[]) {
       }
     }
 
+    // calculate viewport position based on player updated position
+    gs.mapViewport.x = (gs.player().position.x + gs.player().spritePixelSize / 2) - gs.mapViewport.w / 2;
+
     // perform drawing commands
     SDL_SetRenderDrawColor(sdlstate.renderer, 20, 10, 30, 255);
     SDL_RenderClear(sdlstate.renderer);
+
+    // draw background images
+    SDL_RenderTexture(sdlstate.renderer, res.texBg1, nullptr, nullptr);
+    drawParalaxBackground(sdlstate.renderer, res.texBg4, gs.player().velocity.x, gs.bg4scroll, 0.075f, deltaTime);
+    drawParalaxBackground(sdlstate.renderer, res.texBg3, gs.player().velocity.x, gs.bg3scroll, 0.15f, deltaTime);
+    drawParalaxBackground(sdlstate.renderer, res.texBg2, gs.player().velocity.x, gs.bg2scroll, 0.3f, deltaTime);
+
 
     // draw all objects
     for (auto &layer : gs.layers) {
@@ -241,7 +265,7 @@ void drawObject(const SDLState &state, GameState &gs, GameObject &obj, float del
     };
 
     SDL_FRect dst = {
-      .x = obj.position.x,
+      .x = obj.position.x - gs.mapViewport.x, // move objects according to updated viewport position
       .y = obj.position.y,
       .w = obj.spritePixelSize,
       .h = obj.spritePixelSize,
@@ -469,9 +493,9 @@ void createTiles(const SDLState &state, GameState &gs, const Resources &res) {
   short map[MAP_ROWS][MAP_COLS] = {
     0, 0, 0, 0, 4, 0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-    0, 0, 0, 0, 2, 0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-    0, 0, 0, 2, 2, 0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-    1, 1, 1, 1, 1, 1, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
+    0, 0, 0, 0, 2, 0, 0, 0, 0, 0,2, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
+    0, 0, 0, 2, 2, 0, 0, 0, 2, 2,2, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1,1, 1, 1, 1, 1,1, 1, 1, 1, 1,1, 1, 1, 1, 1,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
   };
 
   const auto createObject = [&state](int r, int c, SDL_Texture *tex, ObjectType type, int spriteSize) {
@@ -566,3 +590,19 @@ void handleKeyInput(const SDLState &state, GameState &gs, GameObject &obj, SDL_S
 
 
 };
+
+void drawParalaxBackground(SDL_Renderer *renderer, SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime) {
+  scrollPos -= xVelocity * scrollFactor * deltaTime; // scroll position passed by reference, is updated every loop
+  if (scrollPos <= -texture->w) {
+    scrollPos = 0;
+  }
+
+  SDL_FRect dst{
+    .x = scrollPos,
+    .y = 40,
+    .w = texture->w * 2.0f,
+    .h = static_cast<float>(texture->h)
+  };
+
+  SDL_RenderTextureTiled(renderer, texture, nullptr, 1, &dst);
+}
