@@ -36,19 +36,25 @@ enum class ObjectType
 struct GameObject {
   ObjectType type;
   ObjectData data; // by making this a union, the different object types can have different fields in their structs
-  glm::vec2 position, velocity, acceleration;
+  glm::vec2 position, velocity, acceleration; // we have x and y positions/velocities/accelerations
   float direction;
   float maxSpeedX;
   std::vector<Animation> animations;
   int currentAnimation;
   SDL_Texture *texture;
+  bool dynamic;
+  bool grounded;
+  const float spritePixelSize;
+  SDL_FRect collider;
 
-  GameObject() : data{.level = LevelData()} {
+  GameObject(int spriteSize) : data{.level = LevelData()}, spritePixelSize(spriteSize), collider{0} {
     type = ObjectType::level;
     maxSpeedX = 0;
     direction = 1;
     position = velocity = acceleration = glm::vec2(0);
     currentAnimation = -1;
     texture = nullptr;
+    dynamic = false;
+    grounded = false;
   }
 };
