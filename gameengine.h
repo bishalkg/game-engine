@@ -10,7 +10,6 @@
 #include <SDL3_image/SDL_image.h>
 #include <glm/glm.hpp>
 
-// #include "animation.h"
 #include "gameobject.h"
 
 
@@ -18,11 +17,6 @@
 // sips -z 42 42 data/idle_marie.png --out data/idle_marie_42.png --> resize
 // magick data/move_helmet_marie.png -filter point -resize 210x42! data/move_helmet_marie_42.png
 
-const size_t LAYER_IDX_LEVEL = 0;
-const size_t LAYER_IDX_CHARACTERS = 1;
-const int MAP_ROWS = 5;
-const int MAP_COLS = 50;
-const int TILE_SIZE = 32; // TODO all tiles are 32 right now
 
 struct SDLState {
   SDL_Window *window;
@@ -51,7 +45,7 @@ struct GameState {
   }
 
   // get current player
-  GameObject &player() { return layers[LAYER_IDX_CHARACTERS][playerIndex]; }
+  GameObject &player(size_t layer_idx_chars) { return layers[layer_idx_chars][playerIndex]; }
 };
 
 struct Resources {
@@ -136,12 +130,32 @@ class GameEngine
     void cleanup(); // can be ref or pointer; if using pointer, need to use -> instead of .
     void drawObject(GameObject &obj, float deltaTime);
     void updateGameObject(GameObject &obj, float deltaTime);
-    void initAllTiles();
+    bool initAllTiles();
     void handleCollision(GameObject &a, GameObject &b, float deltaTime);
     void collisionResponse(const SDL_FRect &rectA, const SDL_FRect &rectB, const SDL_FRect &rectC, GameObject &objA, GameObject &objB, float deltaTime);
     void handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown);
     void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime);
+    GameObject &getPlayer();
+    SDLState &getSDLState();
+    GameState &getGameState();
+    Resources &getResources();
 
+};
+
+GameObject &GameEngine::getPlayer() {
+ return gs.player(LAYER_IDX_CHARACTERS);
+};
+
+SDLState &GameEngine::getSDLState() {
+  return state;
+};
+
+GameState &GameEngine::getGameState() {
+  return gs;
+};
+
+Resources &GameEngine::getResources() {
+  return res;
 };
 
 bool GameEngine::init(int width, int height, int logW, int logH) {
@@ -160,8 +174,8 @@ bool GameEngine::init(int width, int height, int logW, int logH) {
   }
 
   // setup game data
-  GameState gs(state);
-  this->initAllTiles();
+  gs = GameState(state);
+  return this->initAllTiles();
 }
 
 bool GameEngine::initWindowAndRenderer(int width, int height, int logW, int logH) {
@@ -422,7 +436,7 @@ void GameEngine::handleCollision(GameObject &a, GameObject &b, float deltaTime) 
   };
 };
 
-void GameEngine::initAllTiles() {
+bool GameEngine::initAllTiles() {
 
   /*
     1 - Ground
@@ -535,7 +549,8 @@ void GameEngine::initAllTiles() {
   loadMap(backgroundMap);
   loadMap(foregroundMap);
 
-  assert(gs.playerIndex != -1); // player index must be set
+  // assert(gs.playerIndex != -1); // player index must be set
+  return gs.playerIndex != -1;
 };
 
 void GameEngine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown) {
@@ -575,7 +590,7 @@ void GameEngine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown)
 
 };
 
-void drawParalaxBackground(SDL_Renderer *renderer, SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime) {
+void GameEngine::drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime) {
   scrollPos -= xVelocity * scrollFactor * deltaTime; // scroll position passed by reference, is updated every loop
   if (scrollPos <= -texture->w) {
     scrollPos = 0;
@@ -588,5 +603,5 @@ void drawParalaxBackground(SDL_Renderer *renderer, SDL_Texture *texture, float x
     .h = static_cast<float>(texture->h)
   };
 
-  SDL_RenderTextureTiled(renderer, texture, nullptr, 1, &dst);
+  SDL_RenderTextureTiled(state.renderer, texture, nullptr, 1, &dst);
 }
