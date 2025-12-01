@@ -20,12 +20,14 @@ class Timer
    * if we're past the initialized length, we set the timeout to true.
    * @param deltaTime is the time between render loops
    */
-    void step(float deltaTime) {
+    bool step(float deltaTime) {
       time += deltaTime;
       if (time >= length) {
         time -= length;
         timeout = true;
+        return true;
       }
+      return false;
     }
 
 

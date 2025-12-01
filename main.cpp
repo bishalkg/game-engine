@@ -19,7 +19,7 @@ using namespace std;
 int main(int argc, char *argv[]) {
 
 
-  GameEngine game;
+  GameEngine::GameEngine game;
   if (!game.init(1600, 900, 640, 320)) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Game Init Failed", "Failed to init Game", nullptr);
         return 0;
@@ -29,9 +29,9 @@ int main(int argc, char *argv[]) {
   uint64_t prevTime = SDL_GetTicks();
   bool running = true;
 
-  GameState &gs = game.getGameState();
-  SDLState &sdl = game.getSDLState();
-  Resources &res = game.getResources();
+  GameEngine::GameState &gs = game.getGameState();
+  GameEngine::SDLState &sdl = game.getSDLState();
+  GameEngine::Resources &res = game.getResources();
   while (running){
     GameObject &player = game.getPlayer();  // fetch each frame in case index changes
 
@@ -49,8 +49,7 @@ int main(int argc, char *argv[]) {
         }
         case SDL_EVENT_WINDOW_RESIZED:
         {
-          game.state.width = event.window.data1;
-          game.state.height = event.window.data2;
+          game.setWindowSize(event.window.data2, event.window.data1);
           break;
         }
         case SDL_EVENT_KEY_DOWN: // non-continuous presses
@@ -121,7 +120,9 @@ int main(int argc, char *argv[]) {
 
     // draw bullets
     for (GameObject &bullet: gs.bullets) {
-      game.drawObject(bullet, bullet.collider.h, bullet.collider.w, deltaTime);
+      if (bullet.data.bullet.state != BulletState::inactive) {
+        game.drawObject(bullet, bullet.collider.h, bullet.collider.w, deltaTime);
+      }
     }
 
     // draw all foreground objects

@@ -18,7 +18,8 @@ class Animation
 
     // we take a step every frame
     void step(float deltaTime) {
-      return timer.step(deltaTime);
+      timer.step(deltaTime);
+      return;
     };
 
     /**
@@ -29,5 +30,7 @@ class Animation
       int frame = static_cast<int>(progress * frameCount);       // 0..frameCount-1
       return frame;
     };
+
+    bool isDone() const { return timer.isTimedOut(); }
 
 };
