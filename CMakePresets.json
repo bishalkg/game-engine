@@ -15,7 +15,7 @@
         "CMAKE_CXX_STANDARD": "23",
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "CMAKE_PREFIX_PATH": "/opt/homebrew/opt/sdl3/lib/cmake/SDL3"
+        "CMAKE_PREFIX_PATH": "/opt/homebrew/Cellar/sdl3/3.2.26/lib/cmake/SDL3;/opt/homebrew/Cellar/sdl3_image/3.2.4/lib/cmake/SDL3_image;/opt/homebrew/Cellar/glm/1.0.2/share/glm"
       }
     }
   ]
