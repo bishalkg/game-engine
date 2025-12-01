@@ -61,24 +61,32 @@ int main(int argc, char *argv[]) {
         case SDL_EVENT_KEY_UP:
         {
           game.handleKeyInput(player, event.key.scancode, false);
+          if (event.key.scancode == SDL_SCANCODE_Q) {
+            gs.debugMode = !gs.debugMode;
+          }
           break;
         }
       }
     }
 
-    // update all objects; TODO make into helper
+    // TODO make into helper: UpdateAllObjects()
+    // update all objects;
     for (auto &layer : gs.layers) {
       for (GameObject &obj : layer) { // for each obj in layer
-        game.updateGameObject(obj, deltaTime);
-        if (obj.currentAnimation != -1) {
-          obj.animations[obj.currentAnimation].step(deltaTime);
+        if (obj.dynamic) {
+          game.updateGameObject(obj, deltaTime);
         }
       }
     }
 
-    // TODO make into Draw function
+    // update bullet physics
+    for (GameObject &bullet : gs.bullets) {
+      game.updateGameObject(bullet, deltaTime);
+    }
+
+    // TODO wrap all below in Render() function
     // calculate viewport position based on player updated position
-    gs.mapViewport.x = (player.position.x + player.spritePixelSize / 2) - gs.mapViewport.w / 2;
+    gs.mapViewport.x = (player.position.x + player.spritePixelW / 2) - gs.mapViewport.w / 2;
 
     SDL_SetRenderDrawColor(sdl.renderer, 20, 10, 30, 255);
 
@@ -107,8 +115,13 @@ int main(int argc, char *argv[]) {
     // draw all interactable objects
     for (auto &layer : gs.layers) {
       for (GameObject &obj : layer) {
-        game.drawObject(obj, deltaTime);
+        game.drawObject(obj, obj.spritePixelH, obj.spritePixelW, deltaTime);
       }
+    }
+
+    // draw bullets
+    for (GameObject &bullet: gs.bullets) {
+      game.drawObject(bullet, bullet.collider.h, bullet.collider.w, deltaTime);
     }
 
     // draw all foreground objects
@@ -123,10 +136,14 @@ int main(int argc, char *argv[]) {
     }
 
     // debugging
-    SDL_SetRenderDrawColor(sdl.renderer, 255, 255, 255, 255);
-    SDL_RenderDebugText(sdl.renderer, 5, 5, std::format("State: {}", static_cast<int>(player.data.player.state)).c_str());
-
-
+    if (gs.debugMode) {
+      SDL_SetRenderDrawColor(sdl.renderer, 255, 255, 255, 255);
+      SDL_RenderDebugText(
+          sdl.renderer,
+          5,
+          5,
+          std::format("State3: {}  Direction: {} B: {}, G: {}", static_cast<int>(player.data.player.state), player.direction, gs.bullets.size(), player.grounded).c_str());
+    }
     // swap backbuffer to display new state
     // Textures live in GPU memory; the renderer batches copies/draws and flushes them on present.
     SDL_RenderPresent(sdl.renderer);

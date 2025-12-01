@@ -8,9 +8,15 @@ enum class PlayerState {
   idle, running, jumping
 };
 
+enum class BulletState {
+  moving, colliding, inactive
+};
+
 struct PlayerData {
   PlayerState state;
-  PlayerData(){ state = PlayerState::idle; };
+  Timer weaponTimer;
+
+  PlayerData(): weaponTimer(0.1f) { state = PlayerState::idle; };
 };
 
 struct LevelData {
@@ -21,15 +27,23 @@ struct EnemyData {
 
 };
 
+struct BulletData{
+  BulletState state;
+  BulletData(): state(BulletState::moving) {};
+};
+
+
+
 union ObjectData {
   PlayerData player;
   LevelData level;
   EnemyData enemy;
+  BulletData bullet;
 };
 
 enum class ObjectType
 {
-  player, level, enemy
+  player, level, enemy, bullet, sword
 };
 
 // define all objects in the game
@@ -44,10 +58,11 @@ struct GameObject {
   SDL_Texture *texture;
   bool dynamic;
   bool grounded;
-  const float spritePixelSize;
+  float spritePixelW;
+  float spritePixelH;
   SDL_FRect collider;
 
-  GameObject(int spriteSize) : data{.level = LevelData()}, spritePixelSize(spriteSize), collider{0} {
+  GameObject(float spriteH, float spriteW): data{.level = LevelData()}, spritePixelW(spriteW), spritePixelH(spriteH), collider{0} {
     type = ObjectType::level;
     maxSpeedX = 0;
     direction = 1;
