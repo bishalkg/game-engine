@@ -29,7 +29,8 @@ struct LevelData {
 
 struct EnemyData {
   EnemyState state;
-  EnemyData(): state(EnemyState::idle) {};
+  Timer damageTimer;
+  EnemyData(): state(EnemyState::idle), damageTimer(1.0f) {};
 };
 
 struct BulletData{

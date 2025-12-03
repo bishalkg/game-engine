@@ -12,6 +12,9 @@
 
 #include "gameobject.h"
 
+#include "imgui.h"
+#include "backends/imgui_impl_sdl3.h"
+#include "backends/imgui_impl_sdlrenderer3.h"
 
 
 // sips -z 42 42 data/idle_marie.png --out data/idle_marie_42.png --> resize
@@ -29,6 +32,10 @@ struct SDLState {
 };
 
 struct GameState {
+
+  // state for menu or game or network options?
+
+
   std::array<std::vector<GameObject>, 2> layers;
   std::vector<GameObject> backgroundTiles;
   std::vector<GameObject> foregroundTiles;
@@ -251,6 +258,20 @@ bool GameEngine::initWindowAndRenderer(int width, int height, int logW, int logH
   // configure presentation
   SDL_SetRenderLogicalPresentation(state.renderer, state.logW , state.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
+  // Setup ImGui context
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO& io = ImGui::GetIO();
+  (void)io;
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // optional
+
+  // Setup ImGui style
+  ImGui::StyleColorsDark();
+
+  // Setup ImGui platform/renderer backends
+  ImGui_ImplSDL3_InitForSDLRenderer(state.window, state.renderer);
+  ImGui_ImplSDLRenderer3_Init(state.renderer);
+
   return true;
 
 }
@@ -260,6 +281,9 @@ void GameEngine::cleanupTextures() {
 }
 
 void GameEngine::cleanup() {
+  ImGui_ImplSDLRenderer3_Shutdown();
+  ImGui_ImplSDL3_Shutdown();
+  ImGui::DestroyContext();
   SDL_DestroyRenderer(state.renderer); // destroy renderer before window
   SDL_DestroyWindow(state.window);
   SDL_Quit();
@@ -480,6 +504,20 @@ void GameEngine::updateGameObject(GameObject &obj, float deltaTime) {
       }
     }
   }
+  else if (obj.type == ObjectType::enemy) {
+    switch (obj.data.enemy.state) {
+      case EnemyState::dying:
+      {
+        if (obj.data.enemy.damageTimer.step(deltaTime)) {
+          obj.data.enemy.state = EnemyState::idle;
+          obj.texture = res.texEnemy;
+          obj.currentAnimation = res.ANIM_ENEMY;
+          obj.data.enemy.damageTimer.reset();
+        }
+        break;
+      }
+    }
+  }
 
   if (currDirection) {
     obj.direction = currDirection;
@@ -589,6 +627,9 @@ void GameEngine::collisionResponse(const SDL_FRect &rectA, const SDL_FRect &rect
             objB.direction = -1 * objA.direction;
             objB.shouldFlash = true;
             objB.flashTimer.reset();
+            objB.texture = res.texEnemyHit;
+            objB.currentAnimation = res.ANIM_ENEMY_HIT;
+            objB.data.enemy.state = EnemyState::dying;
             break;
           }
         }
