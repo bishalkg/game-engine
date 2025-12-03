@@ -38,7 +38,9 @@ int main(int argc, char *argv[]) {
   GameEngine::SDLState &sdl = game.getSDLState();
   GameEngine::Resources &res = game.getResources();
   while (running){
+
     GameObject &player = game.getPlayer();  // fetch each frame in case index changes
+    // use gs.currentView directly so state changes take effect immediately
 
     uint64_t nowTime = SDL_GetTicks();
     float deltaTime = (nowTime - prevTime) / 1000.0f; // convert to seconds; time bw frames
@@ -49,6 +51,12 @@ int main(int argc, char *argv[]) {
 
       // 2) Give every event to ImGui first
       ImGui_ImplSDL3_ProcessEvent(&event);
+
+      // always honor quit
+      if (event.type == SDL_EVENT_QUIT) {
+        running = false;
+        continue;
+      }
 
       // 3) only handle game input if ImGui doesn't want it
       ImGuiIO& io = ImGui::GetIO();
@@ -85,109 +93,176 @@ int main(int argc, char *argv[]) {
       }
     }
 
+
     // 4) Start a new ImGui frame
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
-    // TODO make into helper: UpdateAllObjects()
-    // update all objects;
-    for (auto &layer : gs.layers) {
-      for (GameObject &obj : layer) { // for each obj in layer
-        if (obj.dynamic) {
-          game.updateGameObject(obj, deltaTime);
-        }
-      }
-    }
-
-    // update bullet physics
-    for (GameObject &bullet : gs.bullets) {
-      game.updateGameObject(bullet, deltaTime);
-    }
-
-    // TODO wrap all below in Render() function
-    // calculate viewport position based on player updated position
-    gs.mapViewport.x = (player.position.x + player.spritePixelW / 2) - gs.mapViewport.w / 2;
-
-    SDL_SetRenderDrawColor(sdl.renderer, 20, 10, 30, 255);
-
-    // clear the backbuffer before drawing onto it with black from draw color above
-    SDL_RenderClear(sdl.renderer);
-
-    // Perform drawing commands:
-
-    // draw background images
-    SDL_RenderTexture(sdl.renderer, res.texBg1, nullptr, nullptr);
-    game.drawParalaxBackground(res.texBg4, player.velocity.x, gs.bg4scroll, 0.075f, deltaTime);
-    game.drawParalaxBackground(res.texBg3, player.velocity.x, gs.bg3scroll, 0.15f, deltaTime);
-    game.drawParalaxBackground(res.texBg2, player.velocity.x, gs.bg2scroll, 0.3f, deltaTime);
-
-    // draw all background objects
-    for (auto &tile : gs.backgroundTiles) {
-      SDL_FRect dst{
-        .x = tile.position.x - gs.mapViewport.x,
-        .y = tile.position.y,
-        .w = static_cast<float>(tile.texture->w),
-        .h = static_cast<float>(tile.texture->h),
-      };
-      SDL_RenderTexture(sdl.renderer, tile.texture, nullptr, &dst);
-    }
-
-    // draw all interactable objects
-    for (auto &layer : gs.layers) {
-      for (GameObject &obj : layer) {
-        game.drawObject(obj, obj.spritePixelH, obj.spritePixelW, deltaTime);
-      }
-    }
-
-    // draw bullets
-    for (GameObject &bullet: gs.bullets) {
-      if (bullet.data.bullet.state != BulletState::inactive) {
-        game.drawObject(bullet, bullet.collider.h, bullet.collider.w, deltaTime);
-      }
-    }
-
-    // draw all foreground objects
-    for (auto &tile : gs.foregroundTiles) {
-      SDL_FRect dst{
-        .x = tile.position.x - gs.mapViewport.x,
-        .y = tile.position.y,
-        .w = static_cast<float>(tile.texture->w),
-        .h = static_cast<float>(tile.texture->h),
-      };
-      SDL_RenderTexture(sdl.renderer, tile.texture, nullptr, &dst);
-    }
-
-    // debugging
-    if (gs.debugMode) {
-      SDL_SetRenderDrawColor(sdl.renderer, 255, 255, 255, 255);
-      SDL_RenderDebugText(
-          sdl.renderer,
-          5,
-          5,
-          std::format("State3: {}  Direction: {} B: {}, G: {}", static_cast<int>(player.data.player.state), player.direction, gs.bullets.size(), player.grounded).c_str());
-    }
-
     // 5) Build your ImGui UI for THIS frame
     // (menus, pause, debug overlay, etc.)
-    {
-        // Example: simple main overlay
-        ImGui::Begin("Main Menu");
+
+    //
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(io.DisplaySize);
+
+    ImVec2 buttonSize = ImVec2(150, 50);
+
+    switch (gs.currentView) {
+      case GameEngine::GameScreen::MainMenu:
+        ImGui::Begin("Main Menu", nullptr, sdl.ImGuiWindowFlags);
         ImGui::Text("Hello from ImGui in SDL3!");
-        if (ImGui::Button("Start Game")) {
+        if (ImGui::Button("Start", buttonSize)) {
             // startGame();
+            std::cout << "start game" << std::endl;
+            std::puts("Start clicked");
+            gs.currentView = GameEngine::GameScreen::Playing;
         }
-        if (ImGui::Button("Quit")) {
+        if (ImGui::Button("Multiplayer",buttonSize)) {
+          gs.currentView = GameEngine::GameScreen::MultiPlayerOptionsMenu;
+          std::cout << "multi game" << std::endl;
+        }
+        if (ImGui::Button("Quit", buttonSize)) {
+            std::cout << "quit game" << std::endl;
             running = false;
         }
         ImGui::End();
+        break;
+      case GameEngine::GameScreen::PauseMenu:
+        ImGui::Begin("Pause", nullptr, sdl.ImGuiWindowFlags);
+        if (ImGui::Button("Resume")) gs.currentView = GameEngine::GameScreen::Playing;
+        if (ImGui::Button("Quit")) running = false;
+        ImGui::End();
+        break;
+      case GameEngine::GameScreen::MultiPlayerOptionsMenu:
+        // drawSettings();
+        ImGui::Begin("MultiPlayer Menu", nullptr, sdl.ImGuiWindowFlags);
+        if (ImGui::Button("Host",buttonSize)) {
+          // todo
+        }
+        if (ImGui::Button("Client",buttonSize)) {
+          // todo
+        }
+        if (ImGui::Button("Back to Menu",buttonSize)) {
+          // todo
+          gs.currentView = GameEngine::GameScreen::MainMenu;
+        }
+        ImGui::End();
+        break;
+      case GameEngine::GameScreen::Playing:
+        ImGuiWindowFlags ImGuiWindowFlags =
+          sdl.ImGuiWindowFlags | ImGuiWindowFlags_NoBackground;
+          // ImGuiWindowFlags_NoSavedSettings;
+          ImGui::Begin("HUD", nullptr, ImGuiWindowFlags);
+          // Optional: remove padding so the button hugs the corner
+          ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+          ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+          if (ImGui::Button("Back to Menu", buttonSize)) {
+              gs.currentView = GameEngine::GameScreen::MainMenu;
+          }
+          ImGui::PopStyleVar();
+          ImGui::PopItemFlag();
+          ImGui::End();
+        break;
     }
 
-    // 6) Render ImGui on top of your SDL frame
-    ImGui::Render();
-    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), sdl.renderer);
+    // clear the backbuffer before drawing onto it with black from draw color above
+    SDL_SetRenderDrawColor(sdl.renderer, 20, 10, 30, 255);
+    SDL_RenderClear(sdl.renderer);
+
+
+    bool playing = (gs.currentView == GameEngine::GameScreen::Playing);
+    if (playing) {
+      // update & draw game world to sdl.renderer here (before ImGui::Render)
+      // TODO make into helper: UpdateAllObjects()
+      // update all objects;
+      for (auto &layer : gs.layers) {
+        for (GameObject &obj : layer) { // for each obj in layer
+          if (obj.dynamic) {
+            game.updateGameObject(obj, deltaTime);
+          }
+        }
+      }
+
+      // update bullet physics
+      for (GameObject &bullet : gs.bullets) {
+        game.updateGameObject(bullet, deltaTime);
+      }
+
+      // TODO wrap all below in Render() function
+      // calculate viewport position based on player updated position
+      gs.mapViewport.x = (player.position.x + player.spritePixelW / 2) - gs.mapViewport.w / 2;
+
+      // SDL_SetRenderDrawColor(sdl.renderer, 20, 10, 30, 255);
+
+      // // clear the backbuffer before drawing onto it with black from draw color above
+      // SDL_RenderClear(sdl.renderer);
+
+      // Perform drawing commands:
+
+      // draw background images
+      SDL_RenderTexture(sdl.renderer, res.texBg1, nullptr, nullptr);
+      game.drawParalaxBackground(res.texBg4, player.velocity.x, gs.bg4scroll, 0.075f, deltaTime);
+      game.drawParalaxBackground(res.texBg3, player.velocity.x, gs.bg3scroll, 0.15f, deltaTime);
+      game.drawParalaxBackground(res.texBg2, player.velocity.x, gs.bg2scroll, 0.3f, deltaTime);
+
+      // draw all background objects
+      for (auto &tile : gs.backgroundTiles) {
+        SDL_FRect dst{
+          .x = tile.position.x - gs.mapViewport.x,
+          .y = tile.position.y,
+          .w = static_cast<float>(tile.texture->w),
+          .h = static_cast<float>(tile.texture->h),
+        };
+        SDL_RenderTexture(sdl.renderer, tile.texture, nullptr, &dst);
+      }
+
+      // draw all interactable objects
+      for (auto &layer : gs.layers) {
+        for (GameObject &obj : layer) {
+          game.drawObject(obj, obj.spritePixelH, obj.spritePixelW, deltaTime);
+        }
+      }
+
+      // draw bullets
+      for (GameObject &bullet: gs.bullets) {
+        if (bullet.data.bullet.state != BulletState::inactive) {
+          game.drawObject(bullet, bullet.collider.h, bullet.collider.w, deltaTime);
+        }
+      }
+
+      // draw all foreground objects
+      for (auto &tile : gs.foregroundTiles) {
+        SDL_FRect dst{
+          .x = tile.position.x - gs.mapViewport.x,
+          .y = tile.position.y,
+          .w = static_cast<float>(tile.texture->w),
+          .h = static_cast<float>(tile.texture->h),
+        };
+        SDL_RenderTexture(sdl.renderer, tile.texture, nullptr, &dst);
+      }
+
+      // debugging
+      if (gs.debugMode) {
+        SDL_SetRenderDrawColor(sdl.renderer, 255, 255, 255, 255);
+        SDL_RenderDebugText(
+            sdl.renderer,
+            5,
+            5,
+            std::format("State3: {}  Direction: {} B: {}, G: {}", static_cast<int>(player.data.player.state), player.direction, gs.bullets.size(), player.grounded).c_str());
+      }
+    }
+
     // swap backbuffer to display new state
     // Textures live in GPU memory; the renderer batches copies/draws and flushes them on present.
+    // 6) Render ImGui on top of your SDL frame
+    SDL_SetRenderLogicalPresentation(sdl.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+    ImGui::Render();
+    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), sdl.renderer);
+
+    SDL_SetRenderLogicalPresentation(sdl.renderer, sdl.logW, sdl.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+
     SDL_RenderPresent(sdl.renderer);
 
     prevTime = nowTime;

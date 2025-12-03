@@ -28,13 +28,29 @@ struct SDLState {
   int width, height, logW, logH;
   const bool *keys;
 
+  // TODO create a new struct for imgui params (flags, button sizes, images etc.)
+  ImGuiWindowFlags ImGuiWindowFlags =
+    ImGuiWindowFlags_NoTitleBar |
+    ImGuiWindowFlags_NoResize |
+    ImGuiWindowFlags_NoMove |
+    ImGuiWindowFlags_NoCollapse |
+    ImGuiWindowFlags_NoScrollbar |
+    ImGuiWindowFlags_NoSavedSettings;
+
   SDLState() : keys(SDL_GetKeyboardState(nullptr)) {}
+};
+
+enum class GameScreen {
+    Playing,
+    MainMenu,
+    PauseMenu,
+    MultiPlayerOptionsMenu, // this menu will show host or client buttons
 };
 
 struct GameState {
 
-  // state for menu or game or network options?
 
+  GameScreen currentView;
 
   std::array<std::vector<GameObject>, 2> layers;
   std::vector<GameObject> backgroundTiles;
@@ -46,7 +62,7 @@ struct GameState {
   SDL_FRect mapViewport; // viewable part of map
   float bg2scroll, bg3scroll, bg4scroll;
 
-  GameState(const SDLState &state): bg2scroll(0), bg3scroll(0), bg4scroll(0) {
+  GameState(const SDLState &state): bg2scroll(0), bg3scroll(0), bg4scroll(0), currentView(GameScreen::MainMenu) {
     playerIndex = -1;
     mapViewport = SDL_FRect{
       .x = 0, .y = 0,
@@ -264,6 +280,24 @@ bool GameEngine::initWindowAndRenderer(int width, int height, int logW, int logH
   ImGuiIO& io = ImGui::GetIO();
   (void)io;
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // optional
+  // io.DisplaySize = ImVec2((float)state.logW, (float)state.logH);
+  // io.DisplayFramebufferScale = ImVec2(
+  //   (float)state.width / state.logW,
+  //   (float)state.height / state.logH);
+  // int fbW = 0, fbH = 0;
+  // SDL_GetCurrentRenderOutputSize(state.renderer, &fbW, &fbH); // SDL3 name
+  // io.DisplaySize = ImVec2((float)state.logW, (float)state.logH); // your logical size
+  // io.DisplayFramebufferScale = ImVec2(
+  //     (float)fbW / (float)state.logW,
+  //     (float)fbH / (float)state.logH
+  // );
+  // SDL_Rect vp;
+  // SDL_GetRenderViewport(state.renderer, &vp); // physical viewport SDL uses with logical presentation
+  // io.DisplaySize = ImVec2((float)state.logW, (float)state.logH);   // your logical size
+  // io.DisplayFramebufferScale = ImVec2(
+  //     (float)vp.w / (float)state.logW,                             // scale X
+  //     (float)vp.h / (float)state.logH                              // scale Y
+  // );
 
   // Setup ImGui style
   ImGui::StyleColorsDark();
