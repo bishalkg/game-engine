@@ -30,7 +30,11 @@ struct LevelData {
 struct EnemyData {
   EnemyState state;
   Timer damageTimer;
-  EnemyData(): state(EnemyState::idle), damageTimer(1.0f) {};
+  int healthPoints;
+
+  EnemyData(): state(EnemyState::idle), damageTimer(1.0f) {
+    healthPoints = 100;
+  };
 };
 
 struct BulletData{
@@ -69,6 +73,7 @@ struct GameObject {
   SDL_FRect collider;
   Timer flashTimer;
   bool shouldFlash;
+  int spriteFrame;
 
   GameObject(float spriteH, float spriteW): data{.level = LevelData()}, spritePixelW(spriteW), spritePixelH(spriteH), collider{0}, flashTimer(0.05f) {
     type = ObjectType::level;
@@ -80,5 +85,6 @@ struct GameObject {
     dynamic = false;
     grounded = false;
     shouldFlash = false;
+    spriteFrame = 1;
   }
 };

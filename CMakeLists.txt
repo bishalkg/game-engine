@@ -9,7 +9,7 @@ find_package(SDL3 REQUIRED CONFIG)
 find_package(SDL3_image REQUIRED CONFIG)
 find_package(glm REQUIRED CONFIG)
 
-add_executable(game_engine main.cpp)
+add_executable(game_engine main.cpp app.cpp gameengine.cpp)
 target_link_libraries(game_engine PRIVATE SDL3::SDL3 SDL3_image::SDL3_image glm::glm) # add sdl3 and sdl3_image to the compiler header link paths
 
 # ImGui: core + SDL3/SDL_Renderer3 backends
