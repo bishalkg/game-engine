@@ -30,6 +30,21 @@ bool GameEngine::GameEngine::init(int width, int height, int logW, int logH) {
     return false;
   };
 
+  // mixer must be created before loading in audio files in res.load()
+  if (!MIX_Init()) {
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL Mixer Failed to init", "Failed to init audio", nullptr);
+    this->cleanup();
+    return false;
+  };
+
+  // one global mixer
+  res.mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
+  if (!res.mixer) {
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Global Mixer Failed to create", "Failed to create audio mixer", nullptr);
+    this->cleanup();
+    return false;
+  }
+
   // load game assets
   res.load(state);
   if (!res.texIdle) {
@@ -38,16 +53,6 @@ bool GameEngine::GameEngine::init(int width, int height, int logW, int logH) {
     return false;
   }
 
-
-
-  if (!MIX_Init()) {
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL Mixer Failed to init", "Failed to init audio", nullptr);
-    this->cleanup();
-    return false;
-  };
-
-  // one global mixer
-  MIX_Mixer* mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
 
   // setup game data
   gs = GameState(state);
@@ -356,6 +361,8 @@ void GameEngine::GameEngine::cleanupTextures() {
 }
 
 void GameEngine::GameEngine::cleanup() {
+  MIX_DestroyMixer(res.mixer);
+  MIX_Quit();
   ImGui_ImplSDLRenderer3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
   ImGui::DestroyContext();

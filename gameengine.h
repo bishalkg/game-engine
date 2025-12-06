@@ -132,8 +132,6 @@ struct Resources {
 
 
   std::pair<MIX_Audio*, MIX_Track*> loadAudioChunk(const std::string& filepath) {
-
-
     // init SDL Mixer
     // auto audioDevice = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, NULL);
     // if (!audioDevice) {
@@ -148,14 +146,16 @@ struct Resources {
     //     SDL_Quit();
     // }
     // init mixer
+    if (!mixer) return {nullptr, nullptr};
 
     // then in this func load the audio
     MIX_Audio* audio = MIX_LoadAudio(mixer, filepath.c_str(), false);
-
+    if (!audio) return {nullptr, nullptr};
     audioBuff.push_back(audio);
 
     // need one for EACH sound that will be played
     MIX_Track* track = MIX_CreateTrack(mixer);
+    if (!track) return {nullptr, nullptr};
     audioTracks.push_back(track);
 
     MIX_SetTrackAudio(track, audio);
@@ -253,8 +253,6 @@ struct Resources {
       MIX_DestroyTrack(track);
     }
 
-    MIX_DestroyMixer(mixer);
-    MIX_Quit();
   };
 
 };
