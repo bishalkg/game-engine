@@ -16,6 +16,25 @@ GameEngine::Resources &GameEngine::GameEngine::getResources() {
   return res;
 };
 
+void GameEngine::GameEngine::playBackgroundSoundtrack() {
+  if (!MIX_TrackPlaying(res.backgroundTrack)) {
+    SDL_PropertiesID opts = SDL_CreateProperties();
+    SDL_SetNumberProperty(opts, MIX_PROP_PLAY_LOOPS_NUMBER, -1); // loop forever
+    if (!MIX_PlayTrack(res.backgroundTrack, opts)) {
+        SDL_Log("Background Music Play failed: %s", SDL_GetError());
+    }
+    SDL_DestroyProperties(opts); // destory internal resources
+  }
+};
+
+void GameEngine::GameEngine::stopBackgroundSoundtrack() {
+  if (MIX_TrackPlaying(res.backgroundTrack)) {
+    if (!MIX_StopTrack(res.backgroundTrack, 10)) {
+        SDL_Log("stopping Background Music Play failed: %s", SDL_GetError());
+    }
+  }
+};
+
 void GameEngine::GameEngine::setWindowSize(int height, int width) {
   state.width = width;
   state.height = height;
@@ -45,6 +64,8 @@ bool GameEngine::GameEngine::init(int width, int height, int logW, int logH) {
     return false;
   }
 
+  MIX_SetMasterGain(res.mixer, 0.5f);  // 50% master
+
   // load game assets
   res.load(state);
   if (!res.texIdle) {
@@ -68,6 +89,7 @@ void GameEngine::GameEngine::runGameLoop() {
   GameState &gs = this->getGameState();
   SDLState &sdl = this->getSDLState();
   Resources &res = this->getResources();
+
   while (this->running){
 
     GameObject &player = this->getPlayer();  // fetch each frame in case index changes
@@ -94,6 +116,7 @@ void GameEngine::GameEngine::runGameLoop() {
 
     switch (gs.currentView) {
       case GameScreen::MainMenu:
+        this->stopBackgroundSoundtrack();
         ImGui::Begin("Main Menu", nullptr, sdl.ImGuiWindowFlags);
         ImGui::Text("Hello from ImGui in SDL3!");
         if (ImGui::Button("Start", buttonSize)) {
@@ -134,6 +157,7 @@ void GameEngine::GameEngine::runGameLoop() {
         ImGui::End();
         break;
       case GameScreen::Playing:
+        this->playBackgroundSoundtrack();
         ImGuiWindowFlags ImGuiWindowFlags =
           sdl.ImGuiWindowFlags | ImGuiWindowFlags_NoBackground;
           // ImGuiWindowFlags_NoSavedSettings;
@@ -535,7 +559,7 @@ void GameEngine::GameEngine::updateGameObject(GameObject &obj, float deltaTime) 
 
         // MIX_SetTrackAudio(res.shootTrack, res.audioShoot); // or MIX_SetTrackAudioWithProperties
         if (!MIX_PlayTrack(res.shootTrack, 0)) {
-            SDL_Log("Play failed: %s", SDL_GetError());
+            // SDL_Log("Play failed: %s", SDL_GetError());
         };
 
       } else {
@@ -770,6 +794,10 @@ void GameEngine::GameEngine::collisionResponse(const SDL_FRect &rectA, const SDL
         switch (objB.type) {
           case ObjectType::level:
           {
+            if (!MIX_PlayTrack(res.hitTrack, 0)) {
+            // SDL_Log("Play failed: %s", SDL_GetError());
+            };
+
             break;
           }
           case ObjectType::enemy:
@@ -789,7 +817,9 @@ void GameEngine::GameEngine::collisionResponse(const SDL_FRect &rectA, const SDL
                 d.state = EnemyState::dead;
                 objB.texture = res.texEnemyDie;
                 objB.currentAnimation = res.ANIM_ENEMY_DIE;
+                MIX_PlayTrack(res.enemyDieTrack, 0);
               }
+              MIX_PlayTrack(res.enemyHitTrack, 0);
             } else {
               passthrough = true;
             }

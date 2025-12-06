@@ -125,27 +125,14 @@ struct Resources {
 
   //MIX_Audio and use the new loading/track APIs (MIX_LoadAudio, MIX_CreateTrack
   std::vector<MIX_Audio*> audioBuff;
-  MIX_Audio *audioShoot, *audioShootHit;
-  MIX_Track *shootTrack, *hitTrack;
+  MIX_Audio *backgroundAudio, *audioShoot, *audioShootHit, *audioEnemyHit, *audioEnemyDie;
+  MIX_Track *backgroundTrack, *shootTrack, *hitTrack, *enemyHitTrack, *enemyDieTrack;
   std::vector<MIX_Track*> audioTracks;
   MIX_Mixer* mixer;
 
 
-  std::pair<MIX_Audio*, MIX_Track*> loadAudioChunk(const std::string& filepath) {
-    // init SDL Mixer
-    // auto audioDevice = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, NULL);
-    // if (!audioDevice) {
-    //     std::cerr << "SDL_OpenAudioDevice Error: " << SDL_GetError() << std::endl;
-    //     SDL_DestroyWindow(win);
-    //     SDL_Quit();
-    // }
+  std::pair<MIX_Audio*, MIX_Track*> loadAudioChunk(const std::string& filepath, float gain = 1.0f) {
 
-    // if (!Mix_OpenAudio(audioDevice, NULL)) {
-    //     std::cerr << "Mix_OpenAudio Error: " << SDL_GetError() << std::endl;
-    //     SDL_DestroyWindow(win);
-    //     SDL_Quit();
-    // }
-    // init mixer
     if (!mixer) return {nullptr, nullptr};
 
     // then in this func load the audio
@@ -161,7 +148,7 @@ struct Resources {
     MIX_SetTrackAudio(track, audio);
 
     // MIX_GetTrackGain(track) / 2)
-    MIX_SetTrackGain(track, 1.0f);
+    MIX_SetTrackGain(track, gain);
 
     // // in game loop
     // SDL_PropertiesID opts = SDL_CreateProperties();
@@ -233,8 +220,14 @@ struct Resources {
     texEnemyHit = loadTexture(state.renderer, "data/enemy_hit.png");
     texEnemyDie = loadTexture(state.renderer, "data/enemy_die.png");
 
-    std::tie(audioShoot, shootTrack) = loadAudioChunk("data/audio/shoot.wav");
-    std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/wall_hit.wav");
+    float g = MIX_GetMasterGain(mixer);
+    float chunkAudioGain = g * 3;
+
+    std::tie(audioShoot, shootTrack) = loadAudioChunk("data/audio/shoot.wav", chunkAudioGain);
+    std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/wall_hit.wav", chunkAudioGain);
+    std::tie(audioEnemyHit, enemyHitTrack) = loadAudioChunk("data/audio/enemy_hit.wav", chunkAudioGain);
+    std::tie(audioEnemyDie, enemyDieTrack) = loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
+    std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk("data/audio/Juhani Junkala [Retro Game Music Pack] Level 1.mp3", g);
   };
 
   void unload() {
@@ -301,6 +294,9 @@ class GameEngine
     void collisionResponse(const SDL_FRect &rectA, const SDL_FRect &rectB, const SDL_FRect &rectC, GameObject &objA, GameObject &objB, float deltaTime);
     void handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown);
     void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime);
+    void playBackgroundSoundtrack();
+    void stopBackgroundSoundtrack();
+    // MIX_PauseTrack(track) / MIX_ResumeTrack(track)
 
     // getters
     GameObject &getPlayer();
