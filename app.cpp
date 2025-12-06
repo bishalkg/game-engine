@@ -17,7 +17,6 @@
 #include "backends/imgui_impl_sdlrenderer3.h"
 #include "app.h"
 
-
 void App::App::Run() {
 
   GameEngine::GameEngine game;

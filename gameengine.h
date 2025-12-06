@@ -16,6 +16,8 @@
 #include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_sdlrenderer3.h"
 
+#include <SDL3_mixer/SDL_mixer.h>
+
 
 // GameApp class
 // GameApp:start() -> creates GameEngine -> does everything thats done in the game loop rn
@@ -119,6 +121,70 @@ struct Resources {
     *texShoot, *texRunShoot, *texSlideShoot,
     *texEnemy, *texEnemyHit, *texEnemyDie;
 
+
+
+  //MIX_Audio and use the new loading/track APIs (MIX_LoadAudio, MIX_CreateTrack
+  std::vector<MIX_Audio*> audioBuff;
+  MIX_Audio *audioShoot, *audioShootHit;
+  MIX_Track *shootTrack, *hitTrack;
+  std::vector<MIX_Track*> audioTracks;
+  MIX_Mixer* mixer;
+
+
+  std::pair<MIX_Audio*, MIX_Track*> loadAudioChunk(const std::string& filepath) {
+
+
+    // init SDL Mixer
+    // auto audioDevice = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, NULL);
+    // if (!audioDevice) {
+    //     std::cerr << "SDL_OpenAudioDevice Error: " << SDL_GetError() << std::endl;
+    //     SDL_DestroyWindow(win);
+    //     SDL_Quit();
+    // }
+
+    // if (!Mix_OpenAudio(audioDevice, NULL)) {
+    //     std::cerr << "Mix_OpenAudio Error: " << SDL_GetError() << std::endl;
+    //     SDL_DestroyWindow(win);
+    //     SDL_Quit();
+    // }
+    // init mixer
+
+    // then in this func load the audio
+    MIX_Audio* audio = MIX_LoadAudio(mixer, filepath.c_str(), false);
+
+    audioBuff.push_back(audio);
+
+    // need one for EACH sound that will be played
+    MIX_Track* track = MIX_CreateTrack(mixer);
+    audioTracks.push_back(track);
+
+    MIX_SetTrackAudio(track, audio);
+
+    // MIX_GetTrackGain(track) / 2)
+    MIX_SetTrackGain(track, 1.0f);
+
+    // // in game loop
+    // SDL_PropertiesID opts = SDL_CreateProperties();
+    // SDL_SetNumberProperty(opts, MIX_PROP_PLAY_LOOPS_NUMBER, -1);
+    // SDL_SetNumberProperty(opts, MIX_PROP_PLAY_FADE_IN_MILLISECONDS_NUMBER, 200);
+
+
+    // when firing
+    // MIX_SetTrackAudio(shootTrack, audioShoot); // or MIX_SetTrackAudioWithProperties
+    // MIX_PlayTrack(shootTrack, 0); // defaults: no loop, no fade
+    // if (!MIX_PlayTrack(track, 0)) {
+    //     SDL_Log("Play failed: %s", SDL_GetError());
+    // }
+    // SDL_DestroyProperties(opts);  // once you’re done with the bag
+
+  // return the audio, and the track to set
+  return {audio, track};
+
+  };
+
+
+
+
   SDL_Texture *loadTexture(SDL_Renderer *renderer, const std::string &filepath){
     SDL_Texture *tex = IMG_LoadTexture(renderer, filepath.c_str()); // textures on gpu, surface in cpu memory (we can access)
     SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST); // scale so pixels aren't blended;
@@ -166,12 +232,29 @@ struct Resources {
     texEnemy = loadTexture(state.renderer, "data/enemy.png");
     texEnemyHit = loadTexture(state.renderer, "data/enemy_hit.png");
     texEnemyDie = loadTexture(state.renderer, "data/enemy_die.png");
+
+    std::tie(audioShoot, shootTrack) = loadAudioChunk("data/audio/shoot.wav");
+    std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/wall_hit.wav");
   };
 
   void unload() {
     for (SDL_Texture *tex : textures) {
       SDL_DestroyTexture(tex);
     }
+
+    // cleanup audio
+    for (MIX_Audio* chunk: audioBuff) {
+
+    // destroy chunks
+      MIX_DestroyAudio(chunk);
+    };
+
+    for (MIX_Track* track: audioTracks) {
+      MIX_DestroyTrack(track);
+    }
+
+    MIX_DestroyMixer(mixer);
+    MIX_Quit();
   };
 
 };

@@ -38,6 +38,17 @@ bool GameEngine::GameEngine::init(int width, int height, int logW, int logH) {
     return false;
   }
 
+
+
+  if (!MIX_Init()) {
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL Mixer Failed to init", "Failed to init audio", nullptr);
+    this->cleanup();
+    return false;
+  };
+
+  // one global mixer
+  MIX_Mixer* mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
+
   // setup game data
   gs = GameState(state);
   return this->initAllTiles();
@@ -514,6 +525,12 @@ void GameEngine::GameEngine::updateGameObject(GameObject &obj, float deltaTime) 
             this->gs.bullets.push_back(bullet); // push bullets so we can draw them
           }
         }
+
+        // MIX_SetTrackAudio(res.shootTrack, res.audioShoot); // or MIX_SetTrackAudioWithProperties
+        if (!MIX_PlayTrack(res.shootTrack, 0)) {
+            SDL_Log("Play failed: %s", SDL_GetError());
+        };
+
       } else {
           obj.texture = tex;
           obj.currentAnimation = animIndex;
