@@ -4,6 +4,7 @@
 #include <string>
 #include <format>
 #include <array>
+#include <filesystem>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -18,6 +19,8 @@
 
 #include <SDL3_mixer/SDL_mixer.h>
 
+#include "tmx.h"
+#include <algorithm>
 
 // GameApp class
 // GameApp:start() -> creates GameEngine -> does everything thats done in the game loop rn
@@ -41,7 +44,7 @@
 // sips -z 42 42 data/idle_marie.png --out data/idle_marie_42.png --> resize
 // magick data/move_helmet_marie.png -filter point -resize 210x42! data/move_helmet_marie_42.png
 
-namespace GameEngine {
+namespace game_engine {
 
 struct SDLState {
   SDL_Window *window;
@@ -74,13 +77,13 @@ struct GameState {
 
   GameScreen currentView;
 
-  std::array<std::vector<GameObject>, 2> layers;
-  std::vector<GameObject> backgroundTiles;
-  std::vector<GameObject> foregroundTiles;
+  std::vector<std::vector<GameObject>> layers;
+  // std::vector<GameObject> backgroundTiles;
+  // std::vector<GameObject> foregroundTiles;
   std::vector<GameObject> bullets;
   bool debugMode;
 
-  int playerIndex;
+  int playerLayer, playerIndex;
   SDL_FRect mapViewport; // viewable part of map
   float bg2scroll, bg3scroll, bg4scroll;
 
@@ -95,8 +98,13 @@ struct GameState {
   }
 
   // get current player
-  GameObject &player(size_t layer_idx_chars) { return layers[layer_idx_chars][playerIndex]; }
+  GameObject &player(size_t layer_idx_chars) { return layers[playerLayer][playerIndex]; }
 };
+
+// struct TileSetTextures {
+//   int firstGid;
+//   std::vector<SDL_Texture *> textures;
+// };
 
 struct Resources {
   const int ANIM_PLAYER_IDLE = 0;
@@ -116,13 +124,20 @@ struct Resources {
   std::vector<Animation> enemyAnims;
 
   std::vector<SDL_Texture*> textures;
-  SDL_Texture *texIdle, *texRun, *texSlide, *texBrick,
-    *texGrass, *texGround, *texPanel,
-    *texBg1, *texBg2, *texBg3, *texBg4, *texBullet, *texBulletHit,
+  SDL_Texture *texIdle, *texRun, *texSlide,
+    // *texBrick,
+    // *texGrass, *texGround,
+    // *texPanel,
+    *texBg1, *texBg2, *texBg3, *texBg4,
+    *texBullet, *texBulletHit,
     *texShoot, *texRunShoot, *texSlideShoot,
     *texEnemy, *texEnemyHit, *texEnemyDie;
 
 
+  // the current game map in use
+  std::unique_ptr<tmx::Map> map;
+  // std::unordered_map<uint32_t,const tmx::TileSet*> gidToTileSet;
+  // std::vector<tmx::TileSet*> tilesetTextures; // hold all textures for all tilesets currently present on the map
 
   //MIX_Audio and use the new loading/track APIs (MIX_LoadAudio, MIX_CreateTrack
   std::vector<MIX_Audio*> audioBuff;
@@ -181,6 +196,19 @@ struct Resources {
   }
 
   void load(SDLState &state){
+
+    map = tmx::loadMap("data/maps/level_1/level_1.tmx"); // only the resource struct instance can hold this pointer and it will be automatically deleted when not used (eg. when we swap out maps)
+    for (tmx::TileSet &tileSet: map->tileSets)
+    {
+      const std::string imagePath = "data/tiles/" + std::filesystem::path(tileSet.image.source).filename().string();
+      tileSet.texture = loadTexture(state.renderer, imagePath);
+      // tilesetTextures.push_back(&tileSet);
+    }
+    std::sort(map->tileSets.begin(), map->tileSets.end(),
+    [](const tmx::TileSet& a, const tmx::TileSet& b) {
+        return a.firstgid < b.firstgid;
+    });
+
     playerAnims.resize(5); // not reserve
     playerAnims[ANIM_PLAYER_IDLE] = Animation(8, 1.6f); // 8 frames in 1.6 sec
     playerAnims[ANIM_PLAYER_RUN] = Animation(4, 0.5f); //4
@@ -198,14 +226,14 @@ struct Resources {
     texSlideShoot = loadTexture(state.renderer, "data/slide_shoot.png");
 
 
-    texBrick = loadTexture(state.renderer, "data/tiles/brick.png");
-    texGrass = loadTexture(state.renderer, "data/tiles/grass.png");
-    texGround = loadTexture(state.renderer, "data/tiles/ground.png");
-    texPanel = loadTexture(state.renderer, "data/tiles/panel.png");
-    texBg1 = loadTexture(state.renderer, "data/bg/bg_layer1.png");
-    texBg2 = loadTexture(state.renderer, "data/bg/bg_layer2.png");
-    texBg3 = loadTexture(state.renderer, "data/bg/bg_layer3.png");
-    texBg4 = loadTexture(state.renderer, "data/bg/bg_layer4.png");
+    // texBrick = loadTexture(state.renderer, "data/tiles/brick.png");
+    // texGrass = loadTexture(state.renderer, "data/tiles/grass.png");
+    // texGround = loadTexture(state.renderer, "data/tiles/ground.png");
+    // texPanel = loadTexture(state.renderer, "data/tiles/panel.png");
+    // texBg1 = loadTexture(state.renderer, "data/bg/bg_layer1.png");
+    // texBg2 = loadTexture(state.renderer, "data/bg/bg_layer2.png");
+    // texBg3 = loadTexture(state.renderer, "data/bg/bg_layer3.png");
+    // texBg4 = loadTexture(state.renderer, "data/bg/bg_layer4.png");
 
     bulletAnims.resize(2);
     bulletAnims[ANIM_BULLET_MOVING] = Animation(4, 0.05f);
@@ -256,7 +284,7 @@ struct Resources {
 /*
 GameEngine is the main class that provides all the functionality to run our game
 */
-class GameEngine
+class Engine
 {
   private:
     SDLState state;
@@ -265,9 +293,8 @@ class GameEngine
     bool running;
 
   public:
-    GameEngine() : state{}, gs(state), res{} {}
-    GameEngine(SDLState& state, GameState& gs, Resources& res)
-        : state(state), gs(gs), res(res) {}
+    Engine() : state{}, gs(state), res{} {}
+
 
 
     inline static constexpr glm::vec2 GRAVITY = glm::vec2(0, 500);
@@ -291,6 +318,7 @@ class GameEngine
     void drawObject(GameObject &obj, float height, float width, float deltaTime);
     void updateGameObject(GameObject &obj, float deltaTime);
     bool initAllTiles();
+    // const tmx::TileSet* pickTileset(uint32_t gid);
     void handleCollision(GameObject &a, GameObject &b, float deltaTime);
     void collisionResponse(const SDL_FRect &rectA, const SDL_FRect &rectB, const SDL_FRect &rectC, GameObject &objA, GameObject &objB, float deltaTime);
     void handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown);

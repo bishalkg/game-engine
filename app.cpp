@@ -19,7 +19,7 @@
 
 void App::App::Run() {
 
-  GameEngine::GameEngine game;
+  game_engine::Engine game;
   if (!game.init(1600, 900, 640, 320)) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Game Init Failed", "Failed to init Game", nullptr);
     return;

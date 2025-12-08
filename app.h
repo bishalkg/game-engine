@@ -10,7 +10,7 @@ namespace App {
   class App
   {
 
-    GameEngine::GameEngine GameEngine;
+    game_engine::Engine GameEngine;
     Net::Client client;
     Net::Server server;
 
