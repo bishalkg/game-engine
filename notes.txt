@@ -25,12 +25,21 @@ cmake --build build
 cmake --install build
 
 
-Then building SDL_mixer that matches SDL3.3:
+Then building SDL_mixer that matches SDL3.3, git clone the repo, checkout appropriate branch:
 cmake -S . -B build \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
   -DCMAKE_INSTALL_PREFIX=$HOME/SDL3-mixer-3.1.0 \
   -DCMAKE_PREFIX_PATH="$HOME/SDL3-3.3"
+cmake --build build
+cmake --install build
+
+And SDL_image, git clone the repo, checkout appropriate branch:
+cmake -S . -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+  -DCMAKE_INSTALL_PREFIX=$HOME/SDL3-image-3.3 \
+  -DSDL3_DIR=$HOME/SDL3-3.3/lib/cmake/SDL3
 cmake --build build
 cmake --install build
 

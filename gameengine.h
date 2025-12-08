@@ -48,6 +48,7 @@ struct SDLState {
   SDL_Renderer *renderer;
   int width, height, logW, logH;
   const bool *keys;
+  bool fullscreen;
 
   // TODO create a new struct for imgui params (flags, button sizes, images etc.)
   ImGuiWindowFlags ImGuiWindowFlags =

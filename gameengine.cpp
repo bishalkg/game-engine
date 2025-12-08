@@ -328,6 +328,10 @@ void GameEngine::GameEngine::runEventLoop(GameObject &player) {
           if (event.key.scancode == SDL_SCANCODE_Q) {
             gs.debugMode = !gs.debugMode;
           }
+          else if (event.key.scancode == SDL_SCANCODE_F11) {
+            state.fullscreen = !state.fullscreen;
+            SDL_SetWindowFullscreen(state.window, state.fullscreen);
+          }
           break;
         }
       }
