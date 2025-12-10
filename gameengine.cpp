@@ -260,15 +260,37 @@ void game_engine::Engine::runGameLoop() {
       for (auto &layer : gs.layers) {
         for (GameObject &obj : layer) {
           if (obj.type == ObjectType::level) {
-            // if level tile, let src and dst override
+            // if level tile, let src and dst override so that
             // src points to a specfic 32x32 tile texture from the whole png; dst is where on our window we want to place it
             SDL_FRect dst = obj.data.level.dst;
             dst.x -= gs.mapViewport.x;  // if you scroll horizontally
             dst.y -= gs.mapViewport.y;  // if vertical scrolling
             // dst.w = static_cast<float>(obj.texture->w);
             // dst.h = static_cast<float>(obj.texture->h);
-
             SDL_RenderTexture(sdl.renderer, obj.texture, &obj.data.level.src, &dst);
+                // if (gs.debugMode) {
+                //   // display each objects collision hitbox
+                //   SDL_FRect rectA{
+                //     .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
+                //     .y = obj.position.y + obj.collider.y,
+                //     .w = obj.collider.w,
+                //     .h = obj.collider.h
+                //   };
+                //   SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
+                //   SDL_SetRenderDrawColor(state.renderer, 255, 0, 0, 100);
+                //   SDL_RenderFillRect(state.renderer, &rectA);
+                //   SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_NONE);
+
+                //   SDL_FRect sensor{
+                //     .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
+                //     .y = obj.position.y + obj.collider.y + obj.collider.h,
+                //     .w = obj.collider.w, .h = 1
+                //   };
+                //   SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
+                //   SDL_SetRenderDrawColor(state.renderer, 0, 0, 255, 255);
+                //   SDL_RenderFillRect(state.renderer, &sensor);
+                //   SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_NONE);
+                // }
           } else {
             this->drawObject(obj, obj.spritePixelH, obj.spritePixelW, deltaTime);
           }
@@ -308,12 +330,11 @@ void game_engine::Engine::runGameLoop() {
     // Textures live in GPU memory; the renderer batches copies/draws and flushes them on present.
     // 6) Render ImGui on top of your SDL frame
     // doRenderUpdates()
+    // need to do this to get the GUI to render properly:
     SDL_SetRenderLogicalPresentation(sdl.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
     ImGui::Render();
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), sdl.renderer);
-
     SDL_SetRenderLogicalPresentation(sdl.renderer, sdl.logW, sdl.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
-
     SDL_RenderPresent(sdl.renderer);
 
     prevTime = nowTime;
@@ -449,8 +470,8 @@ void game_engine::Engine::drawObject(GameObject &obj, float height, float width,
     };
 
     SDL_FRect dst = {
-      .x = obj.position.x - gs.mapViewport.x, // move objects according to updated viewport position
-      .y = obj.position.y, // TODO?
+      .x = obj.position.x - gs.mapViewport.x, // move objects according to updated viewport position in x AND y
+      .y = obj.position.y - gs.mapViewport.y,
       .w = width,
       .h = height,
     };
@@ -929,7 +950,7 @@ bool game_engine::Engine::initAllTiles() {
     const auto createObject(int r, int c, SDL_Texture *tex, ObjectType type, float spriteH, float spriteW, int srcX, int srcY) {
       GameObject o(spriteH, spriteW);
       o.type = type;
-      o.position = glm::vec2(c * TILE_SIZE, state.logH - (20 - r) * TILE_SIZE);
+      // o.position = glm::vec2(c * TILE_SIZE, state.logH - (20 - r) * TILE_SIZE);
       o.texture = tex;
       o.collider = {
         .x = 5,
@@ -938,8 +959,8 @@ bool game_engine::Engine::initAllTiles() {
         .h = spriteH
       };
 
-      // o.position = { c * TILE_SIZE, r * TILE_SIZE };
       if (type == ObjectType::level) {
+        o.position = { c * spriteW, r * spriteH };
         // o.position = glm::vec2(c * TILE_SIZE, state.logH - (20 - r) * TILE_SIZE);
         // pick out the exact tile from the tilesheet
         o.data.level.src = SDL_FRect{

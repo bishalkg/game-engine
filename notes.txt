@@ -170,3 +170,27 @@ To play audio, you create a track with MIX_CreateTrack(). You need one track for
 Assign input to a MIX_Track with MIX_SetTrackAudio(), MIX_SetTrackAudioStream(), or MIX_SetTrackIOStream().
 
 Once a track has an input, start it playing with MIX_PlayTrack(). There are many options to this function to dictate mixing features: looping, fades, etc.
+
+
+
+
+
+Impl Notes:
+- right now event the backgrounds are rendered tile by tile, but could I just download the full png and for each level render a different background with a single render? Then we can
+do the parallax we have now without any changes.
+  - basically level1 background, level2 background get loaded as you enter the next level,
+    - we can maybe export these separately
+
+when i change logical width and height to size of my total game tiles
+characters display fine
+but when I change logical width and height to be smaller, character dissapears and our viewport doesnt follow it.
+the logical height and width are actually set using the SDL_SetRenderLogicalPresentation twice, one init and repeatedly in the loop
+
+If i comment out the set render logical presentation, and pass the smalle w/h i think i get the same behavior or no? yes same
+
+are players x and y position are based on the image width and height?
+
+is my image not properly sized as before, like to get it to work it HAS to be just the portion we’d want to see, not us zooming into one section of the map?
+this would mean just the height is wrong? no this doesnt make sense, the whole image can be there and we just view a portion of it with the viewport and players position
+
+watch vid again and replicate what he has

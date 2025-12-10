@@ -20,7 +20,7 @@
 void App::App::Run() {
 
   game_engine::Engine game;
-  if (!game.init(1600, 900, 960, 640)) { // 960, 640, 640, 320
+  if (!game.init(1600, 900, 640, 320)) { // 960, 640, 640, 320
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Game Init Failed", "Failed to init Game", nullptr);
     return;
   }
