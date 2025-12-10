@@ -195,7 +195,7 @@ struct Resources {
     return tex;
   }
 
-  void load(SDLState &state){
+  void loadAllAssets(SDLState &state){
 
     map = tmx::loadMap("data/maps/level_1/level_1.tmx"); // only the resource struct instance can hold this pointer and it will be automatically deleted when not used (eg. when we swap out maps)
     for (tmx::TileSet &tileSet: map->tileSets)

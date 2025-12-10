@@ -67,20 +67,19 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
   MIX_SetMasterGain(res.mixer, 0.5f);  // 50% master
 
   // load game assets
-  res.load(state);
+  res.loadAllAssets(state);
   if (!res.texIdle) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Idle Texture load failed", "Failed to load idle image", nullptr);
     this->cleanup();
     return false;
   }
 
-
   // setup game data
   gs = GameState(state);
   // gs.mapViewport.x = 0;
   // gs.mapViewport.y = 0;
-  // gs.mapViewport.w = state.width;   // or state.logW if you want that logical size
-  // gs.mapViewport.h = state.height;  // or state.logH
+  // gs.mapViewport.w = state.logW; // or state.width/state.logW
+  // gs.mapViewport.h = state.logH; // or state.height/state.logH
   return this->initAllTiles();
 }
 
@@ -96,6 +95,7 @@ void game_engine::Engine::runGameLoop() {
 
   while (this->running){
 
+    // TODO the type of player is enemy????? i think we're following the wrong guy
     GameObject &player = this->getPlayer();  // fetch each frame in case index changes
     // use gs.currentView directly so state changes take effect immediately
 
@@ -199,6 +199,11 @@ void game_engine::Engine::runGameLoop() {
           if (obj.dynamic) {
             this->updateGameObject(obj, deltaTime);
           }
+          // if (obj.type == ObjectType::player) {
+          //   bool left  = state.keys ? state.keys[SDL_SCANCODE_LEFT]  : false;
+          //   bool right = state.keys ? state.keys[SDL_SCANCODE_RIGHT] : false;
+          //   SDL_Log("pos=(%.2f,%.2f) vel=(%.2f,%.2f) left=%d right=%d", obj.position.x, obj.position.y, obj.velocity.x, obj.velocity.y, int(left), int(right));
+          // }
         }
       }
 
@@ -207,9 +212,25 @@ void game_engine::Engine::runGameLoop() {
         this->updateGameObject(bullet, deltaTime);
       }
 
+
       // TODO wrap all below in Render() function
       // calculate viewport position based on player updated position
-      gs.mapViewport.x = (player.position.x + player.spritePixelW / 2) - gs.mapViewport.w / 2;
+      // gs.mapViewport.x = (player.position.x + player.spritePixelW / 2) - gs.mapViewport.w / 2;
+      // gs.mapViewport.y = (player.position.y + player.spritePixelH / 2) - gs.mapViewport.h / 2;
+
+      int mapWpx = res.map->mapWidth * res.map->tileWidth;
+      int mapHpx = res.map->mapHeight * res.map->tileHeight;
+
+      gs.mapViewport.x = std::clamp(
+          (player.position.x + player.spritePixelW * 0.5f) - gs.mapViewport.w * 0.5f,
+          0.0f,
+          std::max(0.0f, float(mapWpx - gs.mapViewport.w)));
+
+      gs.mapViewport.y = std::clamp(
+          (player.position.y + player.spritePixelH * 0.5f) - gs.mapViewport.h * 0.5f,
+          0.0f,
+          std::max(0.0f, float(mapHpx - gs.mapViewport.h)));
+
 
       // SDL_SetRenderDrawColor(sdl.renderer, 20, 10, 30, 255);
 
@@ -239,10 +260,14 @@ void game_engine::Engine::runGameLoop() {
       for (auto &layer : gs.layers) {
         for (GameObject &obj : layer) {
           if (obj.type == ObjectType::level) {
-          // if level tile, let src and dst override
+            // if level tile, let src and dst override
+            // src points to a specfic 32x32 tile texture from the whole png; dst is where on our window we want to place it
             SDL_FRect dst = obj.data.level.dst;
-            // dst.x -= gs.mapViewport.x;  // if you scroll horizontally
-            // dst.y -= gs.mapViewport.y;  // if vertical scrolling
+            dst.x -= gs.mapViewport.x;  // if you scroll horizontally
+            dst.y -= gs.mapViewport.y;  // if vertical scrolling
+            // dst.w = static_cast<float>(obj.texture->w);
+            // dst.h = static_cast<float>(obj.texture->h);
+
             SDL_RenderTexture(sdl.renderer, obj.texture, &obj.data.level.src, &dst);
           } else {
             this->drawObject(obj, obj.spritePixelH, obj.spritePixelW, deltaTime);
@@ -275,7 +300,7 @@ void game_engine::Engine::runGameLoop() {
             sdl.renderer,
             5,
             5,
-            std::format("State3: {}  Direction: {} B: {}, G: {}", static_cast<int>(player.data.player.state), player.direction, gs.bullets.size(), player.grounded).c_str());
+            std::format("State3: {}  Direction: {} B: {}, G: {}, Px: {}, Py:{}, VPx: {}", static_cast<int>(player.data.player.state), player.direction, gs.bullets.size(), player.grounded, player.position.x, player.position.y, gs.mapViewport.x).c_str());
       }
     }
 
@@ -358,13 +383,10 @@ bool game_engine::Engine::initWindowAndRenderer(int width, int height, int logW,
   state.logW = logW;
   state.logH = logH;
 
-  if (!SDL_Init(SDL_INIT_VIDEO)) { // later to add audio we'll also need SDL_INIT_AUDIO
+  if (!SDL_Init(SDL_INIT_VIDEO)) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL Init Error", "Failed to initialize SDL.", nullptr);
     return false;
   };
-
-  // SDL_CreateWindow("SDL Game Engine",width, height, fullscreen ? SDL_WINDOW_FULLSCREEN : 0),
-  // SDL_CreateRenderer(sdlstate.window, nullptr)
 
   if (!SDL_CreateWindowAndRenderer("SDL Game Engine", state.width, state.height, SDL_WINDOW_RESIZABLE, &state.window, &state.renderer)) {
 
@@ -373,6 +395,7 @@ bool game_engine::Engine::initWindowAndRenderer(int width, int height, int logW,
     this->cleanup();
     return false;
   }
+  state.keys = SDL_GetKeyboardState(nullptr);
   SDL_SetRenderVSync(state.renderer, 1);
 
   // configure presentation
@@ -418,7 +441,7 @@ void game_engine::Engine::drawObject(GameObject &obj, float height, float width,
       obj.animations[obj.currentAnimation].currentFrame() * width
       : (obj.spriteFrame -1)*width;
 
-    SDL_FRect src = {
+    SDL_FRect src = { // src is position on animation sheet texture
       .x = srcX, // different starting x position in sprite sheet
       .y = 0,
       .w = width,
@@ -427,7 +450,7 @@ void game_engine::Engine::drawObject(GameObject &obj, float height, float width,
 
     SDL_FRect dst = {
       .x = obj.position.x - gs.mapViewport.x, // move objects according to updated viewport position
-      .y = obj.position.y,
+      .y = obj.position.y, // TODO?
       .w = width,
       .h = height,
     };
@@ -906,29 +929,32 @@ bool game_engine::Engine::initAllTiles() {
     const auto createObject(int r, int c, SDL_Texture *tex, ObjectType type, float spriteH, float spriteW, int srcX, int srcY) {
       GameObject o(spriteH, spriteW);
       o.type = type;
-      o.position = glm::vec2(c * TILE_SIZE, state.logH - (MAP_ROWS - r) * TILE_SIZE);
+      o.position = glm::vec2(c * TILE_SIZE, state.logH - (20 - r) * TILE_SIZE);
       o.texture = tex;
       o.collider = {
-        .x = 0,
-        .y = 0,
-        .w = TILE_SIZE,
-        .h = TILE_SIZE
+        .x = 5,
+        .y = 5,
+        .w = spriteW,
+        .h = spriteH
       };
 
+      // o.position = { c * TILE_SIZE, r * TILE_SIZE };
       if (type == ObjectType::level) {
+        // o.position = glm::vec2(c * TILE_SIZE, state.logH - (20 - r) * TILE_SIZE);
+        // pick out the exact tile from the tilesheet
         o.data.level.src = SDL_FRect{
-          static_cast<float>(srcX),
-          static_cast<float>(srcY),
-          static_cast<float>(spriteW),
-          static_cast<float>(spriteH)
+          .x = static_cast<float>(srcX),
+          .y = static_cast<float>(srcY),
+          .w = static_cast<float>(spriteW),
+          .h = static_cast<float>(spriteH)
         };
         o.data.level.dst = SDL_FRect{
-          static_cast<float>(c) * spriteW,
-          static_cast<float>(r) * spriteH,
-          static_cast<float>(spriteW),
-          static_cast<float>(spriteH)
+          .x = static_cast<float>(c) * spriteW,
+          .y = static_cast<float>(r) * spriteH,
+          .w = static_cast<float>(spriteW),
+          .h = static_cast<float>(spriteH)
         };
-        // o.position = { c * TILE_SIZE, r * TILE_SIZE };
+
       }
       return o;
     };
@@ -975,8 +1001,13 @@ bool game_engine::Engine::initAllTiles() {
       for (tmx::LayerObject &obj : objectGroup.objects)
       {
         glm::vec2 objPos(
-          obj.y - res.map->tileHeight / 2,
-          obj.x - res.map->tileWidth / 2);
+          obj.x - res.map->tileWidth / 2, //17
+          obj.y - res.map->tileHeight / 2 //411
+        );
+
+        // glm::vec2 objPos{ obj.x, obj.y - res.map->tileHeight }; // raise by tile height so the bottom sits on Tiled Y
+        // glm::vec2 objPos{ obj.y - res.map->tileHeight, obj.x}; // raise by tile height so the bottom sits on Tiled Y
+
 
         if (obj.type == "Enemy") {
           GameObject enemy = createObject(1, 1, res.texEnemy, ObjectType::enemy, TILE_SIZE, TILE_SIZE, 0, 0);
@@ -986,18 +1017,19 @@ bool game_engine::Engine::initAllTiles() {
           enemy.animations = res.enemyAnims;
           enemy.dynamic = true;
           enemy.maxSpeedX = 15;
-          // enemy.collider = {
-          //   .x = 11,
-          //   .y = 6,
-          //   .w = 10,
-          //   .h = 26
-          // };
+          enemy.collider = {
+            .x = 11,
+            .y = 6,
+            .w = 10,
+            .h = 26
+          };
           newLayer.push_back(enemy);
         }
         if (obj.type == "Player") {
         {
           GameObject player = createObject(1, 1, res.texIdle, ObjectType::player, 32, 32, 0, 0); // TODO update with new dimensions
           player.position = objPos;
+          // player.position = glm::vec2(0, 0);
           player.data.player = PlayerData();
           player.animations = res.playerAnims; // copies via std::vector copy assignment
           player.currentAnimation = res.ANIM_PLAYER_IDLE;
@@ -1011,7 +1043,7 @@ bool game_engine::Engine::initAllTiles() {
             .h = 26
           };
           newLayer.push_back(player);
-          gs.playerIndex = newLayer.size();
+          gs.playerIndex = newLayer.size() - 1;
           gs.playerLayer = gs.layers.size();
         }
         };
