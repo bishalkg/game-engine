@@ -11,8 +11,8 @@ namespace App {
   {
 
     game_engine::Engine GameEngine;
-    Net::Client client;
-    Net::Server server;
+    Net::Client client; // TODO
+    Net::Server server; // TODO
 
     // some persistence object like database
     public:

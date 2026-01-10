@@ -268,29 +268,29 @@ void game_engine::Engine::runGameLoop() {
             // dst.w = static_cast<float>(obj.texture->w);
             // dst.h = static_cast<float>(obj.texture->h);
             SDL_RenderTexture(sdl.renderer, obj.texture, &obj.data.level.src, &dst);
-                // if (gs.debugMode) {
-                //   // display each objects collision hitbox
-                //   SDL_FRect rectA{
-                //     .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
-                //     .y = obj.position.y + obj.collider.y,
-                //     .w = obj.collider.w,
-                //     .h = obj.collider.h
-                //   };
-                //   SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
-                //   SDL_SetRenderDrawColor(state.renderer, 255, 0, 0, 100);
-                //   SDL_RenderFillRect(state.renderer, &rectA);
-                //   SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_NONE);
+            if (gs.debugMode) {
+              // display each objects collision hitbox
+              SDL_FRect rectA{
+                .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
+                .y = obj.position.y + obj.collider.y - gs.mapViewport.y,
+                .w = obj.collider.w,
+                .h = obj.collider.h
+              };
+              SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
+              SDL_SetRenderDrawColor(state.renderer, 255, 0, 0, 100);
+              SDL_RenderFillRect(state.renderer, &rectA);
+              SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_NONE);
 
-                //   SDL_FRect sensor{
-                //     .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
-                //     .y = obj.position.y + obj.collider.y + obj.collider.h,
-                //     .w = obj.collider.w, .h = 1
-                //   };
-                //   SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
-                //   SDL_SetRenderDrawColor(state.renderer, 0, 0, 255, 255);
-                //   SDL_RenderFillRect(state.renderer, &sensor);
-                //   SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_NONE);
-                // }
+              SDL_FRect sensor{
+                .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
+                .y = obj.position.y + obj.collider.y + obj.collider.h - gs.mapViewport.y,
+                .w = obj.collider.w, .h = 1
+              };
+              SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
+              SDL_SetRenderDrawColor(state.renderer, 0, 0, 255, 255);
+              SDL_RenderFillRect(state.renderer, &sensor);
+              SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_NONE);
+            }
           } else {
             this->drawObject(obj, obj.spritePixelH, obj.spritePixelW, deltaTime);
           }
@@ -457,24 +457,45 @@ void game_engine::Engine::cleanup() {
 
 void game_engine::Engine::drawObject(GameObject &obj, float height, float width, float deltaTime) {
 
+    float frameW = height;
+    float frameH = width;
+    if (obj.type == ObjectType::enemy) {
+        frameW = obj.data.enemy.srcW;   // e.g. 128
+        frameH = obj.data.enemy.srcH;   // e.g. 128
+    }
+
     // pull out specific sprite frame from sprite sheet
     float srcX = obj.currentAnimation != -1 ?
-      obj.animations[obj.currentAnimation].currentFrame() * width
-      : (obj.spriteFrame -1)*width;
+      obj.animations[obj.currentAnimation].currentFrame() * frameW
+      : (obj.spriteFrame -1)*frameW;
 
     SDL_FRect src = { // src is position on animation sheet texture
       .x = srcX, // different starting x position in sprite sheet
       .y = 0,
-      .w = width,
-      .h = height
+      .w = frameW, // if source sheet is larger keep the actual w/h
+      .h = frameH
     };
+
+    // if (obj.type == ObjectType::enemy) {
+    //   src.h = obj.data.enemy.srcH;
+    //   src.w = obj.data.enemy.srcW;
+    // }
+
+
+    // obj.data.enemy.srcH // we can use these on dst to scale down the image
+    // obj.data.enemy.srcW
 
     SDL_FRect dst = {
       .x = obj.position.x - gs.mapViewport.x, // move objects according to updated viewport position in x AND y
       .y = obj.position.y - gs.mapViewport.y,
-      .w = width,
+      .w = width, // if source is larger but you want to shrink it, set the w/h you want to scale it to
       .h = height,
     };
+
+    if (obj.type == ObjectType::enemy) {
+      dst.h = obj.data.enemy.srcH / 2.5f;
+      dst.w = obj.data.enemy.srcW / 2.5f;
+    }
 
     SDL_FlipMode flipMode = obj.direction == -1 ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
 
@@ -494,7 +515,7 @@ void game_engine::Engine::drawObject(GameObject &obj, float height, float width,
       // display each objects collision hitbox
       SDL_FRect rectA{
         .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
-        .y = obj.position.y + obj.collider.y,
+        .y = obj.position.y + obj.collider.y - gs.mapViewport.y,
         .w = obj.collider.w,
         .h = obj.collider.h
       };
@@ -505,7 +526,7 @@ void game_engine::Engine::drawObject(GameObject &obj, float height, float width,
 
       SDL_FRect sensor{
         .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
-        .y = obj.position.y + obj.collider.y + obj.collider.h,
+        .y = obj.position.y + obj.collider.y + obj.collider.h - gs.mapViewport.y,
         .w = obj.collider.w, .h = 1
       };
       SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
@@ -711,10 +732,12 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
             currDirection = -1;
           };
           obj.acceleration = glm::vec2(30, 0);
+          obj.texture = res.texEnemyRun;
         } else {
           // stop them from moving when too far away
           obj.acceleration = glm::vec2(0);
           obj.velocity.x = 0;
+          obj.texture = res.texEnemy;
         }
 
         break;
@@ -947,14 +970,17 @@ bool game_engine::Engine::initAllTiles() {
           return match; // assumes sets are sorted by firstGid
     }
 
-    const auto createObject(int r, int c, SDL_Texture *tex, ObjectType type, float spriteH, float spriteW, int srcX, int srcY) {
+    const GameObject createObject(int r, int c, SDL_Texture *tex, ObjectType type, float spriteH, float spriteW, int srcX, int srcY) {
       GameObject o(spriteH, spriteW);
       o.type = type;
       // o.position = glm::vec2(c * TILE_SIZE, state.logH - (20 - r) * TILE_SIZE);
       o.texture = tex;
+
+      // default collider for level objects
+      // TODO I need to define a specific collider for each type of level tile
       o.collider = {
-        .x = 5,
-        .y = 5,
+        .x = 0,
+        .y = 0, // update collider x.y position to  detemine how much overlap is allowed between objects
         .w = spriteW,
         .h = spriteH
       };
@@ -1021,7 +1047,7 @@ bool game_engine::Engine::initAllTiles() {
       std::vector<GameObject> newLayer;
       for (tmx::LayerObject &obj : objectGroup.objects)
       {
-        glm::vec2 objPos(
+        glm::vec2 objStartingPos(
           obj.x - res.map->tileWidth / 2, //17
           obj.y - res.map->tileHeight / 2 //411
         );
@@ -1032,25 +1058,27 @@ bool game_engine::Engine::initAllTiles() {
 
         if (obj.type == "Enemy") {
           GameObject enemy = createObject(1, 1, res.texEnemy, ObjectType::enemy, TILE_SIZE, TILE_SIZE, 0, 0);
-          enemy.position = objPos;
+          enemy.position = objStartingPos;
           enemy.data.enemy = EnemyData();
+          enemy.data.enemy.srcH = 128;
+          enemy.data.enemy.srcW = 128;
           enemy.currentAnimation = res.ANIM_ENEMY;
           enemy.animations = res.enemyAnims;
           enemy.dynamic = true;
           enemy.maxSpeedX = 15;
+          // update collider x.y position to detemine how much overlap is allowed between objects
           enemy.collider = {
             .x = 11,
-            .y = 6,
-            .w = 10,
-            .h = 26
+            .y = 10,
+            .w = 32,
+            .h = 32
           };
           newLayer.push_back(enemy);
         }
         if (obj.type == "Player") {
         {
           GameObject player = createObject(1, 1, res.texIdle, ObjectType::player, 32, 32, 0, 0); // TODO update with new dimensions
-          player.position = objPos;
-          // player.position = glm::vec2(0, 0);
+          player.position = objStartingPos;
           player.data.player = PlayerData();
           player.animations = res.playerAnims; // copies via std::vector copy assignment
           player.currentAnimation = res.ANIM_PLAYER_IDLE;
@@ -1059,7 +1087,7 @@ bool game_engine::Engine::initAllTiles() {
           player.dynamic = true;
           player.collider = {
             .x = 11,
-            .y = 6,
+            .y = -3,
             .w = 10,
             .h = 26
           };

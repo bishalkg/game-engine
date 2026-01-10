@@ -32,6 +32,8 @@ struct EnemyData {
   EnemyState state;
   Timer damageTimer;
   int healthPoints;
+  int srcH, srcW;
+
 
   EnemyData(): state(EnemyState::idle), damageTimer(1.0f) {
     healthPoints = 100;

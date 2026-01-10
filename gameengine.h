@@ -121,6 +121,7 @@ struct Resources {
   const int ANIM_ENEMY = 0;
   const int ANIM_ENEMY_HIT = 1;
   const int ANIM_ENEMY_DIE = 2;
+  const int ANIM_ENEMY_RUN = 3;
   std::vector<Animation> enemyAnims;
 
   std::vector<SDL_Texture*> textures;
@@ -131,7 +132,7 @@ struct Resources {
     *texBg1, *texBg2, *texBg3, *texBg4,
     *texBullet, *texBulletHit,
     *texShoot, *texRunShoot, *texSlideShoot,
-    *texEnemy, *texEnemyHit, *texEnemyDie;
+    *texEnemy, *texEnemyHit, *texEnemyDie, *texEnemyRun;
 
 
   // the current game map in use
@@ -242,12 +243,21 @@ struct Resources {
     texBulletHit = loadTexture(state.renderer, "data/bullet_hit.png");
 
     enemyAnims.resize(3);
-    enemyAnims[ANIM_ENEMY] = Animation(8, 2.0f);
-    enemyAnims[ANIM_ENEMY_HIT] = Animation(8, 1.0f);
-    enemyAnims[ANIM_ENEMY_DIE] = Animation(18, 2.0f);
-    texEnemy = loadTexture(state.renderer, "data/enemy.png");
-    texEnemyHit = loadTexture(state.renderer, "data/enemy_hit.png");
-    texEnemyDie = loadTexture(state.renderer, "data/enemy_die.png");
+    // enemyAnims[ANIM_ENEMY] = Animation(8, 2.0f);
+    // enemyAnims[ANIM_ENEMY_HIT] = Animation(8, 1.0f);
+    // enemyAnims[ANIM_ENEMY_DIE] = Animation(18, 2.0f);
+    // texEnemy = loadTexture(state.renderer, "data/enemy.png");
+    // texEnemyHit = loadTexture(state.renderer, "data/enemy_hit.png");
+    // texEnemyDie = loadTexture(state.renderer, "data/enemy_die.png");
+    enemyAnims[ANIM_ENEMY] = Animation(7, 0.6f);
+    enemyAnims[ANIM_ENEMY_HIT] = Animation(3, 0.3f);
+    enemyAnims[ANIM_ENEMY_DIE] = Animation(3, 0.5f);
+    enemyAnims[ANIM_ENEMY_RUN] = Animation(8, 0.5f);
+    texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Idle.png");
+    // texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Attack_1.png");
+    texEnemyRun = loadTexture(state.renderer, "data/enemies/skeleton/Run.png");
+    texEnemyHit = loadTexture(state.renderer, "data/enemies/skeleton/Hurt.png");
+    texEnemyDie = loadTexture(state.renderer, "data/enemies/skeleton/Dead.png");
 
     float g = MIX_GetMasterGain(mixer);
     float chunkAudioGain = g * 3;
@@ -256,7 +266,7 @@ struct Resources {
     std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/wall_hit.wav", chunkAudioGain);
     std::tie(audioEnemyHit, enemyHitTrack) = loadAudioChunk("data/audio/enemy_hit.wav", chunkAudioGain);
     std::tie(audioEnemyDie, enemyDieTrack) = loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
-    std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk("data/audio/Juhani Junkala [Retro Game Music Pack] Level 1.mp3", g);
+    std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk("data/audio/Level_1_Forest_Outside_Castle.wav", g);
   };
 
   void unload() {
