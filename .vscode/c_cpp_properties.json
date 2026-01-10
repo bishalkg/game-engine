@@ -1,14 +1,17 @@
 {
     "configurations": [
         {
-            "name": "Mac",
-            "includePath": [
-                "${workspaceFolder}/**"
+            "name": "CMake",
+            "configurationProvider": "ms-vscode.cmake-tools",
+            "compileCommands": [
+                "${workspaceFolder}/build/compile_commands.json"
             ],
-            "defines": [],
-            "cStandard": "c23",
-            "cppStandard": "c++26",
-            "intelliSenseMode": "macos-clang-arm64"
+            "intelliSenseMode": "macos-clang-arm64",
+            "cppStandard": "c++23",
+            "includePath": [
+                "/opt/homebrew/include",
+                "/opt/homebrew/include/SDL3_image"
+            ]
         }
     ],
     "version": 4
