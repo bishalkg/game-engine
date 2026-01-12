@@ -14,6 +14,14 @@ find_package(SDL3_mixer REQUIRED CONFIG)
 find_package(SDL3_image REQUIRED CONFIG)
 find_package(glm REQUIRED CONFIG)
 
+# link asio as vendor
+set(ASIO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/asio)
+add_library(asio INTERFACE)
+target_include_directories(asio INTERFACE ${ASIO_DIR})
+target_compile_definitions(asio INTERFACE ASIO_STANDALONE)
+find_package(Threads REQUIRED)
+target_link_libraries(asio INTERFACE Threads::Threads)
+
 add_executable(game_engine
   main.cpp
   app.cpp
@@ -21,7 +29,7 @@ add_executable(game_engine
   tmx.cpp
   vendor/tinyxml2/tinyxml2.cpp
 )
-target_link_libraries(game_engine PRIVATE SDL3::SDL3 SDL3_image::SDL3_image glm::glm SDL3_mixer::SDL3_mixer) # add sdl3 and sdl3_image to the compiler header link paths
+# target_link_libraries(game_engine PRIVATE SDL3::SDL3 SDL3_image::SDL3_image glm::glm SDL3_mixer::SDL3_mixer) # add sdl3 and sdl3_image to the compiler header link paths
 
 # ImGui: core + SDL3/SDL_Renderer3 backends
 set(IMGUI_DIR ${IMGUI_DIR})
@@ -41,7 +49,7 @@ target_include_directories(game_engine PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendo
 
 target_link_libraries(imgui PUBLIC SDL3::SDL3)  # backend needs SDL headers
 target_link_libraries(game_engine
-  PRIVATE SDL3::SDL3 SDL3_image::SDL3_image SDL3_mixer::SDL3_mixer glm::glm imgui
+  PRIVATE SDL3::SDL3 SDL3_image::SDL3_image SDL3_mixer::SDL3_mixer glm::glm imgui asio
 )
 
 

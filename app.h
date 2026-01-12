@@ -16,9 +16,9 @@ namespace App {
 
     // some persistence object like database
     public:
-      App() {};
+      App() = default;
 
-      ~App(){}
+      ~App() = default;
 
       void Run();
   };
