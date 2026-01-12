@@ -56,7 +56,7 @@ namespace net
       // get location at end of body that we want to chip off
       size_t idx = msg.body.size() - sizeof(DataType);
 
-      // copy that data onto data
+      // copy that data onto data (needs ptr; address of ref == address of underlying data)
       std::memcpy(&data, msg.body.data() + idx, sizeof(DataType));
 
       // resize since we copied that data
@@ -69,6 +69,23 @@ namespace net
 
 
 
+  };
+
+
+  template <typename T>
+  class connection;
+
+  template <typename T>
+  struct owned_message
+  {
+    std::shared_ptr<connection<T>> remote = nullptr; // tag each with connection
+    message<T> msg;
+
+    friend std::ostream& operator<<(std::ostream& os, const owned_message<T>& msg)
+    {
+      os << msg.msg;
+      return os;
+    }
   };
 
 }
