@@ -8,7 +8,7 @@ namespace net
   struct message_header
   {
     T id{};
-    uint32_t size = 0;
+    uint32_t bodySize = 0;
   };
 
   template <typename T>
@@ -17,14 +17,14 @@ namespace net
     message_header<T> header{};
     std::vector<uint8_t> body;
 
-    size_t size() const
+    size_t size() const // TODO rename to bodySize
     {
-      return sizeof(msg_header<T>) + body.size();
+      return sizeof(message_header<T>) + body.size();
     }
 
     friend std::ostream& operator << (std::ostream& os, const message<T>& msg)
     {
-      os << "ID:" << int(msg.header.id) << "Size:" << msg.header.size;
+      os << "ID:" << int(msg.header.id) << "Size:" << msg.header.bodySize;
       return os;
     }
 
@@ -41,7 +41,7 @@ namespace net
       // incr pointer to end of vector and then append data
       std::memcpy(msg.body.data() + curr_size, &data, sizeof(DataType));
 
-      msg.header.size = msg.size();
+      msg.header.bodySize = msg.size();
 
       // return ref to msg
       return msg;
@@ -78,7 +78,7 @@ namespace net
   template <typename T>
   struct owned_message
   {
-    std::shared_ptr<connection<T>> remote = nullptr; // tag each with connection
+    std::shared_ptr<connection<T>> remote = nullptr; // tag each with connection on server; client only has one so nullptr
     message<T> msg;
 
     friend std::ostream& operator<<(std::ostream& os, const owned_message<T>& msg)

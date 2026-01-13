@@ -24,7 +24,7 @@ namespace net
       bool Start() {
         try
         {
-          WaitForClientConnection(); // give context work first so it doesn't close on startup
+          AsyncWaitForClientConnection(); // give context work first so it doesn't close on startup
 
           m_threadContext = std::thread([this]() { m_asioContext.run(); });
 
@@ -52,7 +52,7 @@ namespace net
 
       }
 
-      void WaitForClientConnection()
+      void AsyncWaitForClientConnection()
       {
         m_asioAccepter.async_accept(
           [this](std::error_code ec, asio::ip::tcp::socket socket)
@@ -87,7 +87,7 @@ namespace net
             }
 
             // return to waiting for another conn
-            WaitForClientConnection();
+            AsyncWaitForClientConnection();
           });
       }
 
@@ -177,7 +177,7 @@ namespace net
         }
 
       protected:
-        tsqueue<owned_message<T>> m_qMessagesIn;
+        tsqueue<owned_message<T>> m_qMessagesIn; // server owns this incoming msg queue, passed as ref to connection
 
         // container of all valid conns
         std::deque<std::shared_ptr<connection<T>>> m_deqConns;
