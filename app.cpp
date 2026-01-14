@@ -29,7 +29,7 @@ void App::App::Run() {
 
   game.cleanupTextures();
 
-  game.cleanup(); // Clean up SDL
+  game.cleanup(); // Clean up SDL; TODO there is a segfault on destory of SDL objects..
 
   return;
 };

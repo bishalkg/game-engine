@@ -445,14 +445,14 @@ void game_engine::Engine::cleanupTextures() {
 }
 
 void game_engine::Engine::cleanup() {
-  MIX_DestroyMixer(res.mixer);
+  if (res.mixer) { MIX_DestroyMixer(res.mixer); res.mixer = nullptr; }
   MIX_Quit();
   ImGui_ImplSDLRenderer3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
   ImGui::DestroyContext();
-  SDL_DestroyRenderer(state.renderer); // destroy renderer before window
-  SDL_DestroyWindow(state.window);
-  SDL_Quit();
+  // if (state.renderer) { SDL_DestroyRenderer(state.renderer); state.renderer = nullptr; }
+  // if (state.window) { SDL_DestroyWindow(state.window); state.window = nullptr; }
+  // SDL_Quit();
 }
 
 void game_engine::Engine::drawObject(GameObject &obj, float height, float width, float deltaTime) {

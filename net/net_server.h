@@ -22,15 +22,12 @@ namespace net
       }
 
       bool Start() {
-        try
-        {
+        try {
           AsyncWaitForClientConnection(); // give context work first so it doesn't close on startup
 
           m_threadContext = std::thread([this]() { m_asioContext.run(); });
 
-        }
-        catch (std::exception& e)
-        {
+        } catch (std::exception& e) {
           std::cerr << "Server Exception " << e.what() << "\n";
           return false;
         }
@@ -52,37 +49,32 @@ namespace net
 
       }
 
-      void AsyncWaitForClientConnection()
-      {
+      void AsyncWaitForClientConnection() {
         m_asioAccepter.async_accept(
-          [this](std::error_code ec, asio::ip::tcp::socket socket)
-          {
-            if (!ec)
-            {
+          [this](std::error_code ec, asio::ip::tcp::socket socket) {
+            if (!ec) {
               std::cout << "Server New Connection: " << socket.remote_endpoint() << "\n";
 
               std::shared_ptr<connection<T>> newconn = std::make_shared<connection<T>>(
                 connection<T>::owner::server,
-                m_asioContext, std::move(socket), m_qMessagesIn);
+                m_asioContext,
+                std::move(socket),
+                m_qMessagesIn
+              );
 
-              if (OnClientConnect(newconn))
-              {
+              if (OnClientConnect(newconn)) {
 
                 // add to container of conns
                 m_deqConns.push_back(std::move(newconn));
 
-                m_deqConns.back()->ConnectToClient(nIDCounter++);
+                m_deqConns.back()->ConnectToClient(this, nIDCounter++);
 
                 std::cout << "[ ConnID: " << m_deqConns.back()->GetID() << "] Connection Approved\n";
 
-              }
-              else
-              {
+              } else {
                 std::cout << "Server Denied Connection: " << socket.remote_endpoint() << "\n";
               }
-            }
-            else
-            {
+            } else {
               std::cout << "Server New Connection Error" << ec.message() << "\n";
             }
 
@@ -91,25 +83,17 @@ namespace net
           });
       }
 
-      void MessageClient(std::shared_ptr<connection<T>> client, const message<T>& msg)
-      {
-        if (client && client->IsConnected())
-        {
+      void MessageClient(std::shared_ptr<connection<T>> client, const message<T>& msg) {
+        if (client && client->IsConnected()) {
           client->Send(msg);
-        }
-        else
-        {
+        } else {
           OnClientDisconnect(client); // allow user to handle
           client.reset();
           m_deqConns.erase(
             std::remove(m_deqConns.begin(), m_deqConns.end(), client),
             m_deqConns.end()
           );
-
-
         }
-
-
       }
 
       void BroadcastToClients(const message<T>& msg, std::shared_ptr<connection<T>> pIgnoreClient = nullptr)
@@ -143,8 +127,15 @@ namespace net
 
       }
 
-      void Update(size_t nMaxMessages = -1) // setting unsigned int to -1 sets it to max number
-      {
+      // setting unsigned int to -1 sets it to max number;
+      // Update runs in a tight loop so we enable condition variable waiting to not waste cpu cycles trying to read the m_qMessagesIn when its empty
+      void ProcessIncomingMessages(size_t nMaxMessages = -1, bool enableWaiting) {
+
+        // *Server Sleeps* Until input queue has msg; BLOCKING
+        if (enableWaiting) {
+          m_qMessagesIn.wait();
+        }
+
         size_t nMessageCount = 0;
 
         // limit max number of messages being read on single Update call
@@ -173,6 +164,11 @@ namespace net
 
         virtual void OnMessage(std::shared_ptr<connection<T>> client, message<T>& msg)
         {
+
+        }
+
+      public:
+        virtual void OnClientValidated(std::shared_ptr<conntection<T>> client) {
 
         }
 

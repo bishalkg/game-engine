@@ -30,46 +30,55 @@ namespace net
         {
           std::scoped_lock lock(mu);
           deQueue.emplace_back(std::move(item));
+
+          std::unique_lock<std::mutex> ul(muxBlocking);
+          cvBlocking.notify_one();
         }
 
-        void push_front(const T& item)
-        {
+        void push_front(const T& item) {
           std::scoped_lock lock(mu);
           deQueue.emplace_front(std::move(item));
+
+          std::unique_lock<std::mutex> ul(muxBlocking);
+          cvBlocking.notify_one();
         }
 
-        bool empty()
-        {
+        bool empty() {
           std::scoped_lock lock(mu);
           return deQueue.empty();
         }
 
-        size_t count()
-        {
+        size_t count() {
           std::scoped_lock lock(mu);
           return deQueue.size();
         }
 
-        void clear()
-        {
+        void clear() {
           std::scoped_lock lock(mu);
           return deQueue.clear();
         }
 
-        T pop_front()
-        {
+        T pop_front() {
           std::scoped_lock lock(mu);
           auto item = std::move(deQueue.front());
           deQueue.pop_front();
           return item;
         }
 
-        T pop_back()
-        {
+        T pop_back() {
           std::scoped_lock lock(mu);
           auto item = std::move(deQueue.back());
           deQueue.pop_back();
           return item;
+        }
+
+        // wait for condition variable to notify there is data in queue
+        void wait() {
+          while (empty()){
+            // wait needs unique_lock because it must unlock/relock around the sleep; scoped_lock can’t do that.
+            std::unique_lock<std::mutex> ul(muxBlocking);
+            cvBlocking.wait(ul);
+          }
         }
 
 
@@ -77,6 +86,9 @@ namespace net
     protected:
       std::mutex mu;
       std::deque<T> deQueue;
+
+      std::condition_variable cvBlocking;
+      std::mutex muxBlocking;
 
   };
 
