@@ -148,10 +148,10 @@ void game_engine::Engine::runGameLoop() {
       case GameScreen::MultiPlayerOptionsMenu:
         // drawSettings();
         ImGui::Begin("MultiPlayer Menu", nullptr, sdl.ImGuiWindowFlags);
-        if (ImGui::Button("Host",buttonSize)) {
+        if (ImGui::Button("Host A Game",buttonSize)) {
           // todo
         }
-        if (ImGui::Button("Client",buttonSize)) {
+        if (ImGui::Button("Join A Game",buttonSize)) {
           // todo
         }
         if (ImGui::Button("Back to Menu",buttonSize)) {

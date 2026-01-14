@@ -36,7 +36,6 @@ void App::App::Run() {
 
 
 
-
 // Template pseudocode for multiplayer loop
     // SharedNetworkInterface net;      // your abstraction for queues/sockets
     // SharedGameStateForClients renderState;  // what clients use to draw (snapshot buffer)
