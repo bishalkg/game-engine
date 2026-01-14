@@ -270,9 +270,9 @@ struct Resources {
   };
 
   void unload() {
-    for (SDL_Texture *tex : textures) {
-      SDL_DestroyTexture(tex);
-    }
+    // for (SDL_Texture *tex : textures) {
+    //   SDL_DestroyTexture(tex);
+    // }
 
     // cleanup audio
     for (MIX_Audio* chunk: audioBuff) {
@@ -305,8 +305,6 @@ class Engine
   public:
     Engine() : state{}, gs(state), res{} {}
 
-
-
     inline static constexpr glm::vec2 GRAVITY = glm::vec2(0, 500);
     inline static constexpr size_t LAYER_IDX_LEVEL = 0;
     inline static constexpr size_t LAYER_IDX_CHARACTERS = 1;
@@ -319,8 +317,6 @@ class Engine
     bool init(int width, int height, int logW, int logH);
     void runGameLoop();
     void runEventLoop(GameObject &player);
-
-
 
     bool initWindowAndRenderer(int width, int height, int logW, int logH);
     void cleanupTextures();

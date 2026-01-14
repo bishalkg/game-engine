@@ -194,3 +194,32 @@ is my image not properly sized as before, like to get it to work it HAS to be ju
 this would mean just the height is wrong? no this doesnt make sense, the whole image can be there and we just view a portion of it with the viewport and players position
 
 watch vid again and replicate what he has
+
+
+
+// Plan For Multiplayer:
+// One Client Decides to be host and one the server. (Host a Game, Join a Game)
+// Host a Game: create a server. start server in background thread. Create client connect to server. Run game loop.
+// Join a Game. create client connect to server. Run game loop.
+// Inside Game Loop of each Client: Do local updates as usual. Also deque from client queue and update world. Send player (and enemy) updates to server.
+// Not sure how to handle enemy syncronization, does the server have to emit positions
+// Inside Server: Assigns playerID to clients. recieves updates (playerID, pos(?), velocity..basically player state). Broadcasts to all clients.
+
+// What gpt though about my plan:
+// Let the server be authoritative for world state (including enemies) and for player snapshots. Each client sends inputs (or compact “intent”) to the server; the server simulates, then broadcasts snapshots. That avoids divergent physics and keeps cheats down.
+// For “host game,” run the server loop in a separate thread/process and connect a local client to it (loopback). Use the same net protocol for host and join so you don’t special-case.
+// Define a clear message set: Join, AssignPlayerId, Input, StateSnapshot, Spawn/Despawn, maybe Chat/Ping. Keep serialization small.
+// Enemy sync: server simulates enemies; clients render from server snapshots. If you want client-side prediction for players, send inputs with timestamps and apply reconciliation when snapshots arrive.
+// Update loop on clients: drain incoming messages → reconcile/predict → simulate local effects → render. Keep network handling on a separate thread or use a queue.
+// Tick rate: pick a fixed server tick (e.g., 60 Hz) and snapshot rate (e.g., 10–20 Hz). Interpolate on clients between snapshots to smooth motion.
+// Connections: handle disconnects, timeouts, and late joins; cleanly remove players and their entities on server and broadcast the removal.
+
+// You won’t if you add client-side prediction and reconciliation:
+
+// The client sends inputs with timestamps to the server and immediately applies them locally (predicted movement), so input feels instant.
+// When the server snapshot arrives, reconcile: rewind to the authoritative state, reapply any inputs not yet seen by the server, and correct the position if it drifted. Small corrections are blended to avoid pops.
+// Other players/enemies: interpolate/extrapolate between server snapshots to smooth motion; don’t snap.
+// Keep server tick reasonable (e.g., 60 Hz sim, 10–20 Hz snapshots) and send input at a steady rate; include sequence numbers so you know what’s been acknowledged.
+// For host/local play, loopback latency is tiny; for remote play, prediction is what hides RTT.
+// That lets the server stay authoritative without introducing feelable input lag.
+
