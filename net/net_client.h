@@ -42,7 +42,7 @@ namespace net {
           return false;
         }
 
-        return false;
+        return true;
       }
 
       void Disconnect() {

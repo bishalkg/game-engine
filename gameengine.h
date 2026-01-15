@@ -316,7 +316,7 @@ class Engine
     std::unique_ptr<GameClient> m_gameClient = nullptr; // only create if gameType!=SinglePlayer
 
   public:
-    Engine() : m_sdlState{}, gs(m_sdlState), res{} {}
+    Engine() : m_sdlState{}, gs(m_sdlState), res{}, m_gameType(SinglePlayer) {}
 
     inline static constexpr glm::vec2 GRAVITY = glm::vec2(0, 500);
     inline static constexpr size_t LAYER_IDX_LEVEL = 0;

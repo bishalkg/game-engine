@@ -173,13 +173,14 @@ namespace net
         }
 
       protected:
+
+        asio::io_context m_asioContext;
+        std::thread m_threadContext;
+
         tsqueue<owned_message<T>> m_qMessagesIn; // server owns this incoming msg queue, passed as ref to connection
 
         // container of all valid conns
         std::deque<std::shared_ptr<connection<T>>> m_deqConns;
-
-        asio::io_context m_asioContext;
-        std::thread m_threadContext;
 
         // socket of asio server is abstracted, accepter listens on socket for connections
         asio::ip::tcp::acceptor m_asioAccepter;
