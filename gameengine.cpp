@@ -105,34 +105,11 @@ void game_engine::Engine::runGameLoop() {
 
     this->clearRenderer();
 
-    // extract this into helper func
-    if (m_gameType == game_engine::Engine::Host && !this->m_gameServer) {
-
-      std::cout << "starting server" << std::endl;
-      // start up the server
-      // need a GameServer that inherits from server_interface
-      this->m_gameServer = std::make_unique<GameServer>(9000);
-      bool successStart = m_gameServer->Start();
-      if (!successStart) {
-        return;
-      }
+    if (!this->handleMultiplayerConnections()) {
+      return;
     }
-
-    if (!m_gameClient && (m_gameType == game_engine::Engine::Host || m_gameType == game_engine::Engine::Client)) {
-      std::cout << "starting client" << std::endl;
-      this->m_gameClient = std::make_unique<GameClient>();
-      if (!this->m_gameClient->Connect("127.0.0.1", 9000)) {
-        std::cout << "failed to connect to server" << std::endl;
-        return;
-      }
-    }
-
-    // create a client; need a GameClient that inherits from client_interface
-    // wait for connection to the server to be made.
-    // non-host client should be able to join and exit at any time.
 
     // runEventLoop takes in key inputs that we want the client to send to the server
-
     // we read in snapshots from the server and updateGamePlayState; reconcile each GameObjects position using the m_stateLastUpdatedAt
     this->runEventLoop(player);
 
@@ -144,6 +121,42 @@ void game_engine::Engine::runGameLoop() {
   };
 
 };
+
+bool game_engine::Engine::handleMultiplayerConnections() {
+    // create a client; need a GameClient that inherits from client_interface
+    // wait for connection to the server to be made.
+    // non-host client should be able to join and exit at any time.
+  if (m_gameType == game_engine::Engine::Host && !this->m_gameServer) {
+
+    std::cout << "starting server" << std::endl;
+    // start up the server
+    // need a GameServer that inherits from server_interface
+    this->m_gameServer = std::make_unique<GameServer>(9000);
+    bool successStart = m_gameServer->Start();
+    if (!successStart) {
+      return false;
+    }
+  }
+
+  // host creates client
+  if (!m_gameClient && (m_gameType == game_engine::Engine::Host || m_gameType == game_engine::Engine::Client)) {
+    std::cout << "starting client" << std::endl;
+    this->m_gameClient = std::make_unique<GameClient>();
+  }
+  // every render loop tries to connect to server
+  if (m_gameClient) {
+    if (!isConnectedToServer) {
+      if (this->m_gameClient->Connect("127.0.0.1", 9000)) {
+        isConnectedToServer = true;
+      } else {
+        std::cout << "failed to connect to server" << std::endl;
+        // return;
+      }
+    }
+  }
+
+  return true;
+}
 
 void game_engine::Engine::clearRenderer(){
     // clear the backbuffer before drawing onto it with black from draw color above

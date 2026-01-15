@@ -312,8 +312,9 @@ class Engine
     GameRunMode m_gameType;
 
     std::unique_ptr<GameServer> m_gameServer = nullptr; // only create if gameType==Host
-
+    bool isConnectedToServer = false;
     std::unique_ptr<GameClient> m_gameClient = nullptr; // only create if gameType!=SinglePlayer
+
 
   public:
     Engine() : m_sdlState{}, gs(m_sdlState), res{}, m_gameType(SinglePlayer) {}
@@ -344,6 +345,7 @@ class Engine
     void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime);
     void playBackgroundSoundtrack();
     void stopBackgroundSoundtrack();
+    bool handleMultiplayerConnections();
     void updateGameplayState(float deltaTime, GameObject& player);
     void updateImGuiMenuRenderState();
     void clearRenderer();
