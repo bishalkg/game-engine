@@ -36,7 +36,7 @@ namespace net
         return true;
       }
 
-      bool Stop()
+      void Stop()
       {
         m_asioContext.stop();
 
@@ -45,7 +45,7 @@ namespace net
           m_threadContext.join();
         }
 
-        std::cout << "Server Stopped!\n"
+        std::cout << "Server Stopped!\n" << std::endl;
 
       }
 
@@ -110,7 +110,7 @@ namespace net
           }
           else
           {
-            OnClientDisconnect();
+            OnClientDisconnect(client);
             client.reset();
             // can't do erase here or could break the for loop
             shouldErase = true;
@@ -129,7 +129,7 @@ namespace net
 
       // setting unsigned int to -1 sets it to max number;
       // Update runs in a tight loop so we enable condition variable waiting to not waste cpu cycles trying to read the m_qMessagesIn when its empty
-      void ProcessIncomingMessages(size_t nMaxMessages = -1, bool enableWaiting) {
+      void ProcessIncomingMessages(size_t nMaxMessages = -1, bool enableWaiting = true) {
 
         // *Server Sleeps* Until input queue has msg; BLOCKING
         if (enableWaiting) {
@@ -145,8 +145,8 @@ namespace net
 
           OnMessage(msg.remote, msg.msg);
 
-          nMessageCount++
-        }
+          nMessageCount++;
+        };
 
       }
 
@@ -168,7 +168,7 @@ namespace net
         }
 
       public:
-        virtual void OnClientValidated(std::shared_ptr<conntection<T>> client) {
+        virtual void OnClientValidated(std::shared_ptr<connection<T>> client) {
 
         }
 

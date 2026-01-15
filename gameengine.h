@@ -12,6 +12,8 @@
 #include <glm/glm.hpp>
 
 #include "gameobject.h"
+#include "game_server.h" // create a common.h file that just imports all common and then only include that
+#include "game_client.h"
 
 #include "imgui.h"
 #include "backends/imgui_impl_sdl3.h"
@@ -74,8 +76,9 @@ enum class GameScreen {
 
 struct GameState {
 
-
   GameScreen currentView;
+
+  uint64_t m_stateLastUpdatedAt; // when the gameState was last updated, by local or by server msg
 
   std::vector<std::vector<GameObject>> layers;
   // std::vector<GameObject> backgroundTiles;
@@ -290,20 +293,30 @@ struct Resources {
 };
 
 
-
 /*
-GameEngine is the main class that provides all the functionality to run our game
+Engine is the main class that provides all the functionality to run our game
 */
 class Engine
 {
+  enum GameRunMode {
+    SinglePlayer, // default to single player
+    Host,
+    Client,
+  };
+
   private:
-    SDLState state;
+    SDLState m_sdlState;
     GameState gs;
     Resources res;
     bool running;
+    GameRunMode m_gameType;
+
+    std::unique_ptr<GameServer> m_gameServer = nullptr; // only create if gameType==Host
+
+    std::unique_ptr<GameClient> m_gameClient = nullptr; // only create if gameType!=SinglePlayer
 
   public:
-    Engine() : state{}, gs(state), res{} {}
+    Engine() : m_sdlState{}, gs(m_sdlState), res{} {}
 
     inline static constexpr glm::vec2 GRAVITY = glm::vec2(0, 500);
     inline static constexpr size_t LAYER_IDX_LEVEL = 0;
@@ -331,6 +344,10 @@ class Engine
     void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime);
     void playBackgroundSoundtrack();
     void stopBackgroundSoundtrack();
+    void updateGameplayState(float deltaTime, GameObject& player);
+    void updateImGuiMenuRenderState();
+    void clearRenderer();
+    void renderUpdates();
     // MIX_PauseTrack(track) / MIX_ResumeTrack(track)
 
     // getters

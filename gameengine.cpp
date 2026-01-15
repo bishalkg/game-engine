@@ -5,7 +5,7 @@ GameObject &game_engine::Engine::getPlayer() {
 };
 
 game_engine::SDLState &game_engine::Engine::getSDLState() {
-  return state;
+  return m_sdlState;
 };
 
 game_engine::GameState &game_engine::Engine::getGameState() {
@@ -36,8 +36,8 @@ void game_engine::Engine::stopBackgroundSoundtrack() {
 };
 
 void game_engine::Engine::setWindowSize(int height, int width) {
-  state.width = width;
-  state.height = height;
+  m_sdlState.width = width;
+  m_sdlState.height = height;
 }
 
 bool game_engine::Engine::init(int width, int height, int logW, int logH) {
@@ -67,7 +67,7 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
   MIX_SetMasterGain(res.mixer, 0.5f);  // 50% master
 
   // load game assets
-  res.loadAllAssets(state);
+  res.loadAllAssets(m_sdlState);
   if (!res.texIdle) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Idle Texture load failed", "Failed to load idle image", nullptr);
     this->cleanup();
@@ -75,7 +75,7 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
   }
 
   // setup game data
-  gs = GameState(state);
+  gs = GameState(m_sdlState);
   // gs.mapViewport.x = 0;
   // gs.mapViewport.y = 0;
   // gs.mapViewport.w = state.logW; // or state.width/state.logW
@@ -94,102 +94,273 @@ void game_engine::Engine::runGameLoop() {
   Resources &res = this->getResources();
 
   while (this->running){
+    uint64_t nowTime = SDL_GetTicks();
+    float deltaTime = (nowTime - prevTime) / 1000.0f; // convert to seconds; time bw frames
 
     // TODO the type of player is enemy????? i think we're following the wrong guy
     GameObject &player = this->getPlayer();  // fetch each frame in case index changes
     // use gs.currentView directly so state changes take effect immediately
 
-    uint64_t nowTime = SDL_GetTicks();
-    float deltaTime = (nowTime - prevTime) / 1000.0f; // convert to seconds; time bw frames
+    this->updateImGuiMenuRenderState();
 
-    this->runEventLoop(player);
+    this->clearRenderer();
 
-    // this->updateImGuiMenuRenderState()
-    // 4) Start a new ImGui frame
-    ImGui_ImplSDLRenderer3_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    ImGui::NewFrame();
+    // extract this into helper func
+    if (m_gameType == game_engine::Engine::Host && !this->m_gameServer) {
 
-    // 5) Build your ImGui UI for THIS frame
-    // (menus, pause, debug overlay, etc.)
-    ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(io.DisplaySize);
-
-    ImVec2 buttonSize = ImVec2(150, 50); // TODO put in config
-
-    switch (gs.currentView) {
-      case GameScreen::MainMenu:
-        this->stopBackgroundSoundtrack();
-        ImGui::Begin("Main Menu", nullptr, sdl.ImGuiWindowFlags);
-        ImGui::Text("Hello from ImGui in SDL3!");
-        if (ImGui::Button("Start", buttonSize)) {
-            // startGame();
-            std::cout << "start game" << std::endl;
-            std::puts("Start clicked");
-            gs.currentView = GameScreen::Playing;
-        }
-        if (ImGui::Button("Multiplayer",buttonSize)) {
-          gs.currentView = GameScreen::MultiPlayerOptionsMenu;
-          std::cout << "multi game" << std::endl;
-        }
-        if (ImGui::Button("Quit", buttonSize)) {
-            std::cout << "quit game" << std::endl;
-            running = false;
-        }
-        ImGui::End();
-        break;
-      case GameScreen::PauseMenu:
-        ImGui::Begin("Pause", nullptr, sdl.ImGuiWindowFlags);
-        if (ImGui::Button("Resume")) gs.currentView = GameScreen::Playing;
-        if (ImGui::Button("Quit")) running = false;
-        ImGui::End();
-        break;
-      case GameScreen::MultiPlayerOptionsMenu:
-        // drawSettings();
-        ImGui::Begin("MultiPlayer Menu", nullptr, sdl.ImGuiWindowFlags);
-        if (ImGui::Button("Host A Game",buttonSize)) {
-          // todo
-        }
-        if (ImGui::Button("Join A Game",buttonSize)) {
-          // todo
-        }
-        if (ImGui::Button("Back to Menu",buttonSize)) {
-          // todo; should reset game state unless saved
-          gs.currentView = GameScreen::MainMenu;
-        }
-        ImGui::End();
-        break;
-      case GameScreen::Playing:
-        this->playBackgroundSoundtrack();
-        ImGuiWindowFlags ImGuiWindowFlags =
-          sdl.ImGuiWindowFlags | ImGuiWindowFlags_NoBackground;
-          // ImGuiWindowFlags_NoSavedSettings;
-          ImGui::Begin("HUD", nullptr, ImGuiWindowFlags);
-          // Optional: remove padding so the button hugs the corner
-          ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
-          ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-          if (ImGui::Button("Back to Menu", buttonSize)) {
-              gs.currentView = GameScreen::MainMenu;
-          }
-          ImGui::SameLine(0, 2.0f);
-          if (ImGui::Button("Save Game", buttonSize)) {
-            // TODO
-          }
-          ImGui::PopItemFlag();
-          ImGui::PopStyleVar();
-          ImGui::End();
-        break;
+      std::cout << "starting server" << std::endl;
+      // start up the server
+      // need a GameServer that inherits from server_interface
+      this->m_gameServer = std::make_unique<GameServer>(9000);
+      bool successStart = m_gameServer->Start();
+      if (!successStart) {
+        return;
+      }
     }
 
-    // this->clearRendererBackbuffer()
-    // clear the backbuffer before drawing onto it with black from draw color above
-    SDL_SetRenderDrawColor(sdl.renderer, 20, 10, 30, 255);
-    SDL_RenderClear(sdl.renderer);
+    if (!m_gameClient && (m_gameType == game_engine::Engine::Host || m_gameType == game_engine::Engine::Client)) {
+      std::cout << "starting client" << std::endl;
+      this->m_gameClient = std::make_unique<GameClient>();
+      if (!this->m_gameClient->Connect("127.0.0.1", 9000)) {
+        std::cout << "failed to connect to server" << std::endl;
+        return;
+      }
+    }
 
-    // updateGamePlayState()
-    bool playing = (gs.currentView == GameScreen::Playing);
-    if (playing) {
+    // create a client; need a GameClient that inherits from client_interface
+    // wait for connection to the server to be made.
+    // non-host client should be able to join and exit at any time.
+
+    // runEventLoop takes in key inputs that we want the client to send to the server
+
+    // we read in snapshots from the server and updateGamePlayState; reconcile each GameObjects position using the m_stateLastUpdatedAt
+    this->runEventLoop(player);
+
+    this->updateGameplayState(deltaTime, player);
+
+    this->renderUpdates();
+
+    prevTime = nowTime;
+  };
+
+};
+
+void game_engine::Engine::clearRenderer(){
+    // clear the backbuffer before drawing onto it with black from draw color above
+    SDL_SetRenderDrawColor(m_sdlState.renderer, 20, 10, 30, 255);
+    SDL_RenderClear(m_sdlState.renderer);
+}
+
+void game_engine::Engine::renderUpdates(){
+  // swap backbuffer to display new state
+  // Textures live in GPU memory; the renderer batches copies/draws and flushes them on present.
+  // 6) Render ImGui on top of your SDL frame
+  SDL_SetRenderLogicalPresentation(m_sdlState.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+  ImGui::Render();
+  ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), m_sdlState.renderer);
+  SDL_SetRenderLogicalPresentation(m_sdlState.renderer, m_sdlState.logW, m_sdlState.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+  SDL_RenderPresent(m_sdlState.renderer);
+}
+
+
+void game_engine::Engine::runEventLoop(GameObject &player) {
+    // event loop
+    SDL_Event event{0};
+    while (SDL_PollEvent(&event)) {
+
+      // 2) Give every event to ImGui first
+      ImGui_ImplSDL3_ProcessEvent(&event);
+
+      // always honor quit
+      if (event.type == SDL_EVENT_QUIT) {
+        running = false;
+        continue;
+      }
+
+      // 3) only handle game input if ImGui doesn't want it
+      // ImGuiIO& io = ImGui::GetIO();
+      // bool uiWantsKeyboard = io.WantCaptureKeyboard;
+      // bool uiWantsMouse    = io.WantCaptureMouse;
+
+      // if (!uiWantsKeyboard || !uiWantsMouse) {
+      // TODO abstract this to game.handleGameInput(event);
+      switch (event.type) {
+        case SDL_EVENT_QUIT:
+        {
+          running = false;
+          break;
+        }
+        case SDL_EVENT_WINDOW_RESIZED:
+        {
+          this->setWindowSize(event.window.data2, event.window.data1);
+          break;
+        }
+        case SDL_EVENT_KEY_DOWN: // non-continuous presses
+        {
+          this->handleKeyInput(player, event.key.scancode, true);
+          break;
+        }
+        case SDL_EVENT_KEY_UP:
+        {
+          this->handleKeyInput(player, event.key.scancode, false);
+          if (event.key.scancode == SDL_SCANCODE_Q) {
+            gs.debugMode = !gs.debugMode;
+          }
+          else if (event.key.scancode == SDL_SCANCODE_F11) {
+            m_sdlState.fullscreen = !m_sdlState.fullscreen;
+            SDL_SetWindowFullscreen(m_sdlState.window, m_sdlState.fullscreen);
+          }
+          break;
+        }
+      }
+    }
+    // }
+}
+
+bool game_engine::Engine::initWindowAndRenderer(int width, int height, int logW, int logH) {
+
+  m_sdlState.width = width;
+  m_sdlState.height = height;
+  m_sdlState.logW = logW;
+  m_sdlState.logH = logH;
+
+  if (!SDL_Init(SDL_INIT_VIDEO)) {
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL Init Error", "Failed to initialize SDL.", nullptr);
+    return false;
+  };
+
+  if (!SDL_CreateWindowAndRenderer("SDL Game Engine", m_sdlState.width, m_sdlState.height, SDL_WINDOW_RESIZABLE, &m_sdlState.window, &m_sdlState.renderer)) {
+
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL init error", SDL_GetError(), nullptr);
+
+    this->cleanup();
+    return false;
+  }
+  m_sdlState.keys = SDL_GetKeyboardState(nullptr);
+  SDL_SetRenderVSync(m_sdlState.renderer, 1);
+
+  // configure presentation
+  SDL_SetRenderLogicalPresentation(m_sdlState.renderer, m_sdlState.logW , m_sdlState.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+
+  // Setup ImGui context
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO& io = ImGui::GetIO();
+  (void)io;
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // optional
+
+  // Setup ImGui style
+  ImGui::StyleColorsDark();
+
+  // Setup ImGui platform/renderer backends
+  ImGui_ImplSDL3_InitForSDLRenderer(m_sdlState.window, m_sdlState.renderer);
+  ImGui_ImplSDLRenderer3_Init(m_sdlState.renderer);
+
+  return true;
+
+}
+
+void game_engine::Engine::cleanupTextures() {
+  this->res.unload();
+}
+
+void game_engine::Engine::cleanup() {
+  if (res.mixer) { MIX_DestroyMixer(res.mixer); res.mixer = nullptr; }
+  MIX_Quit();
+  ImGui_ImplSDLRenderer3_Shutdown();
+  ImGui_ImplSDL3_Shutdown();
+  ImGui::DestroyContext();
+  // if (state.renderer) { SDL_DestroyRenderer(state.renderer); state.renderer = nullptr; }
+  // if (state.window) { SDL_DestroyWindow(state.window); state.window = nullptr; }
+  // SDL_Quit();
+}
+
+void game_engine::Engine::drawObject(GameObject &obj, float height, float width, float deltaTime) {
+
+    float frameW = height;
+    float frameH = width;
+    if (obj.type == ObjectType::enemy) {
+        frameW = obj.data.enemy.srcW;   // e.g. 128
+        frameH = obj.data.enemy.srcH;   // e.g. 128
+    }
+
+    // pull out specific sprite frame from sprite sheet
+    float srcX = obj.currentAnimation != -1 ?
+      obj.animations[obj.currentAnimation].currentFrame() * frameW
+      : (obj.spriteFrame -1)*frameW;
+
+    SDL_FRect src = { // src is position on animation sheet texture
+      .x = srcX, // different starting x position in sprite sheet
+      .y = 0,
+      .w = frameW, // if source sheet is larger keep the actual w/h
+      .h = frameH
+    };
+
+    // if (obj.type == ObjectType::enemy) {
+    //   src.h = obj.data.enemy.srcH;
+    //   src.w = obj.data.enemy.srcW;
+    // }
+
+
+    // obj.data.enemy.srcH // we can use these on dst to scale down the image
+    // obj.data.enemy.srcW
+
+    SDL_FRect dst = {
+      .x = obj.position.x - gs.mapViewport.x, // move objects according to updated viewport position in x AND y
+      .y = obj.position.y - gs.mapViewport.y,
+      .w = width, // if source is larger but you want to shrink it, set the w/h you want to scale it to
+      .h = height,
+    };
+
+    if (obj.type == ObjectType::enemy) {
+      dst.h = obj.data.enemy.srcH / 2.5f;
+      dst.w = obj.data.enemy.srcW / 2.5f;
+    }
+
+    SDL_FlipMode flipMode = obj.direction == -1 ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
+
+    // set flash animations on enemies
+    if (obj.shouldFlash) {
+      SDL_SetTextureColorModFloat(obj.texture, 2.5f, 1.0f, 1.0f);
+    }
+    SDL_RenderTextureRotated(m_sdlState.renderer, obj.texture, &src, &dst, 0, nullptr, flipMode);
+    if (obj.shouldFlash) {
+      SDL_SetTextureColorModFloat(obj.texture, 1.0f, 1.0f, 1.0f);
+      if (obj.flashTimer.step(deltaTime)) {
+        obj.shouldFlash = false;
+      }
+    }
+
+    if (gs.debugMode) {
+      // display each objects collision hitbox
+      SDL_FRect rectA{
+        .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
+        .y = obj.position.y + obj.collider.y - gs.mapViewport.y,
+        .w = obj.collider.w,
+        .h = obj.collider.h
+      };
+      SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_BLEND);
+      SDL_SetRenderDrawColor(m_sdlState.renderer, 255, 0, 0, 100);
+      SDL_RenderFillRect(m_sdlState.renderer, &rectA);
+      SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
+
+      SDL_FRect sensor{
+        .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
+        .y = obj.position.y + obj.collider.y + obj.collider.h - gs.mapViewport.y,
+        .w = obj.collider.w, .h = 1
+      };
+      SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_BLEND);
+      SDL_SetRenderDrawColor(m_sdlState.renderer, 0, 0, 255, 255);
+      SDL_RenderFillRect(m_sdlState.renderer, &sensor);
+      SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
+    }
+}
+
+void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& player) {
+
+  if (gs.currentView == GameScreen::Playing) {
+      this->playBackgroundSoundtrack(); // TODO we will want to set background track per level
+
       // update & draw game world to sdl.renderer here (before ImGui::Render)
       // TODO make into helper: UpdateAllObjects()
       // update all objects;
@@ -267,7 +438,7 @@ void game_engine::Engine::runGameLoop() {
             dst.y -= gs.mapViewport.y;  // if vertical scrolling
             // dst.w = static_cast<float>(obj.texture->w);
             // dst.h = static_cast<float>(obj.texture->h);
-            SDL_RenderTexture(sdl.renderer, obj.texture, &obj.data.level.src, &dst);
+            SDL_RenderTexture(m_sdlState.renderer, obj.texture, &obj.data.level.src, &dst);
             if (gs.debugMode) {
               // display each objects collision hitbox
               SDL_FRect rectA{
@@ -276,20 +447,20 @@ void game_engine::Engine::runGameLoop() {
                 .w = obj.collider.w,
                 .h = obj.collider.h
               };
-              SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
-              SDL_SetRenderDrawColor(state.renderer, 255, 0, 0, 100);
-              SDL_RenderFillRect(state.renderer, &rectA);
-              SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_NONE);
+              SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_BLEND);
+              SDL_SetRenderDrawColor(m_sdlState.renderer, 255, 0, 0, 100);
+              SDL_RenderFillRect(m_sdlState.renderer, &rectA);
+              SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
 
               SDL_FRect sensor{
                 .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
                 .y = obj.position.y + obj.collider.y + obj.collider.h - gs.mapViewport.y,
                 .w = obj.collider.w, .h = 1
               };
-              SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
-              SDL_SetRenderDrawColor(state.renderer, 0, 0, 255, 255);
-              SDL_RenderFillRect(state.renderer, &sensor);
-              SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_NONE);
+              SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_BLEND);
+              SDL_SetRenderDrawColor(m_sdlState.renderer, 0, 0, 255, 255);
+              SDL_RenderFillRect(m_sdlState.renderer, &sensor);
+              SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
             }
           } else {
             this->drawObject(obj, obj.spritePixelH, obj.spritePixelW, deltaTime);
@@ -317,222 +488,94 @@ void game_engine::Engine::runGameLoop() {
 
       // debugging
       if (gs.debugMode) {
-        SDL_SetRenderDrawColor(sdl.renderer, 255, 255, 255, 255);
+        SDL_SetRenderDrawColor(m_sdlState.renderer, 255, 255, 255, 255);
         SDL_RenderDebugText(
-            sdl.renderer,
+            m_sdlState.renderer,
             5,
             5,
             std::format("State3: {}  Direction: {} B: {}, G: {}, Px: {}, Py:{}, VPx: {}", static_cast<int>(player.data.player.state), player.direction, gs.bullets.size(), player.grounded, player.position.x, player.position.y, gs.mapViewport.x).c_str());
       }
     }
 
-    // swap backbuffer to display new state
-    // Textures live in GPU memory; the renderer batches copies/draws and flushes them on present.
-    // 6) Render ImGui on top of your SDL frame
-    // doRenderUpdates()
-    // need to do this to get the GUI to render properly:
-    SDL_SetRenderLogicalPresentation(sdl.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
-    ImGui::Render();
-    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), sdl.renderer);
-    SDL_SetRenderLogicalPresentation(sdl.renderer, sdl.logW, sdl.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
-    SDL_RenderPresent(sdl.renderer);
+}
 
-    prevTime = nowTime;
-  };
+void game_engine::Engine::updateImGuiMenuRenderState() {
+    // 4) Start a new ImGui frame
+    ImGui_ImplSDLRenderer3_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
 
-};
+    // 5) Build your ImGui UI for THIS frame
+    // (menus, pause, debug overlay, etc.)
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(io.DisplaySize);
 
+    ImVec2 buttonSize = ImVec2(150, 50); // TODO put in config
 
-void game_engine::Engine::runEventLoop(GameObject &player) {
-    // event loop
-    SDL_Event event{0};
-    while (SDL_PollEvent(&event)) {
-
-      // 2) Give every event to ImGui first
-      ImGui_ImplSDL3_ProcessEvent(&event);
-
-      // always honor quit
-      if (event.type == SDL_EVENT_QUIT) {
-        running = false;
-        continue;
-      }
-
-      // 3) only handle game input if ImGui doesn't want it
-      // ImGuiIO& io = ImGui::GetIO();
-      // bool uiWantsKeyboard = io.WantCaptureKeyboard;
-      // bool uiWantsMouse    = io.WantCaptureMouse;
-
-      // if (!uiWantsKeyboard || !uiWantsMouse) {
-      // TODO abstract this to game.handleGameInput(event);
-      switch (event.type) {
-        case SDL_EVENT_QUIT:
-        {
-          running = false;
-          break;
+    switch (gs.currentView) {
+      case GameScreen::MainMenu:
+        this->stopBackgroundSoundtrack();
+        ImGui::Begin("Main Menu", nullptr, m_sdlState.ImGuiWindowFlags);
+        ImGui::Text("Hello from ImGui in SDL3!");
+        if (ImGui::Button("Single Player", buttonSize)) {
+            std::cout << "start game" << std::endl;
+            std::puts("Start clicked");
+            gs.currentView = GameScreen::Playing;
+            m_gameType = game_engine::Engine::SinglePlayer;
         }
-        case SDL_EVENT_WINDOW_RESIZED:
-        {
-          this->setWindowSize(event.window.data2, event.window.data1);
-          break;
+        if (ImGui::Button("Multiplayer",buttonSize)) {
+          gs.currentView = GameScreen::MultiPlayerOptionsMenu;
+          std::cout << "multi game" << std::endl;
         }
-        case SDL_EVENT_KEY_DOWN: // non-continuous presses
-        {
-          this->handleKeyInput(player, event.key.scancode, true);
-          break;
+        if (ImGui::Button("Quit", buttonSize)) {
+            std::cout << "quit game" << std::endl;
+            running = false;
         }
-        case SDL_EVENT_KEY_UP:
-        {
-          this->handleKeyInput(player, event.key.scancode, false);
-          if (event.key.scancode == SDL_SCANCODE_Q) {
-            gs.debugMode = !gs.debugMode;
+        ImGui::End();
+        break;
+      case GameScreen::PauseMenu:
+        ImGui::Begin("Pause", nullptr, m_sdlState.ImGuiWindowFlags);
+        if (ImGui::Button("Resume")) gs.currentView = GameScreen::Playing;
+        if (ImGui::Button("Quit")) running = false;
+        ImGui::End();
+        break;
+      case GameScreen::MultiPlayerOptionsMenu:
+        // drawSettings();
+        ImGui::Begin("MultiPlayer Menu", nullptr, m_sdlState.ImGuiWindowFlags);
+        if (ImGui::Button("Host A Game",buttonSize)) {
+          m_gameType = game_engine::Engine::Host;
+          gs.currentView = GameScreen::Playing;
+        }
+        if (ImGui::Button("Join A Game", buttonSize)) {
+          m_gameType = game_engine::Engine::Client;
+          gs.currentView = GameScreen::Playing;
+        }
+        if (ImGui::Button("Back to Menu", buttonSize)) {
+          // todo; should reset game state unless saved
+          gs.currentView = GameScreen::MainMenu;
+        }
+        ImGui::End();
+        break;
+      case GameScreen::Playing:
+        ImGuiWindowFlags ImGuiWindowFlags =
+          m_sdlState.ImGuiWindowFlags | ImGuiWindowFlags_NoBackground;
+          // ImGuiWindowFlags_NoSavedSettings;
+          ImGui::Begin("HUD", nullptr, ImGuiWindowFlags);
+          // Optional: remove padding so the button hugs the corner
+          ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+          ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+          if (ImGui::Button("Back to Menu", buttonSize)) {
+              gs.currentView = GameScreen::MainMenu;
           }
-          else if (event.key.scancode == SDL_SCANCODE_F11) {
-            state.fullscreen = !state.fullscreen;
-            SDL_SetWindowFullscreen(state.window, state.fullscreen);
+          ImGui::SameLine(0, 2.0f);
+          if (ImGui::Button("Save Game", buttonSize)) {
+            // TODO
           }
-          break;
-        }
-      }
-    }
-    // }
-}
-
-bool game_engine::Engine::initWindowAndRenderer(int width, int height, int logW, int logH) {
-
-  state.width = width;
-  state.height = height;
-  state.logW = logW;
-  state.logH = logH;
-
-  if (!SDL_Init(SDL_INIT_VIDEO)) {
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL Init Error", "Failed to initialize SDL.", nullptr);
-    return false;
-  };
-
-  if (!SDL_CreateWindowAndRenderer("SDL Game Engine", state.width, state.height, SDL_WINDOW_RESIZABLE, &state.window, &state.renderer)) {
-
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL init error", SDL_GetError(), nullptr);
-
-    this->cleanup();
-    return false;
-  }
-  state.keys = SDL_GetKeyboardState(nullptr);
-  SDL_SetRenderVSync(state.renderer, 1);
-
-  // configure presentation
-  SDL_SetRenderLogicalPresentation(state.renderer, state.logW , state.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
-
-  // Setup ImGui context
-  IMGUI_CHECKVERSION();
-  ImGui::CreateContext();
-  ImGuiIO& io = ImGui::GetIO();
-  (void)io;
-  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // optional
-
-  // Setup ImGui style
-  ImGui::StyleColorsDark();
-
-  // Setup ImGui platform/renderer backends
-  ImGui_ImplSDL3_InitForSDLRenderer(state.window, state.renderer);
-  ImGui_ImplSDLRenderer3_Init(state.renderer);
-
-  return true;
-
-}
-
-void game_engine::Engine::cleanupTextures() {
-  this->res.unload();
-}
-
-void game_engine::Engine::cleanup() {
-  if (res.mixer) { MIX_DestroyMixer(res.mixer); res.mixer = nullptr; }
-  MIX_Quit();
-  ImGui_ImplSDLRenderer3_Shutdown();
-  ImGui_ImplSDL3_Shutdown();
-  ImGui::DestroyContext();
-  // if (state.renderer) { SDL_DestroyRenderer(state.renderer); state.renderer = nullptr; }
-  // if (state.window) { SDL_DestroyWindow(state.window); state.window = nullptr; }
-  // SDL_Quit();
-}
-
-void game_engine::Engine::drawObject(GameObject &obj, float height, float width, float deltaTime) {
-
-    float frameW = height;
-    float frameH = width;
-    if (obj.type == ObjectType::enemy) {
-        frameW = obj.data.enemy.srcW;   // e.g. 128
-        frameH = obj.data.enemy.srcH;   // e.g. 128
-    }
-
-    // pull out specific sprite frame from sprite sheet
-    float srcX = obj.currentAnimation != -1 ?
-      obj.animations[obj.currentAnimation].currentFrame() * frameW
-      : (obj.spriteFrame -1)*frameW;
-
-    SDL_FRect src = { // src is position on animation sheet texture
-      .x = srcX, // different starting x position in sprite sheet
-      .y = 0,
-      .w = frameW, // if source sheet is larger keep the actual w/h
-      .h = frameH
-    };
-
-    // if (obj.type == ObjectType::enemy) {
-    //   src.h = obj.data.enemy.srcH;
-    //   src.w = obj.data.enemy.srcW;
-    // }
-
-
-    // obj.data.enemy.srcH // we can use these on dst to scale down the image
-    // obj.data.enemy.srcW
-
-    SDL_FRect dst = {
-      .x = obj.position.x - gs.mapViewport.x, // move objects according to updated viewport position in x AND y
-      .y = obj.position.y - gs.mapViewport.y,
-      .w = width, // if source is larger but you want to shrink it, set the w/h you want to scale it to
-      .h = height,
-    };
-
-    if (obj.type == ObjectType::enemy) {
-      dst.h = obj.data.enemy.srcH / 2.5f;
-      dst.w = obj.data.enemy.srcW / 2.5f;
-    }
-
-    SDL_FlipMode flipMode = obj.direction == -1 ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
-
-    // set flash animations on enemies
-    if (obj.shouldFlash) {
-      SDL_SetTextureColorModFloat(obj.texture, 2.5f, 1.0f, 1.0f);
-    }
-    SDL_RenderTextureRotated(state.renderer, obj.texture, &src, &dst, 0, nullptr, flipMode);
-    if (obj.shouldFlash) {
-      SDL_SetTextureColorModFloat(obj.texture, 1.0f, 1.0f, 1.0f);
-      if (obj.flashTimer.step(deltaTime)) {
-        obj.shouldFlash = false;
-      }
-    }
-
-    if (gs.debugMode) {
-      // display each objects collision hitbox
-      SDL_FRect rectA{
-        .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
-        .y = obj.position.y + obj.collider.y - gs.mapViewport.y,
-        .w = obj.collider.w,
-        .h = obj.collider.h
-      };
-      SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
-      SDL_SetRenderDrawColor(state.renderer, 255, 0, 0, 100);
-      SDL_RenderFillRect(state.renderer, &rectA);
-      SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_NONE);
-
-      SDL_FRect sensor{
-        .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
-        .y = obj.position.y + obj.collider.y + obj.collider.h - gs.mapViewport.y,
-        .w = obj.collider.w, .h = 1
-      };
-      SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
-      SDL_SetRenderDrawColor(state.renderer, 0, 0, 255, 255);
-      SDL_RenderFillRect(state.renderer, &sensor);
-      SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_NONE);
+          ImGui::PopItemFlag();
+          ImGui::PopStyleVar();
+          ImGui::End();
+        break;
     }
 }
 
@@ -573,10 +616,10 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     // prevUpPressed = upPressed;
 
     // update direction
-    if (state.keys[SDL_SCANCODE_LEFT]) {
+    if (m_sdlState.keys[SDL_SCANCODE_LEFT]) {
       currDirection += -1;
     }
-    if (state.keys[SDL_SCANCODE_RIGHT]) {
+    if (m_sdlState.keys[SDL_SCANCODE_RIGHT]) {
       currDirection += 1;
     }
 
@@ -586,7 +629,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     const auto handleShooting = [this, &obj, &weaponTimer, &currDirection](
       SDL_Texture *tex, SDL_Texture *shootTex, int animIndex, int shootAnimIndex){
     // TODO use similar condition to prevent double jump
-      if (state.keys[SDL_SCANCODE_A]) {
+      if (m_sdlState.keys[SDL_SCANCODE_A]) {
 
         // set player texture during shooting anims
         obj.texture = shootTex;
@@ -704,9 +747,9 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     switch (obj.data.bullet.state) {
       case BulletState::moving:
       {
-        if (obj.position.x - gs.mapViewport.x < 0 || obj.position.x - gs.mapViewport.x > state.logW ||
+        if (obj.position.x - gs.mapViewport.x < 0 || obj.position.x - gs.mapViewport.x > m_sdlState.logW ||
         obj.position.y - gs.mapViewport.y < 0 ||
-        obj.position.y - gs.mapViewport.y > state.logH) {
+        obj.position.y - gs.mapViewport.y > m_sdlState.logH) {
         obj.data.bullet.state = BulletState::inactive;
         }
         break;
@@ -1101,7 +1144,7 @@ bool game_engine::Engine::initAllTiles() {
     }
   };
 
-  LayerVisitor visitor(state, gs, res);
+  LayerVisitor visitor(m_sdlState, gs, res);
   for (std::variant<tmx::Layer, tmx::ObjectGroup> &layer : res.map->layers) {
     std::visit(visitor, layer);
   };
@@ -1293,5 +1336,5 @@ void game_engine::Engine::drawParalaxBackground(SDL_Texture *texture, float xVel
     .h = static_cast<float>(texture->h)
   };
 
-  SDL_RenderTextureTiled(state.renderer, texture, nullptr, 1, &dst);
+  SDL_RenderTextureTiled(m_sdlState.renderer, texture, nullptr, 1, &dst);
 };

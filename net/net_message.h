@@ -62,7 +62,7 @@ namespace net
       // resize since we copied that data
       msg.body.resize(idx);
 
-      msg.header.size = msg.size();
+      msg.header.bodySize = msg.size();
 
       return msg;
     }

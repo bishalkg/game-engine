@@ -11,11 +11,12 @@ namespace net {
   class client_interface
   {
 
-    client_interface() : m_socket(m_context){} // init socket with io context
-
-    virtual ~client_interface() { Disconnect(); } // disconnect if client destroyed
-
     public:
+
+      client_interface() : m_socket(m_context){} // init socket with io context
+
+      virtual ~client_interface() { Disconnect(); } // disconnect if client destroyed
+
       bool Connect(const std::string& host, const uint16_t port)
       {
         try {
@@ -44,7 +45,7 @@ namespace net {
         return false;
       }
 
-      bool Disconnect() {
+      void Disconnect() {
 
         if (IsConnected()) {
           m_connection->Disconnect();

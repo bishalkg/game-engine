@@ -124,7 +124,7 @@ std::unique_ptr<tmx::Map> tmx::loadMap(const std::string &mapFilePath) {
     }
     auto t5 = clock::now();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t5 - t0).count();
-    std::cout << "Total time to parase Elapsed: " << ms << " ms\n";
+    std::cout << "Total time to parse Elapsed: " << ms << " ms\n";
 
   }
 

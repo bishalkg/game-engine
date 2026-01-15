@@ -61,6 +61,7 @@ enum class ObjectType
 
 // define all objects in the game
 struct GameObject {
+  uint32_t id = 0;
   ObjectType type;
   ObjectData data; // by making this a union, the different object types can have different fields in their structs
   glm::vec2 position, velocity, acceleration; // we have x and y positions/velocities/accelerations
