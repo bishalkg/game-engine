@@ -74,11 +74,16 @@ namespace net
 
         // wait for condition variable to notify there is data in queue
         void wait() {
-          while (empty()){
+          while (empty() && !stop.load()){
             // wait needs unique_lock because it must unlock/relock around the sleep; scoped_lock can’t do that.
             std::unique_lock<std::mutex> ul(muxBlocking);
             cvBlocking.wait(ul);
           }
+        }
+
+        void wakeAll() {
+          stop.store(true);
+          cvBlocking.notify_all();
         }
 
 
@@ -89,6 +94,7 @@ namespace net
 
       std::condition_variable cvBlocking;
       std::mutex muxBlocking;
+      std::atomic<bool> stop{false};
 
   };
 

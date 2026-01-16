@@ -9,9 +9,7 @@ namespace game_engine {
 
   class GameServer : public net::server_interface<GameMsgHeaders> {
     public:
-      GameServer(uint16_t nPort) : net::server_interface<GameMsgHeaders>(nPort)
-      {
-      }
+      GameServer(uint16_t nPort) : net::server_interface<GameMsgHeaders>(nPort){}
 
       std::unordered_map<uint32_t, NetGameObjectSnapshot> m_mapPlayerRoster;
       std::vector<uint32_t> m_vGarbageIDs;
@@ -50,13 +48,12 @@ namespace game_engine {
             m_vGarbageIDs.push_back(client->GetID());
           }
         }
-
       }
 
+      // OnMessage is an override that is called in .ProcessIncomingMessages on the server
       void OnMessage(std::shared_ptr<net::connection<GameMsgHeaders>> client, net::message<GameMsgHeaders>& msg) override
       {
-          if (!m_vGarbageIDs.empty())
-          {
+          if (!m_vGarbageIDs.empty()) {
             for (auto pid : m_vGarbageIDs)
             {
               net::message<GameMsgHeaders> m;
@@ -70,49 +67,53 @@ namespace game_engine {
 
 
 
-        switch (msg.header.id)
-        {
-        case GameMsgHeaders::Client_RegisterWithServer:
-        {
-          NetGameObjectSnapshot desc;
-          msg >> desc;
-          desc.id = client->GetID();
-          m_mapPlayerRoster.insert_or_assign(desc.id, desc);
+        switch (msg.header.id) {
+          case GameMsgHeaders::Client_RegisterWithServer:
+            {
+              NetGameObjectSnapshot desc;
+              msg >> desc;
+              desc.id = client->GetID();
+              m_mapPlayerRoster.insert_or_assign(desc.id, desc);
 
-          net::message<GameMsgHeaders> msgSendID;
-          msgSendID.header.id = GameMsgHeaders::Client_AssignID;
-          msgSendID << desc.id;
-          MessageClient(client, msgSendID);
+              net::message<GameMsgHeaders> msgSendID;
+              msgSendID.header.id = GameMsgHeaders::Client_AssignID;
+              msgSendID << desc.id;
+              MessageClient(client, msgSendID);
 
-          net::message<GameMsgHeaders> msgAddPlayer;
-          msgAddPlayer.header.id = GameMsgHeaders::Game_AddPlayer;
-          msgAddPlayer << desc;
-          BroadcastToClients(msgAddPlayer);
+              net::message<GameMsgHeaders> msgAddPlayer;
+              msgAddPlayer.header.id = GameMsgHeaders::Game_AddPlayer;
+              msgAddPlayer << desc;
+              BroadcastToClients(msgAddPlayer);
 
-          for (const auto& player : m_mapPlayerRoster)
+              for (const auto& player : m_mapPlayerRoster)
+              {
+                net::message<GameMsgHeaders> msgAddOtherPlayers;
+                msgAddOtherPlayers.header.id = GameMsgHeaders::Game_AddPlayer;
+                msgAddOtherPlayers << player.second;
+                MessageClient(client, msgAddOtherPlayers);
+              }
+
+              break;
+            }
+
+          case GameMsgHeaders::Client_UnregisterWithServer:
+            {
+              break;
+            }
+
+          case GameMsgHeaders::Game_MovePlayer:
           {
-            net::message<GameMsgHeaders> msgAddOtherPlayers;
-            msgAddOtherPlayers.header.id = GameMsgHeaders::Game_AddPlayer;
-            msgAddOtherPlayers << player.second;
-            MessageClient(client, msgAddOtherPlayers);
+            // TODO when we recieve msg that is a player input, we want to dequeue all the inputs we currently have
+            // and update the overall GameState
           }
+          case GameMsgHeaders::Game_UpdatePlayer:
+            {
+              // this should be the msg that is the user inputs
 
-          break;
-        }
-
-        case GameMsgHeaders::Client_UnregisterWithServer:
-        {
-          break;
-        }
-
-        case GameMsgHeaders::Game_UpdatePlayer:
-        {
-          // this should be the msg that is the user inputs
-
-          // Simply bounce update to everyone except incoming client
-          BroadcastToClients(msg, client);
-          break;
-        }
+              // Simply bounce update to everyone except incoming client
+              BroadcastToClients(msg, client);
+              break;
+            }
 
         }
 

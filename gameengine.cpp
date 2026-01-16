@@ -45,14 +45,14 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
   // SDL, ImGUI are initialized
 
   // init window and renderer
-  if (!this->initWindowAndRenderer(width, height, logW, logH)) {
+  if (!initWindowAndRenderer(width, height, logW, logH)) {
     return false;
   };
 
   // mixer must be created before loading in audio files in res.load()
   if (!MIX_Init()) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL Mixer Failed to init", "Failed to init audio", nullptr);
-    this->cleanup();
+    cleanup();
     return false;
   };
 
@@ -60,7 +60,7 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
   res.mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
   if (!res.mixer) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Global Mixer Failed to create", "Failed to create audio mixer", nullptr);
-    this->cleanup();
+    cleanup();
     return false;
   }
 
@@ -70,7 +70,7 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
   res.loadAllAssets(m_sdlState);
   if (!res.texIdle) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Idle Texture load failed", "Failed to load idle image", nullptr);
-    this->cleanup();
+    cleanup();
     return false;
   }
 
@@ -80,45 +80,58 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
   // gs.mapViewport.y = 0;
   // gs.mapViewport.w = state.logW; // or state.width/state.logW
   // gs.mapViewport.h = state.logH; // or state.height/state.logH
-  return this->initAllTiles();
+  return initAllTiles();
 }
 
 
 void game_engine::Engine::runGameLoop() {
     // start the game loop
   uint64_t prevTime = SDL_GetTicks();
-  this->running = true;
+  m_gameRunning.store(true);
 
-  GameState &gs = this->getGameState();
-  SDLState &sdl = this->getSDLState();
-  Resources &res = this->getResources();
+  GameState &gs = getGameState();
+  SDLState &sdl = getSDLState();
+  Resources &res = getResources();
 
-  while (this->running){
+  while (m_gameRunning.load()){
     uint64_t nowTime = SDL_GetTicks();
     float deltaTime = (nowTime - prevTime) / 1000.0f; // convert to seconds; time bw frames
 
     // TODO the type of player is enemy????? i think we're following the wrong guy
-    GameObject &player = this->getPlayer();  // fetch each frame in case index changes
+    GameObject &player = getPlayer();  // fetch each frame in case index changes
     // use gs.currentView directly so state changes take effect immediately
 
-    this->updateImGuiMenuRenderState();
+    updateImGuiMenuRenderState();
 
-    this->clearRenderer();
+    clearRenderer();
 
-    if (!this->handleMultiplayerConnections()) {
+    if (!handleMultiplayerConnections()) {
       return;
     }
 
     // runEventLoop takes in key inputs that we want the client to send to the server
     // we read in snapshots from the server and updateGamePlayState; reconcile each GameObjects position using the m_stateLastUpdatedAt
-    this->runEventLoop(player);
+    runEventLoop(player);
 
-    this->updateGameplayState(deltaTime, player);
+    updateGameplayState(deltaTime, player);
 
-    this->renderUpdates();
+    renderUpdates();
 
     prevTime = nowTime;
   };
+
+  if (m_gameServer) {
+    // triggers .wakeAll() on the servers incoming queue
+    // serverThd loop should wake up, next loop see that m_gameServer is false and quit out of the loop, then it should be joinable
+    net::message<GameMsgHeaders> msg;
+    msg.header.id = GameMsgHeaders::Server_ShutdownOK;
+    m_gameClient->Send(msg);
+    m_gameServer->Stop();
+  }
+  if (m_serverLoopThd.joinable()) {
+    m_serverLoopThd.join();
+  }
+  m_gameServer.reset();
 
 };
 
@@ -126,27 +139,25 @@ bool game_engine::Engine::handleMultiplayerConnections() {
     // create a client; need a GameClient that inherits from client_interface
     // wait for connection to the server to be made.
     // non-host client should be able to join and exit at any time.
-  if (m_gameType == game_engine::Engine::Host && !this->m_gameServer) {
-
+  if (m_gameType == game_engine::Engine::Host && !m_gameServer) {
     std::cout << "starting server" << std::endl;
-    // start up the server
-    // need a GameServer that inherits from server_interface
-    this->m_gameServer = std::make_unique<GameServer>(9000);
+    m_gameServer = std::make_unique<GameServer>(9000);
     bool successStart = m_gameServer->Start();
     if (!successStart) {
       return false;
     }
+    m_serverLoopThd = std::thread(&game_engine::Engine::runGameServerLoopThread, this);
   }
 
   // host creates client
   if (!m_gameClient && (m_gameType == game_engine::Engine::Host || m_gameType == game_engine::Engine::Client)) {
     std::cout << "starting client" << std::endl;
-    this->m_gameClient = std::make_unique<GameClient>();
+    m_gameClient = std::make_unique<GameClient>();
   }
   // every render loop tries to connect to server
   if (m_gameClient) {
     if (!isConnectedToServer) {
-      if (this->m_gameClient->Connect("127.0.0.1", 9000)) {
+      if (m_gameClient->Connect("127.0.0.1", 9000)) {
         isConnectedToServer = true;
       } else {
         std::cout << "failed to connect to server" << std::endl;
@@ -154,8 +165,27 @@ bool game_engine::Engine::handleMultiplayerConnections() {
       }
     }
   }
-
   return true;
+}
+
+void game_engine::Engine::runGameServerLoopThread() {
+
+  // determine delta for server loop
+  while (m_gameRunning.load() && m_gameServer) {
+    // TODO the server logic to read incoming inputs
+    // generate the gameState
+    // work will be done in OnMessage() override member func
+    // this function is blocking until the server has work to do
+    m_gameServer->ProcessIncomingMessages();
+
+
+    // every delta, we take the current gameState, package it into a message and broadcast it to the clients
+    net::message<game_engine::GameMsgHeaders> msg;
+    msg.header.id = GameMsgHeaders::Game_Snapshot;
+    // need serealization and deserealization for NetGameObject
+    // msg.body =
+    m_gameServer->BroadcastToClients(msg, nullptr);
+  }
 }
 
 void game_engine::Engine::clearRenderer(){
@@ -186,8 +216,8 @@ void game_engine::Engine::runEventLoop(GameObject &player) {
 
       // always honor quit
       if (event.type == SDL_EVENT_QUIT) {
-        running = false;
-        continue;
+        m_gameRunning.store(false);
+        break;
       }
 
       // 3) only handle game input if ImGui doesn't want it
@@ -200,22 +230,22 @@ void game_engine::Engine::runEventLoop(GameObject &player) {
       switch (event.type) {
         case SDL_EVENT_QUIT:
         {
-          running = false;
+          m_gameRunning.store(false);
           break;
         }
         case SDL_EVENT_WINDOW_RESIZED:
         {
-          this->setWindowSize(event.window.data2, event.window.data1);
+          setWindowSize(event.window.data2, event.window.data1);
           break;
         }
         case SDL_EVENT_KEY_DOWN: // non-continuous presses
         {
-          this->handleKeyInput(player, event.key.scancode, true);
+          handleKeyInput(player, event.key.scancode, true);
           break;
         }
         case SDL_EVENT_KEY_UP:
         {
-          this->handleKeyInput(player, event.key.scancode, false);
+          handleKeyInput(player, event.key.scancode, false);
           if (event.key.scancode == SDL_SCANCODE_Q) {
             gs.debugMode = !gs.debugMode;
           }
@@ -372,7 +402,7 @@ void game_engine::Engine::drawObject(GameObject &obj, float height, float width,
 void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& player) {
 
   if (gs.currentView == GameScreen::Playing) {
-      this->playBackgroundSoundtrack(); // TODO we will want to set background track per level
+      playBackgroundSoundtrack(); // TODO we will want to set background track per level
 
       // update & draw game world to sdl.renderer here (before ImGui::Render)
       // TODO make into helper: UpdateAllObjects()
@@ -381,7 +411,7 @@ void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& playe
         for (GameObject &obj : layer) { // for each obj in layer
           // optimization to avoid n*m comparisions
           if (obj.dynamic) {
-            this->updateGameObject(obj, deltaTime);
+            updateGameObject(obj, deltaTime);
           }
           // if (obj.type == ObjectType::player) {
           //   bool left  = state.keys ? state.keys[SDL_SCANCODE_LEFT]  : false;
@@ -393,7 +423,7 @@ void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& playe
 
       // update bullet physics
       for (GameObject &bullet : gs.bullets) {
-        this->updateGameObject(bullet, deltaTime);
+        updateGameObject(bullet, deltaTime);
       }
 
 
@@ -476,7 +506,7 @@ void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& playe
               SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
             }
           } else {
-            this->drawObject(obj, obj.spritePixelH, obj.spritePixelW, deltaTime);
+            drawObject(obj, obj.spritePixelH, obj.spritePixelW, deltaTime);
           }
         }
       }
@@ -484,7 +514,7 @@ void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& playe
       // draw bullets
       for (GameObject &bullet: gs.bullets) {
         if (bullet.data.bullet.state != BulletState::inactive) {
-          this->drawObject(bullet, bullet.collider.h, bullet.collider.w, deltaTime);
+          drawObject(bullet, bullet.collider.h, bullet.collider.w, deltaTime);
         }
       }
 
@@ -543,14 +573,14 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
         }
         if (ImGui::Button("Quit", buttonSize)) {
             std::cout << "quit game" << std::endl;
-            running = false;
+            m_gameRunning.store(false);
         }
         ImGui::End();
         break;
       case GameScreen::PauseMenu:
         ImGui::Begin("Pause", nullptr, m_sdlState.ImGuiWindowFlags);
         if (ImGui::Button("Resume")) gs.currentView = GameScreen::Playing;
-        if (ImGui::Button("Quit")) running = false;
+        if (ImGui::Button("Quit")) m_gameRunning.store(false);
         ImGui::End();
         break;
       case GameScreen::MultiPlayerOptionsMenu:
@@ -754,8 +784,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         break;
       }
     }
-  }
-  else if (obj.type == ObjectType::bullet) {
+  } else if (obj.type == ObjectType::bullet) {
 
     switch (obj.data.bullet.state) {
       case BulletState::moving:
@@ -775,8 +804,8 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         break;
       }
     }
-  }
-  else if (obj.type == ObjectType::enemy) {
+  } else if (obj.type == ObjectType::enemy) {
+
     switch (obj.data.enemy.state) {
       case EnemyState::idle:
       {
@@ -1301,6 +1330,8 @@ bool game_engine::Engine::initAllTiles() {
 // };
 
 void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown) {
+
+  // TODO send input msg to server
 
   if (obj.type == ObjectType::player) {
     switch (obj.data.player.state) {

@@ -38,12 +38,15 @@ namespace net
 
       void Stop()
       {
+        m_qMessagesIn.wakeAll();
+
         m_asioContext.stop();
 
         if (m_threadContext.joinable())
         {
           m_threadContext.join();
         }
+
 
         std::cout << "Server Stopped!\n" << std::endl;
 
@@ -128,7 +131,7 @@ namespace net
       }
 
       // setting unsigned int to -1 sets it to max number;
-      // Update runs in a tight loop so we enable condition variable waiting to not waste cpu cycles trying to read the m_qMessagesIn when its empty
+      // ProcessIncomingMessages runs in a tight loop so we enable condition variable waiting to not waste cpu cycles trying to read the m_qMessagesIn when its empty
       void ProcessIncomingMessages(size_t nMaxMessages = -1, bool enableWaiting = true) {
 
         // *Server Sleeps* Until input queue has msg; BLOCKING
@@ -142,6 +145,8 @@ namespace net
         while (nMessageCount < nMaxMessages && !m_qMessagesIn.empty())
         {
           auto msg = m_qMessagesIn.pop_front();
+
+          std::cout << msg << std::endl;
 
           OnMessage(msg.remote, msg.msg);
 

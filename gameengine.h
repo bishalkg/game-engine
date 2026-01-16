@@ -308,12 +308,13 @@ class Engine
     SDLState m_sdlState;
     GameState gs;
     Resources res;
-    bool running;
+    std::atomic<bool> m_gameRunning{false};
     GameRunMode m_gameType;
 
     std::unique_ptr<GameServer> m_gameServer = nullptr; // only create if gameType==Host
     bool isConnectedToServer = false;
     std::unique_ptr<GameClient> m_gameClient = nullptr; // only create if gameType!=SinglePlayer
+    std::thread m_serverLoopThd;
 
 
   public:
@@ -350,6 +351,7 @@ class Engine
     void updateImGuiMenuRenderState();
     void clearRenderer();
     void renderUpdates();
+    void runGameServerLoopThread();
     // MIX_PauseTrack(track) / MIX_ResumeTrack(track)
 
     // getters

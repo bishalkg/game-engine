@@ -40,6 +40,14 @@ namespace game_engine {
 
   };
 
+  enum PlayerInput {
+    None,
+    Up,
+    Left,
+    Right,
+    Down
+  };
+
   struct NetGameStateSnapshot {
     uint64_t m_stateLastUpdatedAt; // when the gameState was last updated, by local or by server msg
     std::vector<NetGameObjectSnapshot> m_gameObjects;
@@ -50,6 +58,8 @@ namespace game_engine {
     Server_GetStatus,
     Server_GetPing,
 
+    Server_ShutdownOK,
+
     Client_Accepted,
     Client_AssignID,
     Client_RegisterWithServer,
@@ -58,6 +68,9 @@ namespace game_engine {
     Game_AddPlayer,
     Game_RemovePlayer,
     Game_UpdatePlayer,
+
+    Game_Snapshot,
+    Game_MovePlayer
   };
 
 }
