@@ -3,13 +3,17 @@
 // #include <iostream>
 // #include <vector>
 #include <string>
-// #include <format>s
+// #include <format>
 // #include <array>
 // #include <filesystem>
 
 
 
 namespace game_engine {
+
+
+  // use std::ByteWriter, ByteReader to write and read GameStateSnapshot
+  // transfer the GameStateSnapshot to the game_engines GameState during renderLoop update
 
 
     struct NetGameObjectSnapshot {

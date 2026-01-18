@@ -86,8 +86,6 @@ namespace net
           cvBlocking.notify_all();
         }
 
-
-
     protected:
       std::mutex mu;
       std::deque<T> deQueue;

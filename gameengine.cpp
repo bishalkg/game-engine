@@ -123,9 +123,9 @@ void game_engine::Engine::runGameLoop() {
   if (m_gameServer) {
     // triggers .wakeAll() on the servers incoming queue
     // serverThd loop should wake up, next loop see that m_gameServer is false and quit out of the loop, then it should be joinable
-    net::message<GameMsgHeaders> msg;
-    msg.header.id = GameMsgHeaders::Server_ShutdownOK;
-    m_gameClient->Send(msg);
+    // net::message<GameMsgHeaders> msg;
+    // msg.header.id = GameMsgHeaders::Server_ShutdownOK;
+    // m_gameClient->Send(msg);
     m_gameServer->Stop();
   }
   if (m_serverLoopThd.joinable()) {

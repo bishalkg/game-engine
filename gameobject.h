@@ -54,7 +54,7 @@ union ObjectData {
   BulletData bullet;
 };
 
-enum class ObjectType
+enum class ObjectType : std::uint8_t
 {
   player, level, enemy, bullet, sword
 };
