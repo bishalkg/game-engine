@@ -70,28 +70,28 @@ namespace game_engine {
         switch (msg.header.id) {
           case GameMsgHeaders::Client_RegisterWithServer:
             {
-              NetGameObjectSnapshot desc;
-              msg >> desc;
-              desc.id = client->GetID();
-              m_mapPlayerRoster.insert_or_assign(desc.id, desc);
+              // NetGameObjectSnapshot desc;
+              // msg >> desc;
+              // desc.id = client->GetID();
+              // m_mapPlayerRoster.insert_or_assign(desc.id, desc);
 
-              net::message<GameMsgHeaders> msgSendID;
-              msgSendID.header.id = GameMsgHeaders::Client_AssignID;
-              msgSendID << desc.id;
-              MessageClient(client, msgSendID);
+              // net::message<GameMsgHeaders> msgSendID;
+              // msgSendID.header.id = GameMsgHeaders::Client_AssignID;
+              // msgSendID << desc.id;
+              // MessageClient(client, msgSendID);
 
-              net::message<GameMsgHeaders> msgAddPlayer;
-              msgAddPlayer.header.id = GameMsgHeaders::Game_AddPlayer;
-              msgAddPlayer << desc;
-              BroadcastToClients(msgAddPlayer);
+              // net::message<GameMsgHeaders> msgAddPlayer;
+              // msgAddPlayer.header.id = GameMsgHeaders::Game_AddPlayer;
+              // msgAddPlayer << desc;
+              // BroadcastToClients(msgAddPlayer);
 
-              for (const auto& player : m_mapPlayerRoster)
-              {
-                net::message<GameMsgHeaders> msgAddOtherPlayers;
-                msgAddOtherPlayers.header.id = GameMsgHeaders::Game_AddPlayer;
-                msgAddOtherPlayers << player.second;
-                MessageClient(client, msgAddOtherPlayers);
-              }
+              // for (const auto& player : m_mapPlayerRoster)
+              // {
+              //   net::message<GameMsgHeaders> msgAddOtherPlayers;
+              //   msgAddOtherPlayers.header.id = GameMsgHeaders::Game_AddPlayer;
+              //   msgAddOtherPlayers << player.second;
+              //   MessageClient(client, msgAddOtherPlayers);
+              // }
 
               break;
             }
@@ -101,8 +101,13 @@ namespace game_engine {
               break;
             }
 
-          case GameMsgHeaders::Game_MovePlayer:
+          case GameMsgHeaders::Game_PlayerInput:
           {
+
+            NetGameInput input = deserealizeNetGameInput(msg.body);
+            // std::cout << "got input: " << input.playerID << " move: " << static_cast<int>(input.move) << " projectile: " << static_cast<int>(input.fireProjectile) << " swing: " << static_cast<int>(input.swingWeapon) << '\n';
+
+
             // TODO when we recieve msg that is a player input, we want to dequeue all the inputs we currently have
             // and update the overall GameState
           }

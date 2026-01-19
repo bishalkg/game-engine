@@ -182,7 +182,7 @@ namespace net
     size_t i;
 
     // set pointer to input data onto ByteReader
-    ByteReader(const std::vector<std::uint8_t>& b): p(b.data()), n(b.size()) {}
+    ByteReader(const std::vector<std::uint8_t>& b): p(b.data()), n(b.size()), i(0) {}
 
     // copy into out address the value of size sz from position p+i
     // advance index i forward size of the data that was copied

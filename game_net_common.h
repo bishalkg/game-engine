@@ -3,9 +3,12 @@
 // #include <iostream>
 // #include <vector>
 #include <string>
+#include <vector>
 // #include <format>
 // #include <array>
 // #include <filesystem>
+
+#include "net/net_message.h"
 
 
 
@@ -44,14 +47,72 @@ namespace game_engine {
 
   };
 
-  enum PlayerInput {
+  enum class PlayerInput: uint16_t {
     None,
     Up,
     Left,
     Right,
-    Down
+    Down,
+    Fire,
+    Swing,
   };
 
+  // input body from the client
+  // read from message.body (byte array) using ByteReader
+  // write from NetGameInput -> ByteWriter. pass the ByteWriterBuff as message.body
+  struct NetGameInput { // can there be multiple inputs at a time?
+    //movePlayer. left, right, up keys.
+    //fireBullet. scancodeA
+    //swingSword. scancodeS (to add)
+    uint32_t playerID; // is msg.header.id already player id? no its the GameMsgHeaders
+    uint32_t tick;
+    PlayerInput move = PlayerInput::None;
+    PlayerInput fireProjectile = PlayerInput::None; // PlayerInput::Fire
+    PlayerInput swingWeapon = PlayerInput::None; // PlayerInput::Swing
+  };
+
+  inline std::vector<uint8_t> serealizeNetGameInput(const NetGameInput& input) {
+    net::ByteWriter bytes;
+
+    bytes.write_u32(input.playerID);
+    bytes.write_u32(input.tick);
+
+    bytes.write_enum(input.move);
+    bytes.write_enum(input.fireProjectile);
+    bytes.write_enum(input.swingWeapon);
+    // if (input.move != PlayerInput::None) {
+    //   bytes.write_enum(input.move);
+    // }
+    // if (input.fireProjectile != PlayerInput::None) {
+    //   bytes.write_enum(input.fireProjectile);
+    // }
+    // if (input.swingWeapon != PlayerInput::None) {
+    //   bytes.write_enum(input.swingWeapon);
+    // }
+
+    return bytes.buff;
+  }
+
+  inline NetGameInput deserealizeNetGameInput(const std::vector<uint8_t>& bytes) {
+
+    net::ByteReader reader(bytes);
+    NetGameInput input;
+
+    input.playerID = reader.read_u32();
+    input.tick = reader.read_u32();
+    input.move = reader.read_enum<PlayerInput>();
+    input.fireProjectile = reader.read_enum<PlayerInput>();
+    input.swingWeapon = reader.read_enum<PlayerInput>();
+
+    return input;
+  }
+
+
+  // output body from the server.
+  // after server consumes the input we update the GameState, and then periodically
+  // we read from GameState and populate this NetGameStateSnapshot. We write to msg.body using the ByteWriter byte by byte in a fixed order.
+  // On the client side we read from the byte buffer in the same order using ByteReader
+  // and populate client side NetGameSnapShot. And then use that snapshot to update the clients GameState.
   struct NetGameStateSnapshot {
     uint64_t m_stateLastUpdatedAt; // when the gameState was last updated, by local or by server msg
     std::vector<NetGameObjectSnapshot> m_gameObjects;
@@ -74,7 +135,7 @@ namespace game_engine {
     Game_UpdatePlayer,
 
     Game_Snapshot,
-    Game_MovePlayer
+    Game_PlayerInput
   };
 
 }

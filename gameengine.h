@@ -331,7 +331,7 @@ class Engine
 
     bool init(int width, int height, int logW, int logH);
     void runGameLoop();
-    void runEventLoop(GameObject &player);
+    void runEventLoop(GameObject &player, game_engine::NetGameInput &input);
 
     bool initWindowAndRenderer(int width, int height, int logW, int logH);
     void cleanupTextures();
@@ -342,7 +342,7 @@ class Engine
     // const tmx::TileSet* pickTileset(uint32_t gid);
     void handleCollision(GameObject &a, GameObject &b, float deltaTime);
     void collisionResponse(const SDL_FRect &rectA, const SDL_FRect &rectB, const SDL_FRect &rectC, GameObject &objA, GameObject &objB, float deltaTime);
-    void handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown);
+    void handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown, game_engine::NetGameInput &input);
     void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime);
     void playBackgroundSoundtrack();
     void stopBackgroundSoundtrack();

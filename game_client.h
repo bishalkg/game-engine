@@ -18,6 +18,7 @@ namespace game_engine {
       NetGameObjectSnapshot descPlayer;
 
       bool bWaitingForConnection = true;
+      bool m_isClientValidated = false;
 
 
     public:
@@ -32,9 +33,14 @@ namespace game_engine {
         return false;
       }
 
+      bool IsClientValidated() const {
+        return m_isClientValidated;
+      }
+
+      // Client calls this in game loop to read in messages from the server
       bool OnUserUpdate(float fElapsedTime)
       {
-        // Check for incoming network messages
+        // Check for incoming network messages from server
         if (IsConnected())
         {
           while (!Incoming().empty())
@@ -46,11 +52,13 @@ namespace game_engine {
             case(GameMsgHeaders::Client_Accepted):
             {
               std::cout << "Server accepted client - you're in!\n";
-              net::message<GameMsgHeaders> msg;
-              msg.header.id = GameMsgHeaders::Client_RegisterWithServer;
-              descPlayer.vPos = 3.0f;
-              msg << descPlayer;
-              Send(msg);
+              m_isClientValidated = true;
+
+              // net::message<GameMsgHeaders> msg;
+              // msg.header.id = GameMsgHeaders::Client_RegisterWithServer;
+              // descPlayer.vPos = 3.0f;
+              // msg << descPlayer;
+              // Send(msg);
               break;
             }
 

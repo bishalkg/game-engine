@@ -78,6 +78,10 @@ namespace net {
         return m_qMessagesIn;
       }
 
+      // bool IsServerValidated() const {
+      //   return m_isServerValidated;
+      // }
+
     protected:
       // client owns the asio context
       asio::io_context m_context;
@@ -87,6 +91,8 @@ namespace net {
       asio::ip::tcp::socket m_socket;
       // client only holds single connection to server
       std::unique_ptr<connection<T>> m_connection;
+
+      // bool m_isServerValidated = false;
 
 
     private:

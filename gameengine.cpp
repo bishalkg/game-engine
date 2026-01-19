@@ -111,7 +111,52 @@ void game_engine::Engine::runGameLoop() {
 
     // runEventLoop takes in key inputs that we want the client to send to the server
     // we read in snapshots from the server and updateGamePlayState; reconcile each GameObjects position using the m_stateLastUpdatedAt
-    runEventLoop(player);
+    game_engine::NetGameInput input; // populate this from runEventLoop
+    input.tick = nowTime;
+    runEventLoop(player, input);
+
+    if (isConnectedToServer && m_gameClient) {
+      m_gameClient->OnUserUpdate(deltaTime);
+      if (m_gameClient->IsClientValidated()) {
+
+        // only want to do below once client is validated by the server, so only set         isConnectedToServer = true after validation
+
+        // only send msg if there is a real player input; we need to use the scancode up and down logic to handle continuous
+        // vs single time actions
+        bool sendMsg = false;
+
+        if (m_sdlState.keys[SDL_SCANCODE_LEFT]) {
+          input.move = game_engine::PlayerInput::Left;
+          sendMsg = true;
+        }
+        if (m_sdlState.keys[SDL_SCANCODE_RIGHT]) {
+          input.move = game_engine::PlayerInput::Right;
+          sendMsg = true;
+        }
+        if (m_sdlState.keys[SDL_SCANCODE_UP]) {
+          input.move = game_engine::PlayerInput::Up;
+          sendMsg = true;
+        }
+        if (m_sdlState.keys[SDL_SCANCODE_A]) {
+          input.fireProjectile = game_engine::PlayerInput::Fire;
+          sendMsg = true;
+        }
+        if (m_sdlState.keys[SDL_SCANCODE_S]) {
+          input.swingWeapon = game_engine::PlayerInput::Swing;
+          sendMsg = true;
+        }
+
+        if (sendMsg) {
+          // game_engine::NetGameInput input; // populate this from runEventLoop
+          net::message<GameMsgHeaders> msg;
+          msg.header.id = GameMsgHeaders::Game_PlayerInput;
+          msg.body = game_engine::serealizeNetGameInput(input);
+          msg.header.bodySize = msg.body.size();
+          m_gameClient->Send(msg);
+        }
+      }
+    }
+
 
     updateGameplayState(deltaTime, player);
 
@@ -206,7 +251,7 @@ void game_engine::Engine::renderUpdates(){
 }
 
 
-void game_engine::Engine::runEventLoop(GameObject &player) {
+void game_engine::Engine::runEventLoop(GameObject &player, game_engine::NetGameInput &net_input) {
     // event loop
     SDL_Event event{0};
     while (SDL_PollEvent(&event)) {
@@ -240,12 +285,12 @@ void game_engine::Engine::runEventLoop(GameObject &player) {
         }
         case SDL_EVENT_KEY_DOWN: // non-continuous presses
         {
-          handleKeyInput(player, event.key.scancode, true);
+          handleKeyInput(player, event.key.scancode, true, net_input);
           break;
         }
         case SDL_EVENT_KEY_UP:
         {
-          handleKeyInput(player, event.key.scancode, false);
+          handleKeyInput(player, event.key.scancode, false, net_input);
           if (event.key.scancode == SDL_SCANCODE_Q) {
             gs.debugMode = !gs.debugMode;
           }
@@ -1329,7 +1374,7 @@ bool game_engine::Engine::initAllTiles() {
 //   return gs.playerIndex != -1;
 // };
 
-void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown) {
+void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown, game_engine::NetGameInput &input) {
 
   // TODO send input msg to server
 
@@ -1340,6 +1385,7 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
         if (key == SDL_SCANCODE_UP && keyDown) {
           obj.velocity.y += JUMP_FORCE;
           obj.data.player.state = PlayerState::jumping;
+          input.move = game_engine::PlayerInput::Up;
         }
         break;
       }
@@ -1356,6 +1402,7 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
         if (key == SDL_SCANCODE_UP && keyDown) {
           obj.velocity.y += JUMP_FORCE;
           obj.data.player.state = PlayerState::jumping;
+          input.move = game_engine::PlayerInput::Up;
         }
         break;
       }
