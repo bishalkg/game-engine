@@ -18,35 +18,6 @@ namespace game_engine {
   // use std::ByteWriter, ByteReader to write and read GameStateSnapshot
   // transfer the GameStateSnapshot to the game_engines GameState during renderLoop update
 
-
-    struct NetGameObjectSnapshot {
-      uint32_t id;
-      uint8_t layer; // flattened so need? or since all updateable objects are in the same layer may not need..
-      uint8_t type;   //  ObjectType type;
-
-      float vPos;
-
-
-
-      //   ObjectType type;
-      // ObjectData data; // by making this a union, the different object types can have different fields in their structs
-      // glm::vec2 position, velocity, acceleration; // we have x and y positions/velocities/accelerations
-      // float direction;
-      // float maxSpeedX;
-      // std::vector<Animation> animations;
-      // int currentAnimation;
-      // SDL_Texture *texture;
-      // bool dynamic;
-      // bool grounded;
-      // float spritePixelW;
-      // float spritePixelH;
-      // SDL_FRect collider;
-      // Timer flashTimer;
-      // bool shouldFlash;
-      // int spriteFrame;
-
-  };
-
   enum class PlayerInput: uint16_t {
     None,
     Up,
@@ -69,6 +40,8 @@ namespace game_engine {
     PlayerInput move = PlayerInput::None;
     PlayerInput fireProjectile = PlayerInput::None; // PlayerInput::Fire
     PlayerInput swingWeapon = PlayerInput::None; // PlayerInput::Swing
+
+    bool shouldSendMessage = false; // not serealized, only used to indicate whether message is ready to be sent
   };
 
   inline std::vector<uint8_t> serealizeNetGameInput(const NetGameInput& input) {
@@ -113,10 +86,34 @@ namespace game_engine {
   // we read from GameState and populate this NetGameStateSnapshot. We write to msg.body using the ByteWriter byte by byte in a fixed order.
   // On the client side we read from the byte buffer in the same order using ByteReader
   // and populate client side NetGameSnapShot. And then use that snapshot to update the clients GameState.
+
+  struct NetGameObjectSnapshot {
+    uint32_t id = 0;
+    uint8_t layer; // flattened so need? or since all updateable objects are in the same layer may not need..
+    uint32_t type;   //  ObjectType type;
+    glm::vec2 position, velocity, acceleration;
+    float direction;
+    float maxSpeedX;
+    // std::vector<Animation> animations; // keep this on each client
+    uint32_t currentAnimation; // determined by the server
+    // SDL_Texture *texture; // keep on each client
+    // bool dynamic; // static property
+    bool grounded;
+    // float spritePixelW; // static property
+    // float spritePixelH; // static property
+    // SDL_FRect collider; // if server is determining collisions, dont need to send obj to client
+    // Timer flashTimer; // determined by server, sends shouldFlash
+    bool shouldFlash;
+    uint32_t spriteFrame;
+
+    ObjectData data; // this is a union
+  };
+
   struct NetGameStateSnapshot {
     uint64_t m_stateLastUpdatedAt; // when the gameState was last updated, by local or by server msg
-    std::vector<NetGameObjectSnapshot> m_gameObjects;
-    std::vector<NetGameObjectSnapshot> m_projectiles; // bullets
+    std::unordered_map<std::tuple<ObjectType, uint32_t>, NetGameObjectSnapshot> gameObjects;
+    // std::vector<NetGameObjectSnapshot> m_gameObjects;
+    // std::vector<NetGameObjectSnapshot> m_projectiles; // bullets
   };
 
   enum class GameMsgHeaders : uint32_t {

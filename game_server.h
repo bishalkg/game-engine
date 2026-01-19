@@ -105,20 +105,25 @@ namespace game_engine {
           {
 
             NetGameInput input = deserealizeNetGameInput(msg.body);
-            // std::cout << "got input: " << input.playerID << " move: " << static_cast<int>(input.move) << " projectile: " << static_cast<int>(input.fireProjectile) << " swing: " << static_cast<int>(input.swingWeapon) << '\n';
+            std::cout << "got input: " << input.playerID << " move: " << static_cast<int>(input.move) << " projectile: " << static_cast<int>(input.fireProjectile) << " swing: " << static_cast<int>(input.swingWeapon) << '\n';
+
+            // for now its ok to process one message at a time, but later we might want to process a bunch
+            // that have queued up
 
 
-            // TODO when we recieve msg that is a player input, we want to dequeue all the inputs we currently have
-            // and update the overall GameState
+
+            // BroadcastToClients(msg, client) will be called in runGameServerLoopThread.
+            // generate a GameState message and broadcast to all clients
+            // update the
           }
-          case GameMsgHeaders::Game_UpdatePlayer:
-            {
-              // this should be the msg that is the user inputs
+          // case GameMsgHeaders::Game_UpdatePlayer:
+          //   {
+          //     // this should be the msg that is the user inputs
 
-              // Simply bounce update to everyone except incoming client
-              BroadcastToClients(msg, client);
-              break;
-            }
+          //     // Simply bounce update to everyone except incoming client
+          //     BroadcastToClients(msg, client);
+          //     break;
+          //   }
 
         }
 

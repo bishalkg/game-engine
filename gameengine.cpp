@@ -1,7 +1,7 @@
 #include "gameengine.h"
 
 GameObject &game_engine::Engine::getPlayer() {
- return gs.player(LAYER_IDX_CHARACTERS);
+ return m_gameState.player(LAYER_IDX_CHARACTERS);
 };
 
 game_engine::SDLState &game_engine::Engine::getSDLState() {
@@ -9,18 +9,18 @@ game_engine::SDLState &game_engine::Engine::getSDLState() {
 };
 
 game_engine::GameState &game_engine::Engine::getGameState() {
-  return gs;
+  return m_gameState;
 };
 
 game_engine::Resources &game_engine::Engine::getResources() {
-  return res;
+  return m_resources;
 };
 
-void game_engine::Engine::playBackgroundSoundtrack() {
-  if (!MIX_TrackPlaying(res.backgroundTrack)) {
+void game_engine::Engine::setBackgroundSoundtrack() {
+  if (!MIX_TrackPlaying(m_resources.backgroundTrack)) {
     SDL_PropertiesID opts = SDL_CreateProperties();
     SDL_SetNumberProperty(opts, MIX_PROP_PLAY_LOOPS_NUMBER, -1); // loop forever
-    if (!MIX_PlayTrack(res.backgroundTrack, opts)) {
+    if (!MIX_PlayTrack(m_resources.backgroundTrack, opts)) {
         SDL_Log("Background Music Play failed: %s", SDL_GetError());
     }
     SDL_DestroyProperties(opts); // destory internal resources
@@ -28,8 +28,8 @@ void game_engine::Engine::playBackgroundSoundtrack() {
 };
 
 void game_engine::Engine::stopBackgroundSoundtrack() {
-  if (MIX_TrackPlaying(res.backgroundTrack)) {
-    if (!MIX_StopTrack(res.backgroundTrack, 10)) {
+  if (MIX_TrackPlaying(m_resources.backgroundTrack)) {
+    if (!MIX_StopTrack(m_resources.backgroundTrack, 10)) {
         SDL_Log("stopping Background Music Play failed: %s", SDL_GetError());
     }
   }
@@ -57,25 +57,25 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
   };
 
   // one global mixer
-  res.mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
-  if (!res.mixer) {
+  m_resources.mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
+  if (!m_resources.mixer) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Global Mixer Failed to create", "Failed to create audio mixer", nullptr);
     cleanup();
     return false;
   }
 
-  MIX_SetMasterGain(res.mixer, 0.5f);  // 50% master
+  MIX_SetMasterGain(m_resources.mixer, 0.5f);  // 50% master
 
   // load game assets
-  res.loadAllAssets(m_sdlState);
-  if (!res.texIdle) {
+  m_resources.loadAllAssets(m_sdlState);
+  if (!m_resources.texIdle) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Idle Texture load failed", "Failed to load idle image", nullptr);
     cleanup();
     return false;
   }
 
   // setup game data
-  gs = GameState(m_sdlState);
+  m_gameState = GameState(m_sdlState);
   // gs.mapViewport.x = 0;
   // gs.mapViewport.y = 0;
   // gs.mapViewport.w = state.logW; // or state.width/state.logW
@@ -119,34 +119,33 @@ void game_engine::Engine::runGameLoop() {
       m_gameClient->OnUserUpdate(deltaTime);
       if (m_gameClient->IsClientValidated()) {
 
-        // only want to do below once client is validated by the server, so only set         isConnectedToServer = true after validation
+        // for jump and swing presses only send message on initial press to prevent double jump..this is broken right now
 
         // only send msg if there is a real player input; we need to use the scancode up and down logic to handle continuous
         // vs single time actions
-        bool sendMsg = false;
 
         if (m_sdlState.keys[SDL_SCANCODE_LEFT]) {
           input.move = game_engine::PlayerInput::Left;
-          sendMsg = true;
+          input.shouldSendMessage = true;
         }
         if (m_sdlState.keys[SDL_SCANCODE_RIGHT]) {
           input.move = game_engine::PlayerInput::Right;
-          sendMsg = true;
+          input.shouldSendMessage = true;
         }
-        if (m_sdlState.keys[SDL_SCANCODE_UP]) {
-          input.move = game_engine::PlayerInput::Up;
-          sendMsg = true;
-        }
+        // if (m_sdlState.keys[SDL_SCANCODE_UP]) {
+        //   input.move = game_engine::PlayerInput::Up;
+        //   sendMsg = true;
+        // }
         if (m_sdlState.keys[SDL_SCANCODE_A]) {
           input.fireProjectile = game_engine::PlayerInput::Fire;
-          sendMsg = true;
+          input.shouldSendMessage = true;
         }
-        if (m_sdlState.keys[SDL_SCANCODE_S]) {
-          input.swingWeapon = game_engine::PlayerInput::Swing;
-          sendMsg = true;
-        }
+        // if (m_sdlState.keys[SDL_SCANCODE_S]) {
+        //   input.swingWeapon = game_engine::PlayerInput::Swing;
+        //   sendMsg = true;
+        // }
 
-        if (sendMsg) {
+        if (input.shouldSendMessage) {
           // game_engine::NetGameInput input; // populate this from runEventLoop
           net::message<GameMsgHeaders> msg;
           msg.header.id = GameMsgHeaders::Game_PlayerInput;
@@ -292,7 +291,7 @@ void game_engine::Engine::runEventLoop(GameObject &player, game_engine::NetGameI
         {
           handleKeyInput(player, event.key.scancode, false, net_input);
           if (event.key.scancode == SDL_SCANCODE_Q) {
-            gs.debugMode = !gs.debugMode;
+            m_gameState.debugMode = !m_gameState.debugMode;
           }
           else if (event.key.scancode == SDL_SCANCODE_F11) {
             m_sdlState.fullscreen = !m_sdlState.fullscreen;
@@ -349,11 +348,11 @@ bool game_engine::Engine::initWindowAndRenderer(int width, int height, int logW,
 }
 
 void game_engine::Engine::cleanupTextures() {
-  this->res.unload();
+  this->m_resources.unload();
 }
 
 void game_engine::Engine::cleanup() {
-  if (res.mixer) { MIX_DestroyMixer(res.mixer); res.mixer = nullptr; }
+  if (m_resources.mixer) { MIX_DestroyMixer(m_resources.mixer); m_resources.mixer = nullptr; }
   MIX_Quit();
   ImGui_ImplSDLRenderer3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
@@ -394,8 +393,8 @@ void game_engine::Engine::drawObject(GameObject &obj, float height, float width,
     // obj.data.enemy.srcW
 
     SDL_FRect dst = {
-      .x = obj.position.x - gs.mapViewport.x, // move objects according to updated viewport position in x AND y
-      .y = obj.position.y - gs.mapViewport.y,
+      .x = obj.position.x - m_gameState.mapViewport.x, // move objects according to updated viewport position in x AND y
+      .y = obj.position.y - m_gameState.mapViewport.y,
       .w = width, // if source is larger but you want to shrink it, set the w/h you want to scale it to
       .h = height,
     };
@@ -419,11 +418,11 @@ void game_engine::Engine::drawObject(GameObject &obj, float height, float width,
       }
     }
 
-    if (gs.debugMode) {
+    if (m_gameState.debugMode) {
       // display each objects collision hitbox
       SDL_FRect rectA{
-        .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
-        .y = obj.position.y + obj.collider.y - gs.mapViewport.y,
+        .x = obj.position.x + obj.collider.x - m_gameState.mapViewport.x,
+        .y = obj.position.y + obj.collider.y - m_gameState.mapViewport.y,
         .w = obj.collider.w,
         .h = obj.collider.h
       };
@@ -433,8 +432,8 @@ void game_engine::Engine::drawObject(GameObject &obj, float height, float width,
       SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
 
       SDL_FRect sensor{
-        .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
-        .y = obj.position.y + obj.collider.y + obj.collider.h - gs.mapViewport.y,
+        .x = obj.position.x + obj.collider.x - m_gameState.mapViewport.x,
+        .y = obj.position.y + obj.collider.y + obj.collider.h - m_gameState.mapViewport.y,
         .w = obj.collider.w, .h = 1
       };
       SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_BLEND);
@@ -444,52 +443,118 @@ void game_engine::Engine::drawObject(GameObject &obj, float height, float width,
     }
 }
 
+
+void game_engine::Engine::updateAllObjects(float deltaTime) {
+
+  // if multiplayer, we need to use the latest GameSnapshot to update the objects
+  // if singleplayer let is pass through normal logic
+    // update all objects;
+  for (auto &layer : m_gameState.layers) {
+    for (GameObject &obj : layer) { // for each obj in layer
+      // optimization to avoid n*m comparisions
+      if (obj.dynamic) {
+        updateGameObject(obj, deltaTime);
+      }
+      // if (obj.type == ObjectType::player) {
+      //   bool left  = state.keys ? state.keys[SDL_SCANCODE_LEFT]  : false;
+      //   bool right = state.keys ? state.keys[SDL_SCANCODE_RIGHT] : false;
+      //   SDL_Log("pos=(%.2f,%.2f) vel=(%.2f,%.2f) left=%d right=%d", obj.position.x, obj.position.y, obj.velocity.x, obj.velocity.y, int(left), int(right));
+      // }
+    }
+  }
+
+  // update bullet physics
+  for (GameObject &bullet : m_gameState.bullets) {
+    updateGameObject(bullet, deltaTime);
+  }
+
+  if (m_gameType == Engine::GameRunMode::Client) {
+
+  }
+
+
+
+}
+
+void game_engine::Engine::updateMapViewport(GameObject& player) {
+  int mapWpx = m_resources.map->mapWidth * m_resources.map->tileWidth;
+  int mapHpx = m_resources.map->mapHeight * m_resources.map->tileHeight;
+
+  m_gameState.mapViewport.x = std::clamp(
+      (player.position.x + player.spritePixelW * 0.5f) - m_gameState.mapViewport.w * 0.5f,
+      0.0f,
+      std::max(0.0f, float(mapWpx - m_gameState.mapViewport.w)));
+
+  m_gameState.mapViewport.y = std::clamp(
+      (player.position.y + player.spritePixelH * 0.5f) - m_gameState.mapViewport.h * 0.5f,
+      0.0f,
+      std::max(0.0f, float(mapHpx - m_gameState.mapViewport.h)));
+}
+
+void game_engine::Engine::drawAllObjects(float deltaTime) {
+  // draw all interactable objects
+  for (auto &layer : m_gameState.layers) {
+    for (GameObject &obj : layer) {
+      if (obj.type == ObjectType::level) {
+        // if level tile, let src and dst override so that
+        // src points to a specfic 32x32 tile texture from the whole png; dst is where on our window we want to place it
+        SDL_FRect dst = obj.data.level.dst;
+        dst.x -= m_gameState.mapViewport.x;  // if you scroll horizontally
+        dst.y -= m_gameState.mapViewport.y;  // if vertical scrolling
+        // dst.w = static_cast<float>(obj.texture->w);
+        // dst.h = static_cast<float>(obj.texture->h);
+        SDL_RenderTexture(m_sdlState.renderer, obj.texture, &obj.data.level.src, &dst);
+        if (m_gameState.debugMode) {
+          // display each objects collision hitbox
+          SDL_FRect rectA{
+            .x = obj.position.x + obj.collider.x - m_gameState.mapViewport.x,
+            .y = obj.position.y + obj.collider.y - m_gameState.mapViewport.y,
+            .w = obj.collider.w,
+            .h = obj.collider.h
+          };
+          SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_BLEND);
+          SDL_SetRenderDrawColor(m_sdlState.renderer, 255, 0, 0, 100);
+          SDL_RenderFillRect(m_sdlState.renderer, &rectA);
+          SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
+
+          SDL_FRect sensor{
+            .x = obj.position.x + obj.collider.x - m_gameState.mapViewport.x,
+            .y = obj.position.y + obj.collider.y + obj.collider.h - m_gameState.mapViewport.y,
+            .w = obj.collider.w, .h = 1
+          };
+          SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_BLEND);
+          SDL_SetRenderDrawColor(m_sdlState.renderer, 0, 0, 255, 255);
+          SDL_RenderFillRect(m_sdlState.renderer, &sensor);
+          SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
+        }
+      } else {
+        drawObject(obj, obj.spritePixelH, obj.spritePixelW, deltaTime);
+      }
+    }
+  }
+
+  // draw bullets
+  for (GameObject &bullet: m_gameState.bullets) {
+    if (bullet.data.bullet.state != BulletState::inactive) {
+      drawObject(bullet, bullet.collider.h, bullet.collider.w, deltaTime);
+    }
+  }
+}
+
 void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& player) {
 
-  if (gs.currentView == GameScreen::Playing) {
-      playBackgroundSoundtrack(); // TODO we will want to set background track per level
+  if (m_gameState.currentView == GameScreen::Playing) {
+      setBackgroundSoundtrack(); // TODO we will want to set background track per level
 
       // update & draw game world to sdl.renderer here (before ImGui::Render)
-      // TODO make into helper: UpdateAllObjects()
-      // update all objects;
-      for (auto &layer : gs.layers) {
-        for (GameObject &obj : layer) { // for each obj in layer
-          // optimization to avoid n*m comparisions
-          if (obj.dynamic) {
-            updateGameObject(obj, deltaTime);
-          }
-          // if (obj.type == ObjectType::player) {
-          //   bool left  = state.keys ? state.keys[SDL_SCANCODE_LEFT]  : false;
-          //   bool right = state.keys ? state.keys[SDL_SCANCODE_RIGHT] : false;
-          //   SDL_Log("pos=(%.2f,%.2f) vel=(%.2f,%.2f) left=%d right=%d", obj.position.x, obj.position.y, obj.velocity.x, obj.velocity.y, int(left), int(right));
-          // }
-        }
-      }
+      updateAllObjects(deltaTime);
 
-      // update bullet physics
-      for (GameObject &bullet : gs.bullets) {
-        updateGameObject(bullet, deltaTime);
-      }
-
+      updateMapViewport(player);
 
       // TODO wrap all below in Render() function
       // calculate viewport position based on player updated position
       // gs.mapViewport.x = (player.position.x + player.spritePixelW / 2) - gs.mapViewport.w / 2;
       // gs.mapViewport.y = (player.position.y + player.spritePixelH / 2) - gs.mapViewport.h / 2;
-
-      int mapWpx = res.map->mapWidth * res.map->tileWidth;
-      int mapHpx = res.map->mapHeight * res.map->tileHeight;
-
-      gs.mapViewport.x = std::clamp(
-          (player.position.x + player.spritePixelW * 0.5f) - gs.mapViewport.w * 0.5f,
-          0.0f,
-          std::max(0.0f, float(mapWpx - gs.mapViewport.w)));
-
-      gs.mapViewport.y = std::clamp(
-          (player.position.y + player.spritePixelH * 0.5f) - gs.mapViewport.h * 0.5f,
-          0.0f,
-          std::max(0.0f, float(mapHpx - gs.mapViewport.h)));
-
 
       // SDL_SetRenderDrawColor(sdl.renderer, 20, 10, 30, 255);
 
@@ -514,54 +579,7 @@ void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& playe
       //   };
       //   SDL_RenderTexture(sdl.renderer, tile.texture, nullptr, &dst);
       // }
-
-      // draw all interactable objects
-      for (auto &layer : gs.layers) {
-        for (GameObject &obj : layer) {
-          if (obj.type == ObjectType::level) {
-            // if level tile, let src and dst override so that
-            // src points to a specfic 32x32 tile texture from the whole png; dst is where on our window we want to place it
-            SDL_FRect dst = obj.data.level.dst;
-            dst.x -= gs.mapViewport.x;  // if you scroll horizontally
-            dst.y -= gs.mapViewport.y;  // if vertical scrolling
-            // dst.w = static_cast<float>(obj.texture->w);
-            // dst.h = static_cast<float>(obj.texture->h);
-            SDL_RenderTexture(m_sdlState.renderer, obj.texture, &obj.data.level.src, &dst);
-            if (gs.debugMode) {
-              // display each objects collision hitbox
-              SDL_FRect rectA{
-                .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
-                .y = obj.position.y + obj.collider.y - gs.mapViewport.y,
-                .w = obj.collider.w,
-                .h = obj.collider.h
-              };
-              SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_BLEND);
-              SDL_SetRenderDrawColor(m_sdlState.renderer, 255, 0, 0, 100);
-              SDL_RenderFillRect(m_sdlState.renderer, &rectA);
-              SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
-
-              SDL_FRect sensor{
-                .x = obj.position.x + obj.collider.x - gs.mapViewport.x,
-                .y = obj.position.y + obj.collider.y + obj.collider.h - gs.mapViewport.y,
-                .w = obj.collider.w, .h = 1
-              };
-              SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_BLEND);
-              SDL_SetRenderDrawColor(m_sdlState.renderer, 0, 0, 255, 255);
-              SDL_RenderFillRect(m_sdlState.renderer, &sensor);
-              SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
-            }
-          } else {
-            drawObject(obj, obj.spritePixelH, obj.spritePixelW, deltaTime);
-          }
-        }
-      }
-
-      // draw bullets
-      for (GameObject &bullet: gs.bullets) {
-        if (bullet.data.bullet.state != BulletState::inactive) {
-          drawObject(bullet, bullet.collider.h, bullet.collider.w, deltaTime);
-        }
-      }
+      drawAllObjects(deltaTime);
 
       // draw all foreground objects
       // for (auto &tile : gs.foregroundTiles) {
@@ -575,13 +593,13 @@ void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& playe
       // }
 
       // debugging
-      if (gs.debugMode) {
+      if (m_gameState.debugMode) {
         SDL_SetRenderDrawColor(m_sdlState.renderer, 255, 255, 255, 255);
         SDL_RenderDebugText(
             m_sdlState.renderer,
             5,
             5,
-            std::format("State3: {}  Direction: {} B: {}, G: {}, Px: {}, Py:{}, VPx: {}", static_cast<int>(player.data.player.state), player.direction, gs.bullets.size(), player.grounded, player.position.x, player.position.y, gs.mapViewport.x).c_str());
+            std::format("State3: {}  Direction: {} B: {}, G: {}, Px: {}, Py:{}, VPx: {}", static_cast<int>(player.data.player.state), player.direction, m_gameState.bullets.size(), player.grounded, player.position.x, player.position.y, m_gameState.mapViewport.x).c_str());
       }
     }
 
@@ -601,7 +619,7 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
 
     ImVec2 buttonSize = ImVec2(150, 50); // TODO put in config
 
-    switch (gs.currentView) {
+    switch (m_gameState.currentView) {
       case GameScreen::MainMenu:
         this->stopBackgroundSoundtrack();
         ImGui::Begin("Main Menu", nullptr, m_sdlState.ImGuiWindowFlags);
@@ -609,11 +627,11 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
         if (ImGui::Button("Single Player", buttonSize)) {
             std::cout << "start game" << std::endl;
             std::puts("Start clicked");
-            gs.currentView = GameScreen::Playing;
+            m_gameState.currentView = GameScreen::Playing;
             m_gameType = game_engine::Engine::SinglePlayer;
         }
         if (ImGui::Button("Multiplayer",buttonSize)) {
-          gs.currentView = GameScreen::MultiPlayerOptionsMenu;
+          m_gameState.currentView = GameScreen::MultiPlayerOptionsMenu;
           std::cout << "multi game" << std::endl;
         }
         if (ImGui::Button("Quit", buttonSize)) {
@@ -624,7 +642,7 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
         break;
       case GameScreen::PauseMenu:
         ImGui::Begin("Pause", nullptr, m_sdlState.ImGuiWindowFlags);
-        if (ImGui::Button("Resume")) gs.currentView = GameScreen::Playing;
+        if (ImGui::Button("Resume")) m_gameState.currentView = GameScreen::Playing;
         if (ImGui::Button("Quit")) m_gameRunning.store(false);
         ImGui::End();
         break;
@@ -633,15 +651,15 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
         ImGui::Begin("MultiPlayer Menu", nullptr, m_sdlState.ImGuiWindowFlags);
         if (ImGui::Button("Host A Game",buttonSize)) {
           m_gameType = game_engine::Engine::Host;
-          gs.currentView = GameScreen::Playing;
+          m_gameState.currentView = GameScreen::Playing;
         }
         if (ImGui::Button("Join A Game", buttonSize)) {
           m_gameType = game_engine::Engine::Client;
-          gs.currentView = GameScreen::Playing;
+          m_gameState.currentView = GameScreen::Playing;
         }
         if (ImGui::Button("Back to Menu", buttonSize)) {
           // todo; should reset game state unless saved
-          gs.currentView = GameScreen::MainMenu;
+          m_gameState.currentView = GameScreen::MainMenu;
         }
         ImGui::End();
         break;
@@ -654,7 +672,7 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
           ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
           ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
           if (ImGui::Button("Back to Menu", buttonSize)) {
-              gs.currentView = GameScreen::MainMenu;
+              m_gameState.currentView = GameScreen::MainMenu;
           }
           ImGui::SameLine(0, 2.0f);
           if (ImGui::Button("Save Game", buttonSize)) {
@@ -729,12 +747,12 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           bullet.data.bullet = BulletData();
           bullet.type = ObjectType::bullet;
           bullet.direction = obj.direction;
-          bullet.texture = res.texBullet;
-          bullet.currentAnimation = res.ANIM_BULLET_MOVING;
+          bullet.texture = m_resources.texBullet;
+          bullet.currentAnimation = m_resources.ANIM_BULLET_MOVING;
           bullet.collider = SDL_FRect{
             .x = 0, .y = 0,
-            .w = static_cast<float>(res.texBullet->h),
-            .h = static_cast<float>(res.texBullet->h),
+            .w = static_cast<float>(m_resources.texBullet->h),
+            .h = static_cast<float>(m_resources.texBullet->h),
           };
           const int yJitter = 50;
           const float yVelocity = SDL_rand(yJitter) - yJitter / 2.0f;
@@ -743,7 +761,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
             yVelocity
           ) * obj.direction;
           bullet.maxSpeedX = 1000.0f;
-          bullet.animations = res.bulletAnims;
+          bullet.animations = m_resources.bulletAnims;
 
           // adjust depending on direction faced; lerp
           const float left = 4;
@@ -756,21 +774,21 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           );
 
           bool foundInactive = false;
-          for (int i = 0; i < gs.bullets.size() && !foundInactive; i++) {
-            if (gs.bullets[i].data.bullet.state == BulletState::inactive) {
+          for (int i = 0; i < m_gameState.bullets.size() && !foundInactive; i++) {
+            if (m_gameState.bullets[i].data.bullet.state == BulletState::inactive) {
               foundInactive = true;
-              gs.bullets[i] = bullet;
+              m_gameState.bullets[i] = bullet;
             }
           }
 
           // only add new if no inactive found
           if (!foundInactive) {
-            this->gs.bullets.push_back(bullet); // push bullets so we can draw them
+            this->m_gameState.bullets.push_back(bullet); // push bullets so we can draw them
           }
         }
 
         // MIX_SetTrackAudio(res.shootTrack, res.audioShoot); // or MIX_SetTrackAudioWithProperties
-        if (!MIX_PlayTrack(res.shootTrack, 0)) {
+        if (!MIX_PlayTrack(m_resources.shootTrack, 0)) {
             // SDL_Log("Play failed: %s", SDL_GetError());
         };
 
@@ -786,8 +804,8 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
       {
         if (currDirection != 0) {
           obj.data.player.state = PlayerState::running;
-          obj.texture = res.texRun;
-          obj.currentAnimation = res.ANIM_PLAYER_RUN;
+          obj.texture = m_resources.texRun;
+          obj.currentAnimation = m_resources.ANIM_PLAYER_RUN;
         } else {
           // decelerate faster than we speed up
           if (obj.velocity.x) {
@@ -801,7 +819,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           }
         }
 
-        handleShooting(res.texIdle, res.texShoot, res.ANIM_PLAYER_IDLE, res.ANIM_PLAYER_SHOOT);
+        handleShooting(m_resources.texIdle, m_resources.texShoot, m_resources.ANIM_PLAYER_IDLE, m_resources.ANIM_PLAYER_SHOOT);
 
         break;
       }
@@ -813,9 +831,9 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
         // move in opposite dir of velocity, sliding
         if (obj.velocity.x * obj.direction < 0 && obj.grounded) {
-          handleShooting(res.texSlide, res.texSlideShoot, res.ANIM_PLAYER_SLIDE, res.ANIM_PLAYER_SLIDE_SHOOT);
+          handleShooting(m_resources.texSlide, m_resources.texSlideShoot, m_resources.ANIM_PLAYER_SLIDE, m_resources.ANIM_PLAYER_SLIDE_SHOOT);
         } else {
-          handleShooting(res.texRun, res.texRunShoot, res.ANIM_PLAYER_RUN, res.ANIM_PLAYER_RUN);
+          handleShooting(m_resources.texRun, m_resources.texRunShoot, m_resources.ANIM_PLAYER_RUN, m_resources.ANIM_PLAYER_RUN);
           // sprite sheets have same frames so we can seamlessly swap between the two sheets
         }
 
@@ -823,7 +841,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
       }
       case PlayerState::jumping:
       {
-        handleShooting(res.texRun, res.texRunShoot, res.ANIM_PLAYER_RUN, res.ANIM_PLAYER_RUN);
+        handleShooting(m_resources.texRun, m_resources.texRunShoot, m_resources.ANIM_PLAYER_RUN, m_resources.ANIM_PLAYER_RUN);
         // obj.texture = res.texRun;
         // obj.currentAnimation = res.ANIM_PLAYER_RUN;
         break;
@@ -834,9 +852,9 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     switch (obj.data.bullet.state) {
       case BulletState::moving:
       {
-        if (obj.position.x - gs.mapViewport.x < 0 || obj.position.x - gs.mapViewport.x > m_sdlState.logW ||
-        obj.position.y - gs.mapViewport.y < 0 ||
-        obj.position.y - gs.mapViewport.y > m_sdlState.logH) {
+        if (obj.position.x - m_gameState.mapViewport.x < 0 || obj.position.x - m_gameState.mapViewport.x > m_sdlState.logW ||
+        obj.position.y - m_gameState.mapViewport.y < 0 ||
+        obj.position.y - m_gameState.mapViewport.y > m_sdlState.logH) {
         obj.data.bullet.state = BulletState::inactive;
         }
         break;
@@ -862,12 +880,12 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
             currDirection = -1;
           };
           obj.acceleration = glm::vec2(30, 0);
-          obj.texture = res.texEnemyRun;
+          obj.texture = m_resources.texEnemyRun;
         } else {
           // stop them from moving when too far away
           obj.acceleration = glm::vec2(0);
           obj.velocity.x = 0;
-          obj.texture = res.texEnemy;
+          obj.texture = m_resources.texEnemy;
         }
 
         break;
@@ -876,8 +894,8 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
       {
         if (obj.data.enemy.damageTimer.step(deltaTime)) {
           obj.data.enemy.state = EnemyState::idle;
-          obj.texture = res.texEnemy;
-          obj.currentAnimation = res.ANIM_ENEMY;
+          obj.texture = m_resources.texEnemy;
+          obj.currentAnimation = m_resources.ANIM_ENEMY;
           obj.data.enemy.damageTimer.reset();
         }
         break;
@@ -909,7 +927,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
   // handle collision detection
   bool foundGround = false;
-  for (auto &layer : gs.layers) {
+  for (auto &layer : m_gameState.layers) {
     for (GameObject &objB: layer){
       // if (obj.type == ObjectType::enemy) {
       //   std::cout << "found Ground" << foundGround << std::endl;
@@ -1007,7 +1025,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
         switch (objB.type) {
           case ObjectType::level:
           {
-            if (!MIX_PlayTrack(res.hitTrack, 0)) {
+            if (!MIX_PlayTrack(m_resources.hitTrack, 0)) {
             // SDL_Log("Play failed: %s", SDL_GetError());
             };
 
@@ -1020,19 +1038,19 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               objB.direction = -1 * objA.direction;
               objB.shouldFlash = true;
               objB.flashTimer.reset();
-              objB.texture = res.texEnemyHit;
-              objB.currentAnimation = res.ANIM_ENEMY_HIT;
+              objB.texture = m_resources.texEnemyHit;
+              objB.currentAnimation = m_resources.ANIM_ENEMY_HIT;
               d.state = EnemyState::dying;
 
               // damage and flag dead
               d.healthPoints -= 10;
               if (d.healthPoints <= 0) {
                 d.state = EnemyState::dead;
-                objB.texture = res.texEnemyDie;
-                objB.currentAnimation = res.ANIM_ENEMY_DIE;
-                MIX_PlayTrack(res.enemyDieTrack, 0);
+                objB.texture = m_resources.texEnemyDie;
+                objB.currentAnimation = m_resources.ANIM_ENEMY_DIE;
+                MIX_PlayTrack(m_resources.enemyDieTrack, 0);
               }
-              MIX_PlayTrack(res.enemyHitTrack, 0);
+              MIX_PlayTrack(m_resources.enemyHitTrack, 0);
             } else {
               passthrough = true;
             }
@@ -1044,8 +1062,8 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
           defaultResponse();
           objA.velocity *= 0;
           objA.data.bullet.state = BulletState::colliding;
-          objA.texture = res.texBulletHit;
-          objA.currentAnimation = res.ANIM_BULLET_HIT;
+          objA.texture = m_resources.texBulletHit;
+          objA.currentAnimation = m_resources.ANIM_BULLET_HIT;
         }
         break;
       }
@@ -1231,13 +1249,13 @@ bool game_engine::Engine::initAllTiles() {
     }
   };
 
-  LayerVisitor visitor(m_sdlState, gs, res);
-  for (std::variant<tmx::Layer, tmx::ObjectGroup> &layer : res.map->layers) {
+  LayerVisitor visitor(m_sdlState, m_gameState, m_resources);
+  for (std::variant<tmx::Layer, tmx::ObjectGroup> &layer : m_resources.map->layers) {
     std::visit(visitor, layer);
   };
 
 
-  return gs.playerIndex != -1;
+  return m_gameState.playerIndex != -1;
 };
 
 // bool game_engine::Engine::initAllTiles() {
@@ -1385,13 +1403,20 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
         if (key == SDL_SCANCODE_UP && keyDown) {
           obj.velocity.y += JUMP_FORCE;
           obj.data.player.state = PlayerState::jumping;
-          input.move = game_engine::PlayerInput::Up;
+          input.move = PlayerInput::Up;
+          input.shouldSendMessage = true;
+        } else if (key == SDL_SCANCODE_S && keyDown) {
+
+          // todo handle swing of sword
+          obj.data.player.state = PlayerState::swingWeapon;
+          input.move = PlayerInput::Swing;
+          input.shouldSendMessage = true;
         }
         break;
       }
       case PlayerState::jumping:
       {
-        if (!keyDown) {
+        if (!keyDown) { // once you stop holding down the key, set player state back to idle
           obj.velocity.y = 0;
           obj.data.player.state = PlayerState::idle;
         }
@@ -1403,6 +1428,15 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
           obj.velocity.y += JUMP_FORCE;
           obj.data.player.state = PlayerState::jumping;
           input.move = game_engine::PlayerInput::Up;
+          input.shouldSendMessage = true;
+        }
+        break;
+      }
+      case PlayerState::swingWeapon:
+      {
+        if (!keyDown) {
+          // obj.velocity.y = 0;
+          obj.data.player.state = PlayerState::idle;
         }
         break;
       }

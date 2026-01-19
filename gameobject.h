@@ -5,7 +5,7 @@
 #include <SDL3/SDL.h>
 
 enum class PlayerState {
-  idle, running, jumping
+  idle, running, jumping, swingWeapon
 };
 
 enum class BulletState {
@@ -52,9 +52,12 @@ union ObjectData {
   LevelData level;
   EnemyData enemy;
   BulletData bullet;
+
+  ObjectData() { new (&level) LevelData{}; }   // pick one as default
+  ~ObjectData() {}  // and destroy the active member appropriately if you change it
 };
 
-enum class ObjectType : std::uint8_t
+enum class ObjectType : std::uint32_t
 {
   player, level, enemy, bullet, sword
 };
@@ -79,7 +82,7 @@ struct GameObject {
   bool shouldFlash;
   int spriteFrame;
 
-  GameObject(float spriteH, float spriteW): data{.level = LevelData()}, spritePixelW(spriteW), spritePixelH(spriteH), collider{0}, flashTimer(0.05f) {
+  GameObject(float spriteH, float spriteW): data(), spritePixelW(spriteW), spritePixelH(spriteH), collider{0}, flashTimer(0.05f) {
     type = ObjectType::level;
     maxSpeedX = 0;
     direction = 1;

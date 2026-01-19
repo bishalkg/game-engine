@@ -141,6 +141,8 @@ namespace net
 
         size_t nMessageCount = 0;
 
+        // for now its ok to process one message at a time, but later we might want to process a bunch
+        // that have queued up
         // limit max number of messages being read on single Update call
         while (nMessageCount < nMaxMessages && !m_qMessagesIn.empty())
         {

@@ -13,7 +13,14 @@ namespace game_engine {
       ~GameClient() = default;
 
     private:
-      std::unordered_map<uint32_t, NetGameObjectSnapshot> mapObjects;
+      // tuple of object type and objectID
+      // need this behind a mutex.
+      // the idea is the client queue will dequeue and update the clients mapObjects state as snapshots come in
+      // the game engine can then read from this mapObjects during its render loop (updateAllObjects) to update the actual game state
+      std::mutex m_gameStateMu;
+      NetGameStateSnapshot m_latestSnapshot;
+      // std::unordered_map<std::tuple<ObjectType, uint32_t>, NetGameObjectSnapshot> m_gameObjects;
+      // uint64_t m_stateLastUpdatedAt; // when the gameState was last updated
       uint32_t nPlayerID = 0;
       NetGameObjectSnapshot descPlayer;
 
@@ -72,15 +79,15 @@ namespace game_engine {
 
             case(GameMsgHeaders::Game_AddPlayer):
             {
-              NetGameObjectSnapshot desc;
-              msg >> desc;
-              mapObjects.insert_or_assign(desc.id, desc);
+              // NetGameObjectSnapshot desc;
+              // msg >> desc;
+              // mapObjects.insert_or_assign(desc.id, desc);
 
-              if (desc.id == nPlayerID)
-              {
-                // Now we exist in game world
-                bWaitingForConnection = false;
-              }
+              // if (desc.id == nPlayerID)
+              // {
+              //   // Now we exist in game world
+              //   bWaitingForConnection = false;
+              // }
               break;
             }
 
@@ -88,15 +95,19 @@ namespace game_engine {
             {
               uint32_t nRemovalID = 0;
               msg >> nRemovalID;
-              mapObjects.erase(nRemovalID);
+              m_latestSnapshot.gameObjects.erase(std::tuple(ObjectType::player, nRemovalID));
               break;
             }
 
-            case(GameMsgHeaders::Game_UpdatePlayer):
+            case(GameMsgHeaders::Game_Snapshot):
             {
-              NetGameObjectSnapshot desc;
-              msg >> desc;
-              mapObjects.insert_or_assign(desc.id, desc);
+              // TODO deserealize the gameSnapshot and set it onto mapObjects and other private variables...We will need a mutex for reading the data so that it doesnt
+              // get updated as we are reading it to set the client data
+
+              // NetGameObjectSnapshot desc;
+              // msg >> desc;
+              // mapObjects.insert_or_assign(desc.id, desc);
+              swapGameStateWithNew(msg);
               break;
             }
 
@@ -115,6 +126,15 @@ namespace game_engine {
         return false;
 
       };
+
+    private:
+      void swapGameStateWithNew(net::message<game_engine::GameMsgHeaders>& msg) {
+        std::scoped_lock lock(m_gameStateMu);
+        NetGameStateSnapshot latestSnapshot;
+        // TODO actual deserealization
+        msg >> latestSnapshot;
+        m_latestSnapshot = latestSnapshot;
+      }
 
   };
 

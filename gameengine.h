@@ -306,8 +306,8 @@ class Engine
 
   private:
     SDLState m_sdlState;
-    GameState gs;
-    Resources res;
+    GameState m_gameState;
+    Resources m_resources;
     std::atomic<bool> m_gameRunning{false};
     GameRunMode m_gameType;
 
@@ -318,7 +318,7 @@ class Engine
 
 
   public:
-    Engine() : m_sdlState{}, gs(m_sdlState), res{}, m_gameType(SinglePlayer) {}
+    Engine() : m_sdlState{}, m_gameState(m_sdlState), m_resources{}, m_gameType(SinglePlayer) {}
 
     inline static constexpr glm::vec2 GRAVITY = glm::vec2(0, 500);
     inline static constexpr size_t LAYER_IDX_LEVEL = 0;
@@ -344,13 +344,18 @@ class Engine
     void collisionResponse(const SDL_FRect &rectA, const SDL_FRect &rectB, const SDL_FRect &rectC, GameObject &objA, GameObject &objB, float deltaTime);
     void handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown, game_engine::NetGameInput &input);
     void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime);
-    void playBackgroundSoundtrack();
+    void setBackgroundSoundtrack();
     void stopBackgroundSoundtrack();
-    bool handleMultiplayerConnections();
+
     void updateGameplayState(float deltaTime, GameObject& player);
+    void updateAllObjects(float deltaTime);
+    void updateMapViewport(GameObject& player);
+    void drawAllObjects(float deltaTime);
     void updateImGuiMenuRenderState();
     void clearRenderer();
     void renderUpdates();
+
+    bool handleMultiplayerConnections();
     void runGameServerLoopThread();
     // MIX_PauseTrack(track) / MIX_ResumeTrack(track)
 
