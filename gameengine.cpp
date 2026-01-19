@@ -1,4 +1,5 @@
 #include "gameengine.h"
+// #include "game_net_common.h"
 
 GameObject &game_engine::Engine::getPlayer() {
  return m_gameState.player(LAYER_IDX_CHARACTERS);
@@ -223,6 +224,7 @@ void game_engine::Engine::runGameServerLoopThread() {
     m_gameServer->ProcessIncomingMessages();
 
 
+    auto snapshot = m_gameState.extractNetSnapshot();
     // every delta, we take the current gameState, package it into a message and broadcast it to the clients
     net::message<game_engine::GameMsgHeaders> msg;
     msg.header.id = GameMsgHeaders::Game_Snapshot;
@@ -366,7 +368,7 @@ void game_engine::Engine::drawObject(GameObject &obj, float height, float width,
 
     float frameW = height;
     float frameH = width;
-    if (obj.type == ObjectType::enemy) {
+    if (obj.type == ObjectType::Enemy) {
         frameW = obj.data.enemy.srcW;   // e.g. 128
         frameH = obj.data.enemy.srcH;   // e.g. 128
     }
@@ -399,7 +401,7 @@ void game_engine::Engine::drawObject(GameObject &obj, float height, float width,
       .h = height,
     };
 
-    if (obj.type == ObjectType::enemy) {
+    if (obj.type == ObjectType::Enemy) {
       dst.h = obj.data.enemy.srcH / 2.5f;
       dst.w = obj.data.enemy.srcW / 2.5f;
     }
@@ -446,9 +448,7 @@ void game_engine::Engine::drawObject(GameObject &obj, float height, float width,
 
 void game_engine::Engine::updateAllObjects(float deltaTime) {
 
-  // if multiplayer, we need to use the latest GameSnapshot to update the objects
   // if singleplayer let is pass through normal logic
-    // update all objects;
   for (auto &layer : m_gameState.layers) {
     for (GameObject &obj : layer) { // for each obj in layer
       // optimization to avoid n*m comparisions
@@ -468,7 +468,12 @@ void game_engine::Engine::updateAllObjects(float deltaTime) {
     updateGameObject(bullet, deltaTime);
   }
 
-  if (m_gameType == Engine::GameRunMode::Client) {
+
+  // if multiplayer, we need to use the latest GameSnapshot to update the objects
+  if (m_gameType == Engine::GameRunMode::Client || m_gameType == Engine::GameRunMode::Host) {
+    // m_gameClient will have the latest snapshot so use a getter to get the data
+
+
 
   }
 
@@ -495,7 +500,7 @@ void game_engine::Engine::drawAllObjects(float deltaTime) {
   // draw all interactable objects
   for (auto &layer : m_gameState.layers) {
     for (GameObject &obj : layer) {
-      if (obj.type == ObjectType::level) {
+      if (obj.type == ObjectType::Level) {
         // if level tile, let src and dst override so that
         // src points to a specfic 32x32 tile texture from the whole png; dst is where on our window we want to place it
         SDL_FRect dst = obj.data.level.dst;
@@ -702,7 +707,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
   }
 
   float currDirection = 0;
-  if (obj.type == ObjectType::player) {
+  if (obj.type == ObjectType::Player) {
 
     // this way player cant spam jump and fly; but sometimes gets stuck and is unable to jump
     // if (state.keys[SDL_SCANCODE_DOWN]) {
@@ -745,7 +750,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           // create bullets
           GameObject bullet(4, 4);
           bullet.data.bullet = BulletData();
-          bullet.type = ObjectType::bullet;
+          bullet.type = ObjectType::Bullet;
           bullet.direction = obj.direction;
           bullet.texture = m_resources.texBullet;
           bullet.currentAnimation = m_resources.ANIM_BULLET_MOVING;
@@ -847,7 +852,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         break;
       }
     }
-  } else if (obj.type == ObjectType::bullet) {
+  } else if (obj.type == ObjectType::Bullet) {
 
     switch (obj.data.bullet.state) {
       case BulletState::moving:
@@ -867,7 +872,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         break;
       }
     }
-  } else if (obj.type == ObjectType::enemy) {
+  } else if (obj.type == ObjectType::Enemy) {
 
     switch (obj.data.enemy.state) {
       case EnemyState::idle:
@@ -936,7 +941,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         this->handleCollision(obj, objB, deltaTime);
 
         // update ground sensor only when landing on level tiles
-        if (objB.type == ObjectType::level) {
+        if (objB.type == ObjectType::Level) {
           SDL_FRect sensor{
             .x = obj.position.x + obj.collider.x,
             .y = obj.position.y + obj.collider.y + obj.collider.h,
@@ -963,7 +968,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
   if (obj.grounded != foundGround) {
     // switching grounded state
     obj.grounded = foundGround;
-    if (foundGround && obj.type == ObjectType::player) {
+    if (foundGround && obj.type == ObjectType::Player) {
       obj.data.player.state = PlayerState::running;
     }
   }
@@ -997,33 +1002,33 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
     }
   };
 
-  if (objA.type == ObjectType::player) {
+  if (objA.type == ObjectType::Player) {
     switch (objB.type) {
-      case ObjectType::level:
+      case ObjectType::Level:
       {
         defaultResponse();
         break;
       }
-      case ObjectType::enemy:
+      case ObjectType::Enemy:
       {
         if (objB.data.enemy.state != EnemyState::dead) {
           objA.velocity = glm::vec2(50, 0) * - objA.direction;
         }
         break;
       }
-      case ObjectType::player:
+      case ObjectType::Player:
       {
         break;
       }
     }
-  } else if (objA.type == ObjectType::bullet) {
+  } else if (objA.type == ObjectType::Bullet) {
 
     bool passthrough = false;
     switch (objA.data.bullet.state) {
       case BulletState::moving:
       {
         switch (objB.type) {
-          case ObjectType::level:
+          case ObjectType::Level:
           {
             if (!MIX_PlayTrack(m_resources.hitTrack, 0)) {
             // SDL_Log("Play failed: %s", SDL_GetError());
@@ -1031,7 +1036,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
 
             break;
           }
-          case ObjectType::enemy:
+          case ObjectType::Enemy:
           {
             EnemyData &d = objB.data.enemy;
             if (d.state != EnemyState::dead) {
@@ -1070,7 +1075,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
     }
 
   }
-  else if (objA.type == ObjectType::enemy) {
+  else if (objA.type == ObjectType::Enemy) {
     defaultResponse(); // ensure enemy doesnt fall through floor
   }
 
@@ -1133,7 +1138,7 @@ bool game_engine::Engine::initAllTiles() {
         .h = spriteH
       };
 
-      if (type == ObjectType::level) {
+      if (type == ObjectType::Level) {
         o.position = { c * spriteW, r * spriteH };
         // o.position = glm::vec2(c * TILE_SIZE, state.logH - (20 - r) * TILE_SIZE);
         // pick out the exact tile from the tilesheet
@@ -1176,7 +1181,7 @@ bool game_engine::Engine::initAllTiles() {
             int srcX = (localId % ts->columns) * ts->tileWidth; // col * tileWidth;
             int srcY = (localId / ts->columns) * ts->tileHeight; // row * tileHeight
 
-            auto tile = createObject(r, c, ts->texture, ObjectType::level, ts->tileHeight, ts->tileWidth, srcX, srcY);
+            auto tile = createObject(r, c, ts->texture, ObjectType::Level, ts->tileHeight, ts->tileWidth, srcX, srcY);
             if (layer.name != "Level") {
               tile.collider.w = tile.collider.h = 0;
             }
@@ -1205,7 +1210,7 @@ bool game_engine::Engine::initAllTiles() {
 
 
         if (obj.type == "Enemy") {
-          GameObject enemy = createObject(1, 1, res.texEnemy, ObjectType::enemy, TILE_SIZE, TILE_SIZE, 0, 0);
+          GameObject enemy = createObject(1, 1, res.texEnemy, ObjectType::Enemy, TILE_SIZE, TILE_SIZE, 0, 0);
           enemy.position = objStartingPos;
           enemy.data.enemy = EnemyData();
           enemy.data.enemy.srcH = 128;
@@ -1225,7 +1230,7 @@ bool game_engine::Engine::initAllTiles() {
         }
         if (obj.type == "Player") {
         {
-          GameObject player = createObject(1, 1, res.texIdle, ObjectType::player, 32, 32, 0, 0); // TODO update with new dimensions
+          GameObject player = createObject(1, 1, res.texIdle, ObjectType::Player, 32, 32, 0, 0); // TODO update with new dimensions
           player.position = objStartingPos;
           player.data.player = PlayerData();
           player.animations = res.playerAnims; // copies via std::vector copy assignment
@@ -1396,7 +1401,7 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
 
   // TODO send input msg to server
 
-  if (obj.type == ObjectType::player) {
+  if (obj.type == ObjectType::Player) {
     switch (obj.data.player.state) {
       case PlayerState::idle:
       {

@@ -95,7 +95,7 @@ namespace game_engine {
             {
               uint32_t nRemovalID = 0;
               msg >> nRemovalID;
-              m_latestSnapshot.gameObjects.erase(std::tuple(ObjectType::player, nRemovalID));
+              m_latestSnapshot.gameObjects.erase(std::tuple(ObjectType::Player, nRemovalID));
               break;
             }
 
@@ -132,10 +132,14 @@ namespace game_engine {
         std::scoped_lock lock(m_gameStateMu);
         NetGameStateSnapshot latestSnapshot;
         // TODO actual deserealization
-        msg >> latestSnapshot;
-        m_latestSnapshot = latestSnapshot;
+        // msg >> latestSnapshot;
+        // m_latestSnapshot = latestSnapshot;
       }
 
   };
 
 };
+
+// 1. write out the serealizer/deserealizer
+// 2. write out the computation logic on the server (server should also have its own GameState like the client or use the snapshot? whichevers easier..)
+// 3. client to use the read in snapshot to update objects in updateAllObjects

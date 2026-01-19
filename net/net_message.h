@@ -65,7 +65,7 @@ namespace net
       msg.header.bodySize = msg.size();
 
       return msg;
-    }
+    };
 
 
 

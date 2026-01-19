@@ -59,7 +59,7 @@ union ObjectData {
 
 enum class ObjectType : std::uint32_t
 {
-  player, level, enemy, bullet, sword
+  Player, Level, Enemy, Bullet, Sword
 };
 
 // define all objects in the game
@@ -83,7 +83,7 @@ struct GameObject {
   int spriteFrame;
 
   GameObject(float spriteH, float spriteW): data(), spritePixelW(spriteW), spritePixelH(spriteH), collider{0}, flashTimer(0.05f) {
-    type = ObjectType::level;
+    type = ObjectType::Level;
     maxSpeedX = 0;
     direction = 1;
     position = velocity = acceleration = glm::vec2(0);

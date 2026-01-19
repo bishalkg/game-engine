@@ -4,6 +4,9 @@
 // #include <vector>
 #include <string>
 #include <vector>
+#include <unordered_map>
+#include <utility>
+#include <type_traits>
 // #include <format>
 // #include <array>
 // #include <filesystem>
@@ -89,7 +92,7 @@ namespace game_engine {
 
   struct NetGameObjectSnapshot {
     uint32_t id = 0;
-    uint8_t layer; // flattened so need? or since all updateable objects are in the same layer may not need..
+    uint32_t layer; // flattened so need? or since all updateable objects are in the same layer may not need..
     uint32_t type;   //  ObjectType type;
     glm::vec2 position, velocity, acceleration;
     float direction;
@@ -109,12 +112,95 @@ namespace game_engine {
     ObjectData data; // this is a union
   };
 
+  using GameObjectKey = std::pair<ObjectType, uint32_t>;
+  struct GameObjectKeyHash {
+    size_t operator()(const GameObjectKey& k) const noexcept {
+      using U = std::underlying_type_t<ObjectType>;
+      const auto h1 = std::hash<U>{}(static_cast<U>(k.first));
+      const auto h2 = std::hash<uint32_t>{}(k.second);
+      return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+    }
+  };
+
   struct NetGameStateSnapshot {
     uint64_t m_stateLastUpdatedAt; // when the gameState was last updated, by local or by server msg
-    std::unordered_map<std::tuple<ObjectType, uint32_t>, NetGameObjectSnapshot> gameObjects;
+    std::unordered_map<GameObjectKey, NetGameObjectSnapshot, GameObjectKeyHash> gameObjects;
     // std::vector<NetGameObjectSnapshot> m_gameObjects;
     // std::vector<NetGameObjectSnapshot> m_projectiles; // bullets
   };
+
+// NetGameStateSnapshot extractSnapshotFromGameState(const GameState& gs) {
+//     NetGameStateSnapshot snapshot;
+//     snapshot.m_stateLastUpdatedAt = gs.m_stateLastUpdatedAt;
+
+//     for (size_t layerIdx = 0; layerIdx < gs.layers.size(); ++layerIdx) {
+//         for (const auto& obj : gs.layers[layerIdx]) {
+//             NetGameObjectSnapshot s{};
+//             s.id = obj.id;
+//             s.layer = static_cast<uint32_t>(layerIdx);
+//             s.type = static_cast<uint32_t>(obj.type);
+//             s.position = obj.position;
+//             s.velocity = obj.velocity;
+//             s.acceleration = obj.acceleration;
+//             s.direction = obj.direction;
+//             s.maxSpeedX = obj.maxSpeedX;
+//             s.currentAnimation = static_cast<uint32_t>(obj.currentAnimation);
+//             s.grounded = obj.grounded;
+//             s.shouldFlash = obj.shouldFlash;
+//             s.spriteFrame = static_cast<uint32_t>(obj.spriteFrame);
+//             s.data = obj.data; // union to be handled in encodeNetGameStateSnapshot
+//             snapshot.gameObjects[{obj.type, obj.id}] = s;
+//         };
+//     };
+
+//     for (const auto& obj : gs.bullets) {
+//         NetGameObjectSnapshot s{};
+//         s.id = obj.id;
+//         s.layer = static_cast<uint32_t>(gs.playerLayer);
+//         s.type = static_cast<uint32_t>(obj.type);
+//         s.position = obj.position;
+//         s.velocity = obj.velocity;
+//         s.acceleration = obj.acceleration;
+//         s.direction = obj.direction;
+//         s.maxSpeedX = obj.maxSpeedX;
+//         s.currentAnimation = static_cast<uint32_t>(obj.currentAnimation);
+//         s.grounded = obj.grounded;
+//         s.shouldFlash = obj.shouldFlash;
+//         s.spriteFrame = static_cast<uint32_t>(obj.spriteFrame);
+//         snapshot.gameObjects[{obj.type, obj.id}] = s;
+//     };
+
+//     return snapshot;
+// }
+
+
+  static constexpr std::uint16_t VERSION = 1;
+  static constexpr std::uint16_t MSG_SNAPSHOT = 1;
+
+  inline std::vector<std::uint8_t> encodeNetGameStateSnapshot(const NetGameStateSnapshot &s) {
+
+    net::ByteWriter w;
+
+    w.write_u16(VERSION);
+    w.write_u16(MSG_SNAPSHOT);
+
+    w.write_u64(s.m_stateLastUpdatedAt);
+
+    // write the unordered_map
+    // for (auto &[key, obj] : s.gameObjects) {
+
+    //   switch (obj.type) {
+    //     case ObjectType::Player: {
+
+    //     }
+
+    //   }
+    // }
+
+    return w.buff;
+
+
+  }
 
   enum class GameMsgHeaders : uint32_t {
     Server_GetStatus,
