@@ -109,10 +109,11 @@ namespace game_engine {
 
       for (size_t layerIdx = 0; layerIdx < layers.size(); ++layerIdx) {
           for (const auto& obj : layers[layerIdx]) {
+            if (obj.dynamic) {
               NetGameObjectSnapshot s{};
               s.id = obj.id;
               s.layer = static_cast<uint32_t>(layerIdx);
-              s.type = static_cast<uint32_t>(obj.type);
+              s.type = obj.type;
               s.position = obj.position;
               s.velocity = obj.velocity;
               s.acceleration = obj.acceleration;
@@ -123,25 +124,28 @@ namespace game_engine {
               s.shouldFlash = obj.shouldFlash;
               s.spriteFrame = static_cast<uint32_t>(obj.spriteFrame);
               s.data = obj.data; // union to be handled in encodeNetGameStateSnapshot
-              snapshot.gameObjects[{obj.type, obj.id}] = s;
+              snapshot.m_gameObjects[{obj.type, obj.id}] = s;
+            };
           };
       };
 
       for (const auto& obj : bullets) {
-          NetGameObjectSnapshot s{};
-          s.id = obj.id;
-          s.layer = static_cast<uint32_t>(playerLayer);
-          s.type = static_cast<uint32_t>(obj.type);
-          s.position = obj.position;
-          s.velocity = obj.velocity;
-          s.acceleration = obj.acceleration;
-          s.direction = obj.direction;
-          s.maxSpeedX = obj.maxSpeedX;
-          s.currentAnimation = static_cast<uint32_t>(obj.currentAnimation);
-          s.grounded = obj.grounded;
-          s.shouldFlash = obj.shouldFlash;
-          s.spriteFrame = static_cast<uint32_t>(obj.spriteFrame);
-          snapshot.gameObjects[{obj.type, obj.id}] = s;
+        // if (obj.dynamic) {
+        NetGameObjectSnapshot s{};
+        s.id = obj.id;
+        s.layer = static_cast<uint32_t>(playerLayer);
+        s.type = obj.type;
+        s.position = obj.position;
+        s.velocity = obj.velocity;
+        s.acceleration = obj.acceleration;
+        s.direction = obj.direction;
+        s.maxSpeedX = obj.maxSpeedX;
+        s.currentAnimation = static_cast<uint32_t>(obj.currentAnimation);
+        s.grounded = obj.grounded;
+        s.shouldFlash = obj.shouldFlash;
+        s.spriteFrame = static_cast<uint32_t>(obj.spriteFrame);
+        snapshot.m_gameObjects[{obj.type, obj.id}] = s;
+        // }
       };
 
       return snapshot;

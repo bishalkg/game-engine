@@ -17,6 +17,8 @@
 
 namespace game_engine {
 
+  static constexpr std::uint16_t VERSION = 1;
+  static constexpr std::uint16_t MSG_SNAPSHOT = 1;
 
   // use std::ByteWriter, ByteReader to write and read GameStateSnapshot
   // transfer the GameStateSnapshot to the game_engines GameState during renderLoop update
@@ -45,43 +47,40 @@ namespace game_engine {
     PlayerInput swingWeapon = PlayerInput::None; // PlayerInput::Swing
 
     bool shouldSendMessage = false; // not serealized, only used to indicate whether message is ready to be sent
+    std::vector<uint8_t> serealizeNetGameInput() const {
+      net::ByteWriter bytes;
+
+      bytes.write_u32(playerID);
+      bytes.write_u32(tick);
+
+      bytes.write_enum(move);
+      bytes.write_enum(fireProjectile);
+      bytes.write_enum(swingWeapon);
+      // if (input.move != PlayerInput::None) {
+      //   bytes.write_enum(input.move);
+      // }
+      // if (input.fireProjectile != PlayerInput::None) {
+      //   bytes.write_enum(input.fireProjectile);
+      // }
+      // if (input.swingWeapon != PlayerInput::None) {
+      //   bytes.write_enum(input.swingWeapon);
+      // }
+
+      return bytes.buff;
+    };
+
+    void deserealizeNetGameInput(const std::vector<uint8_t>& bytes) {
+
+      net::ByteReader reader(bytes);
+
+      playerID = reader.read_u32();
+      tick = reader.read_u32();
+      move = reader.read_enum<PlayerInput>();
+      fireProjectile = reader.read_enum<PlayerInput>();
+      swingWeapon = reader.read_enum<PlayerInput>();
+
+    };
   };
-
-  inline std::vector<uint8_t> serealizeNetGameInput(const NetGameInput& input) {
-    net::ByteWriter bytes;
-
-    bytes.write_u32(input.playerID);
-    bytes.write_u32(input.tick);
-
-    bytes.write_enum(input.move);
-    bytes.write_enum(input.fireProjectile);
-    bytes.write_enum(input.swingWeapon);
-    // if (input.move != PlayerInput::None) {
-    //   bytes.write_enum(input.move);
-    // }
-    // if (input.fireProjectile != PlayerInput::None) {
-    //   bytes.write_enum(input.fireProjectile);
-    // }
-    // if (input.swingWeapon != PlayerInput::None) {
-    //   bytes.write_enum(input.swingWeapon);
-    // }
-
-    return bytes.buff;
-  }
-
-  inline NetGameInput deserealizeNetGameInput(const std::vector<uint8_t>& bytes) {
-
-    net::ByteReader reader(bytes);
-    NetGameInput input;
-
-    input.playerID = reader.read_u32();
-    input.tick = reader.read_u32();
-    input.move = reader.read_enum<PlayerInput>();
-    input.fireProjectile = reader.read_enum<PlayerInput>();
-    input.swingWeapon = reader.read_enum<PlayerInput>();
-
-    return input;
-  }
 
 
   // output body from the server.
@@ -93,22 +92,21 @@ namespace game_engine {
   struct NetGameObjectSnapshot {
     uint32_t id = 0;
     uint32_t layer; // flattened so need? or since all updateable objects are in the same layer may not need..
-    uint32_t type;   //  ObjectType type;
+    ObjectType type;   //  ObjectType type; uint32_t
     glm::vec2 position, velocity, acceleration;
+    uint32_t spriteFrame;
+    uint32_t currentAnimation; // determined by the server
     float direction;
     float maxSpeedX;
+    bool grounded;
+    bool shouldFlash;
     // std::vector<Animation> animations; // keep this on each client
-    uint32_t currentAnimation; // determined by the server
     // SDL_Texture *texture; // keep on each client
     // bool dynamic; // static property
-    bool grounded;
     // float spritePixelW; // static property
     // float spritePixelH; // static property
     // SDL_FRect collider; // if server is determining collisions, dont need to send obj to client
     // Timer flashTimer; // determined by server, sends shouldFlash
-    bool shouldFlash;
-    uint32_t spriteFrame;
-
     ObjectData data; // this is a union
   };
 
@@ -124,83 +122,127 @@ namespace game_engine {
 
   struct NetGameStateSnapshot {
     uint64_t m_stateLastUpdatedAt; // when the gameState was last updated, by local or by server msg
-    std::unordered_map<GameObjectKey, NetGameObjectSnapshot, GameObjectKeyHash> gameObjects;
+    std::unordered_map<GameObjectKey, NetGameObjectSnapshot, GameObjectKeyHash> m_gameObjects;
     // std::vector<NetGameObjectSnapshot> m_gameObjects;
     // std::vector<NetGameObjectSnapshot> m_projectiles; // bullets
+    std::vector<std::uint8_t> encodeNetGameStateSnapshot() const {
+
+      net::ByteWriter w;
+
+      w.write_u16(VERSION);
+      w.write_u16(MSG_SNAPSHOT);
+
+      w.write_u64(m_stateLastUpdatedAt);
+
+      // write the unordered_map
+      w.write_u32(m_gameObjects.size());
+      for (auto &[key, obj] : m_gameObjects) {
+
+          w.write_u32(obj.id); // std::pair<ObjectType, uint32_t>;
+          w.write_u32(obj.layer);
+          w.write_enum<ObjectType>(obj.type); // std::pair<ObjectType, uint32_t>;
+          w.write_glm_vec2(obj.position);
+          w.write_glm_vec2(obj.velocity);
+          w.write_glm_vec2(obj.acceleration);
+          w.write_u32(obj.spriteFrame);
+          w.write_u32(obj.currentAnimation);
+          w.write_float(obj.direction);
+          w.write_float(obj.maxSpeedX);
+          w.write_bool(obj.grounded);
+          w.write_bool(obj.shouldFlash);
+
+
+        // for ObjectData Union
+        switch (obj.type) {
+          case ObjectType::Player: {
+            w.write_enum<PlayerState>(obj.data.player.state);
+            w.write_u32(static_cast<uint32_t>(obj.data.player.healthPoints));
+            break;
+          }
+          case ObjectType::Bullet: {
+            w.write_enum<BulletState>(obj.data.bullet.state);
+            break;
+          }
+          case ObjectType::Enemy: {
+            w.write_enum<EnemyState>(obj.data.enemy.state);
+            w.write_u32(static_cast<uint32_t>(obj.data.enemy.healthPoints));
+            w.write_u32(static_cast<uint32_t>(obj.data.enemy.srcH));
+            w.write_u32(static_cast<uint32_t>(obj.data.enemy.srcW));
+            break;
+          }
+          case ObjectType::Level: {
+            w.write_sdl_frect(obj.data.level.src);
+            w.write_sdl_frect(obj.data.level.dst);
+            break;
+          }
+        }
+      }
+
+      return w.buff;
+    };
+
+    void decodeNetGameStateSnapshot(const std::vector<uint8_t>& bytes) {
+
+      net::ByteReader r(bytes);
+
+      auto version = r.read_u16();
+      if (version != VERSION) throw std::runtime_error("bad message version");
+      auto msg_snapshot = r.read_u16();
+      if (msg_snapshot != MSG_SNAPSHOT) throw std::runtime_error("not a snapshot");
+      m_stateLastUpdatedAt = r.read_u64();
+
+      size_t length = r.read_u32(); // how many NetGameObjectSnapshot there are
+
+      for (std::uint32_t idx = 0; idx < length; idx++) {
+        NetGameObjectSnapshot obj;
+
+        obj.id = r.read_u32(); // std::pair<ObjectType, uint32_t>;
+        obj.layer = r.read_u32();
+        obj.type = r.read_enum<ObjectType>();
+        obj.position = r.read_glm_vec2();
+        obj.velocity = r.read_glm_vec2();
+        obj.acceleration = r.read_glm_vec2();
+        obj.spriteFrame = r.read_u32();
+        obj.currentAnimation = r.read_u32();
+        obj.direction = r.read_float();
+        obj.maxSpeedX = r.read_float();
+        obj.grounded = r.read_bool();
+        obj.shouldFlash = r.read_bool();
+
+        switch (obj.type) {
+          case ObjectType::Player: {
+            new (&obj.data.player) PlayerData{}; // set active member
+            obj.data.player.state = r.read_enum<PlayerState>();
+            obj.data.player.healthPoints = r.read_u32();
+            break;
+          }
+          case ObjectType::Bullet: {
+            new (&obj.data.bullet) BulletData{}; // set active member
+            obj.data.bullet.state = r.read_enum<BulletState>();
+            break;
+          }
+          case ObjectType::Enemy: {
+            new (&obj.data.enemy) EnemyData{}; // set active member
+            obj.data.enemy.state = r.read_enum<EnemyState>();
+            obj.data.enemy.healthPoints = r.read_u32();
+            obj.data.enemy.srcH = r.read_u32();
+            obj.data.enemy.srcW = r.read_u32();
+            break;
+          }
+          case ObjectType::Level: {
+            // already constructed as LevelData by default ctor; optional to reconstruct:
+            new (&obj.data.level) LevelData{};
+            obj.data.level.src = r.read_sdl_frect();
+            obj.data.level.dst = r.read_sdl_frect();
+            break;
+          }
+        }
+        m_gameObjects[{ obj.type, obj.id }] = obj;
+      }
+    };
   };
 
-// NetGameStateSnapshot extractSnapshotFromGameState(const GameState& gs) {
-//     NetGameStateSnapshot snapshot;
-//     snapshot.m_stateLastUpdatedAt = gs.m_stateLastUpdatedAt;
 
-//     for (size_t layerIdx = 0; layerIdx < gs.layers.size(); ++layerIdx) {
-//         for (const auto& obj : gs.layers[layerIdx]) {
-//             NetGameObjectSnapshot s{};
-//             s.id = obj.id;
-//             s.layer = static_cast<uint32_t>(layerIdx);
-//             s.type = static_cast<uint32_t>(obj.type);
-//             s.position = obj.position;
-//             s.velocity = obj.velocity;
-//             s.acceleration = obj.acceleration;
-//             s.direction = obj.direction;
-//             s.maxSpeedX = obj.maxSpeedX;
-//             s.currentAnimation = static_cast<uint32_t>(obj.currentAnimation);
-//             s.grounded = obj.grounded;
-//             s.shouldFlash = obj.shouldFlash;
-//             s.spriteFrame = static_cast<uint32_t>(obj.spriteFrame);
-//             s.data = obj.data; // union to be handled in encodeNetGameStateSnapshot
-//             snapshot.gameObjects[{obj.type, obj.id}] = s;
-//         };
-//     };
-
-//     for (const auto& obj : gs.bullets) {
-//         NetGameObjectSnapshot s{};
-//         s.id = obj.id;
-//         s.layer = static_cast<uint32_t>(gs.playerLayer);
-//         s.type = static_cast<uint32_t>(obj.type);
-//         s.position = obj.position;
-//         s.velocity = obj.velocity;
-//         s.acceleration = obj.acceleration;
-//         s.direction = obj.direction;
-//         s.maxSpeedX = obj.maxSpeedX;
-//         s.currentAnimation = static_cast<uint32_t>(obj.currentAnimation);
-//         s.grounded = obj.grounded;
-//         s.shouldFlash = obj.shouldFlash;
-//         s.spriteFrame = static_cast<uint32_t>(obj.spriteFrame);
-//         snapshot.gameObjects[{obj.type, obj.id}] = s;
-//     };
-
-//     return snapshot;
-// }
-
-
-  static constexpr std::uint16_t VERSION = 1;
-  static constexpr std::uint16_t MSG_SNAPSHOT = 1;
-
-  inline std::vector<std::uint8_t> encodeNetGameStateSnapshot(const NetGameStateSnapshot &s) {
-
-    net::ByteWriter w;
-
-    w.write_u16(VERSION);
-    w.write_u16(MSG_SNAPSHOT);
-
-    w.write_u64(s.m_stateLastUpdatedAt);
-
-    // write the unordered_map
-    // for (auto &[key, obj] : s.gameObjects) {
-
-    //   switch (obj.type) {
-    //     case ObjectType::Player: {
-
-    //     }
-
-    //   }
-    // }
-
-    return w.buff;
-
-
-  }
 
   enum class GameMsgHeaders : uint32_t {
     Server_GetStatus,

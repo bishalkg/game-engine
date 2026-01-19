@@ -104,7 +104,8 @@ namespace game_engine {
           case GameMsgHeaders::Game_PlayerInput:
           {
 
-            NetGameInput input = deserealizeNetGameInput(msg.body);
+            NetGameInput input;
+            input.deserealizeNetGameInput(msg.body);
             std::cout << "got input: " << input.playerID << " move: " << static_cast<int>(input.move) << " projectile: " << static_cast<int>(input.fireProjectile) << " swing: " << static_cast<int>(input.swingWeapon) << '\n';
 
             // for now its ok to process one message at a time, but later we might want to process a bunch

@@ -200,11 +200,21 @@ namespace net
     std::uint64_t read_u64() { std::uint64_t v; read_bytes(&v, sizeof(v)); return v; };
     std::float_t read_float() { std::float_t v; read_bytes(&v, sizeof(v)); return v; };
     bool read_bool() { bool v; read_bytes(&v, sizeof(v)); return v; };
+
     glm::vec2 read_glm_vec2() {
       glm::vec2 vec;
       vec.x = read_float();
       vec.y = read_float();
       return vec;
+    };
+
+    SDL_FRect read_sdl_frect() {
+      SDL_FRect v;
+      v.x = read_float();
+      v.y = read_float();
+      v.w = read_float();
+      v.h = read_float();
+      return v;
     };
 
     // EntityType t = r.read_enum<EntityType>();

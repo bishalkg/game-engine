@@ -4,23 +4,25 @@
 #include "animation.h"
 #include <SDL3/SDL.h>
 
-enum class PlayerState {
+enum class PlayerState: std::uint32_t {
   idle, running, jumping, swingWeapon
 };
 
-enum class BulletState {
+enum class BulletState: std::uint32_t {
   moving, colliding, inactive
 };
 
-enum class EnemyState {
+enum class EnemyState: std::uint32_t {
   idle, dying, dead
 };
 
 struct PlayerData {
   PlayerState state;
+  Timer damageTimer;
+  int healthPoints;
   Timer weaponTimer;
 
-  PlayerData(): weaponTimer(0.1f) { state = PlayerState::idle; };
+  PlayerData(): weaponTimer(0.1f), damageTimer(1.0f) { state = PlayerState::idle; healthPoints = 100; };
 };
 
 struct LevelData {

@@ -150,7 +150,7 @@ void game_engine::Engine::runGameLoop() {
           // game_engine::NetGameInput input; // populate this from runEventLoop
           net::message<GameMsgHeaders> msg;
           msg.header.id = GameMsgHeaders::Game_PlayerInput;
-          msg.body = game_engine::serealizeNetGameInput(input);
+          msg.body = input.serealizeNetGameInput();
           msg.header.bodySize = msg.body.size();
           m_gameClient->Send(msg);
         }
@@ -224,7 +224,7 @@ void game_engine::Engine::runGameServerLoopThread() {
     m_gameServer->ProcessIncomingMessages();
 
 
-    auto snapshot = m_gameState.extractNetSnapshot();
+    // auto snapshot = m_gameState.extractNetSnapshot();
     // every delta, we take the current gameState, package it into a message and broadcast it to the clients
     net::message<game_engine::GameMsgHeaders> msg;
     msg.header.id = GameMsgHeaders::Game_Snapshot;
