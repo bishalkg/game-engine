@@ -126,11 +126,11 @@ void game_engine::Engine::runGameLoop() {
         // vs single time actions
 
         if (m_sdlState.keys[SDL_SCANCODE_LEFT]) {
-          input.move = game_engine::PlayerInput::Left;
+          input.move = game_engine::PlayerInput::MoveLeft;
           input.shouldSendMessage = true;
         }
         if (m_sdlState.keys[SDL_SCANCODE_RIGHT]) {
-          input.move = game_engine::PlayerInput::Right;
+          input.move = game_engine::PlayerInput::MoveRight;
           input.shouldSendMessage = true;
         }
         // if (m_sdlState.keys[SDL_SCANCODE_UP]) {
@@ -1408,7 +1408,7 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
         if (key == SDL_SCANCODE_UP && keyDown) {
           obj.velocity.y += JUMP_FORCE;
           obj.data.player.state = PlayerState::jumping;
-          input.move = PlayerInput::Up;
+          input.move = PlayerInput::Jump;
           input.shouldSendMessage = true;
         } else if (key == SDL_SCANCODE_S && keyDown) {
 
@@ -1432,7 +1432,7 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
         if (key == SDL_SCANCODE_UP && keyDown) {
           obj.velocity.y += JUMP_FORCE;
           obj.data.player.state = PlayerState::jumping;
-          input.move = game_engine::PlayerInput::Up;
+          input.move = game_engine::PlayerInput::Jump;
           input.shouldSendMessage = true;
         }
         break;

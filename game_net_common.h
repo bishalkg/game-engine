@@ -25,10 +25,10 @@ namespace game_engine {
 
   enum class PlayerInput: uint16_t {
     None,
-    Up,
-    Left,
-    Right,
-    Down,
+    Jump,
+    MoveLeft,
+    MoveRight,
+    MoveDown,
     Fire,
     Swing,
   };
@@ -125,7 +125,7 @@ namespace game_engine {
     std::unordered_map<GameObjectKey, NetGameObjectSnapshot, GameObjectKeyHash> m_gameObjects;
     // std::vector<NetGameObjectSnapshot> m_gameObjects;
     // std::vector<NetGameObjectSnapshot> m_projectiles; // bullets
-    std::vector<std::uint8_t> encodeNetGameStateSnapshot() const {
+    std::vector<std::uint8_t> serealizeNetGameStateSnapshot() const {
 
       net::ByteWriter w;
 
@@ -181,7 +181,7 @@ namespace game_engine {
       return w.buff;
     };
 
-    void decodeNetGameStateSnapshot(const std::vector<uint8_t>& bytes) {
+    void deserealizeNetGameStateSnapshot(const std::vector<uint8_t>& bytes) {
 
       net::ByteReader r(bytes);
 
