@@ -2,7 +2,7 @@
 #include "net_common.h"
 #include "net_message.h"
 #include "net_ts_queue.h"
-#include "net_connection.h"
+#include "net_server.h"
 
 namespace net {
 

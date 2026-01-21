@@ -26,6 +26,7 @@ add_executable(game_engine
   main.cpp
   app.cpp
   gameengine.cpp
+  game_server.cpp
   tmx.cpp
   vendor/tinyxml2/tinyxml2.cpp
 )

@@ -12,7 +12,7 @@
 #include <glm/glm.hpp>
 
 #include "gameobject.h"
-#include "game_server.h" // create a common.h file that just imports all common and then only include that
+#include "game_server.h" // needs complete type for unique_ptr destructor
 #include "game_client.h"
 
 #include "imgui.h"
@@ -47,6 +47,9 @@
 // magick data/move_helmet_marie.png -filter point -resize 210x42! data/move_helmet_marie_42.png
 
 namespace game_engine {
+
+  // forward declare
+  class GameClient;
 
   struct SDLState {
     SDL_Window *window;
@@ -232,8 +235,8 @@ namespace game_engine {
       // }
       // SDL_DestroyProperties(opts);  // once you’re done with the bag
 
-    // return the audio, and the track to set
-    return {audio, track};
+      // return the audio, and the track to set
+      return {audio, track};
 
     };
 
@@ -247,15 +250,20 @@ namespace game_engine {
       return tex;
     }
 
-    void loadAllAssets(SDLState &state){
+    // headless is for server resources state
+    void loadAllAssets(SDLState &state, bool headless){
 
       map = tmx::loadMap("data/maps/level_1/level_1.tmx"); // only the resource struct instance can hold this pointer and it will be automatically deleted when not used (eg. when we swap out maps)
-      for (tmx::TileSet &tileSet: map->tileSets)
-      {
-        const std::string imagePath = "data/tiles/" + std::filesystem::path(tileSet.image.source).filename().string();
-        tileSet.texture = loadTexture(state.renderer, imagePath);
-        // tilesetTextures.push_back(&tileSet);
+
+      if (!headless) {
+        for (tmx::TileSet &tileSet: map->tileSets)
+        {
+          const std::string imagePath = "data/tiles/" + std::filesystem::path(tileSet.image.source).filename().string();
+          tileSet.texture = loadTexture(state.renderer, imagePath);
+          // tilesetTextures.push_back(&tileSet);
+        }
       }
+
       std::sort(map->tileSets.begin(), map->tileSets.end(),
       [](const tmx::TileSet& a, const tmx::TileSet& b) {
           return a.firstgid < b.firstgid;
@@ -268,14 +276,16 @@ namespace game_engine {
       playerAnims[ANIM_PLAYER_SHOOT] = Animation(4, 0.5f);
       playerAnims[ANIM_PLAYER_SLIDE_SHOOT] = Animation(4, 0.5f);
 
-      texIdle = loadTexture(state.renderer,  "data/idle.png");
-      // texIdle = loadTexture(state.renderer,  "data/move_helmet_marie_42.png");
-      texRun = loadTexture(state.renderer, "data/run.png");
-      texSlide = loadTexture(state.renderer, "data/slide.png");
-      // texRun = loadTexture(state.renderer, "data/move_helmet_marie_42.png");
-      texShoot = loadTexture(state.renderer, "data/shoot.png");
-      texRunShoot = loadTexture(state.renderer, "data/shoot_run.png");
-      texSlideShoot = loadTexture(state.renderer, "data/slide_shoot.png");
+      if (!headless) {
+        texIdle = loadTexture(state.renderer,  "data/idle.png");
+        // texIdle = loadTexture(state.renderer,  "data/move_helmet_marie_42.png");
+        texRun = loadTexture(state.renderer, "data/run.png");
+        texSlide = loadTexture(state.renderer, "data/slide.png");
+        // texRun = loadTexture(state.renderer, "data/move_helmet_marie_42.png");
+        texShoot = loadTexture(state.renderer, "data/shoot.png");
+        texRunShoot = loadTexture(state.renderer, "data/shoot_run.png");
+        texSlideShoot = loadTexture(state.renderer, "data/slide_shoot.png");
+      }
 
 
       // texBrick = loadTexture(state.renderer, "data/tiles/brick.png");
@@ -290,8 +300,10 @@ namespace game_engine {
       bulletAnims.resize(2);
       bulletAnims[ANIM_BULLET_MOVING] = Animation(4, 0.05f);
       bulletAnims[ANIM_BULLET_HIT] = Animation(4, 0.15f);
-      texBullet = loadTexture(state.renderer, "data/bullet.png");
-      texBulletHit = loadTexture(state.renderer, "data/bullet_hit.png");
+      if (!headless) {
+        texBullet = loadTexture(state.renderer, "data/bullet.png");
+        texBulletHit = loadTexture(state.renderer, "data/bullet_hit.png");
+      }
 
       enemyAnims.resize(3);
       // enemyAnims[ANIM_ENEMY] = Animation(8, 2.0f);
@@ -304,20 +316,23 @@ namespace game_engine {
       enemyAnims[ANIM_ENEMY_HIT] = Animation(3, 0.3f);
       enemyAnims[ANIM_ENEMY_DIE] = Animation(3, 0.5f);
       enemyAnims[ANIM_ENEMY_RUN] = Animation(8, 0.5f);
-      texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Idle.png");
-      // texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Attack_1.png");
-      texEnemyRun = loadTexture(state.renderer, "data/enemies/skeleton/Run.png");
-      texEnemyHit = loadTexture(state.renderer, "data/enemies/skeleton/Hurt.png");
-      texEnemyDie = loadTexture(state.renderer, "data/enemies/skeleton/Dead.png");
 
-      float g = MIX_GetMasterGain(mixer);
-      float chunkAudioGain = g * 3;
+      if (!headless) {
+        texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Idle.png");
+        // texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Attack_1.png");
+        texEnemyRun = loadTexture(state.renderer, "data/enemies/skeleton/Run.png");
+        texEnemyHit = loadTexture(state.renderer, "data/enemies/skeleton/Hurt.png");
+        texEnemyDie = loadTexture(state.renderer, "data/enemies/skeleton/Dead.png");
 
-      std::tie(audioShoot, shootTrack) = loadAudioChunk("data/audio/shoot.wav", chunkAudioGain);
-      std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/wall_hit.wav", chunkAudioGain);
-      std::tie(audioEnemyHit, enemyHitTrack) = loadAudioChunk("data/audio/enemy_hit.wav", chunkAudioGain);
-      std::tie(audioEnemyDie, enemyDieTrack) = loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
-      std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk("data/audio/Level_1_Forest_Outside_Castle.wav", g);
+        float g = MIX_GetMasterGain(mixer);
+        float chunkAudioGain = g * 3;
+
+        std::tie(audioShoot, shootTrack) = loadAudioChunk("data/audio/shoot.wav", chunkAudioGain);
+        std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/wall_hit.wav", chunkAudioGain);
+        std::tie(audioEnemyHit, enemyHitTrack) = loadAudioChunk("data/audio/enemy_hit.wav", chunkAudioGain);
+        std::tie(audioEnemyDie, enemyDieTrack) = loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
+        std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk("data/audio/Level_1_Forest_Outside_Castle.wav", g);
+      }
     };
 
     void unload() {
@@ -367,6 +382,7 @@ namespace game_engine {
 
     public:
       Engine() : m_sdlState{}, m_gameState(m_sdlState), m_resources{}, m_gameType(SinglePlayer) {}
+      ~Engine();
 
       inline static constexpr glm::vec2 GRAVITY = glm::vec2(0, 500);
       inline static constexpr size_t LAYER_IDX_LEVEL = 0;
@@ -403,6 +419,7 @@ namespace game_engine {
       void clearRenderer();
       void renderUpdates();
 
+      void buildAuthoritativeStateForServer();
       bool handleMultiplayerConnections();
       void runGameServerLoopThread();
       // MIX_PauseTrack(track) / MIX_ResumeTrack(track)

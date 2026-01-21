@@ -223,3 +223,23 @@ watch vid again and replicate what he has
 // For host/local play, loopback latency is tiny; for remote play, prediction is what hides RTT.
 // That lets the server stay authoritative without introducing feelable input lag.
 
+
+
+Yes. Build the authoritative, headless state before starting the server thread, move it into the server loop, and keep server-only logic free of SDL renderer/audio.
+
+How to wire it:
+
+In handleMultiplayerConnections (before m_serverLoopThd starts): build a headless bundle, e.g. AuthoritativeContext { GameState state; HeadlessResources res; ViewportDims dims; } auth = buildAuthoritativeState();. Then start the server thread with a move capture: m_serverLoopThd = std::thread([this, auth = std::move(auth)]() mutable { runGameServerLoopThread(std::move(auth)); });.
+In runGameServerLoopThread, store that context in the server (or keep it local) and run your tick loop against it. No cross-thread sharing with the client’s live state; you own it entirely on the server thread.
+Extract logic-only updates from Engine::updateAllObjects into a function that doesn’t touch textures/renderer/audio, e.g. simulateGameplay(GameState&, HeadlessResources&, double dt). Call that from both the client (before rendering) and the server. Keep rendering-specific pieces in a separate render pass on the client.
+Key points:
+
+Ensure buildAuthoritativeState uses only data needed for simulation (positions, colliders, animations metadata, stats). If your current resource loader pulls in textures/mixer handles, add a headless path that skips those.
+Stamp inputs with client->GetID() in OnMessage, push to the server’s input queue, and consume in the fixed-step loop against the authoritative state.
+When you serialize snapshots, read from the server-owned GameState and broadcast; clients reconcile to that.
+
+
+Yes: run Timer logic on the server and send the resolved state (shouldFlash, remaining duration if needed). Clients should be pure renderers; they shouldn’t advance flash timers independently, only reflect server intent.
+Don’t send SDL_Texture* (invalid across processes/threads). Instead, have the server send deterministic render hints: animation id/state, frame index, facing/direction, maybe a simple TextureId enum if animations aren’t enough. Clients map these ids to their own texture pointers.
+Server snapshot should contain: currentAnimation, spriteFrame, direction, shouldFlash, plus any animation/timebase you need (e.g., serverTick or animTime so clients can interpolate). That’s already partially in NetGameObjectSnapshot—lean on those fields, not texture pointers.
+Keep simulation-only data headless: on the server, strip SDL_Texture* and render-only fields from GameObject; use a headless variant or wrap render stuff behind a client-only view.

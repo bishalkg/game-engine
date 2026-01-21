@@ -1,5 +1,7 @@
 #pragma once
 #include "net_common.h"
+#include <glm/glm.hpp>
+#include <SDL3/SDL.h>
 
 namespace net
 {

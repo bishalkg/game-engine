@@ -141,6 +141,6 @@ namespace game_engine {
 };
 
 // 1. write out the serealizer/deserealizer (done)
-// 1.a make gpt write unit tests for the serealizer deserealizers
+// 1.a make gpt write unit tests for the serealizer deserealizers (done)
 // 2. write out the computation logic on the server (server should also have its own GameState like the client or use the snapshot? whichevers easier..) - Server needs to run its own simulation same as client, but only takes inputs from queue, computes the snapshots and broadcasts to all clients periodically
 // 3. client to use the read in snapshot to update objects in updateAllObjects

@@ -11,6 +11,10 @@
 // #include <array>
 // #include <filesystem>
 
+#include <SDL3/SDL.h>
+#include <glm/glm.hpp>
+
+#include "gameobject.h"
 #include "net/net_message.h"
 
 

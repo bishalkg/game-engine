@@ -1,9 +1,20 @@
 #include "gameengine.h"
-// #include "game_net_common.h"
+#include "game_server.h"
 
 GameObject &game_engine::Engine::getPlayer() {
  return m_gameState.player(LAYER_IDX_CHARACTERS);
 };
+
+game_engine::Engine::~Engine() {
+  // ensure server thread and client tear down cleanly
+  m_gameRunning.store(false);
+  if (m_gameServer) {
+    m_gameServer->Stop();
+  }
+  if (m_serverLoopThd.joinable()) {
+    m_serverLoopThd.join();
+  }
+}
 
 game_engine::SDLState &game_engine::Engine::getSDLState() {
   return m_sdlState;
@@ -68,7 +79,7 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
   MIX_SetMasterGain(m_resources.mixer, 0.5f);  // 50% master
 
   // load game assets
-  m_resources.loadAllAssets(m_sdlState);
+  m_resources.loadAllAssets(m_sdlState, false);
   if (!m_resources.texIdle) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Idle Texture load failed", "Failed to load idle image", nullptr);
     cleanup();
@@ -90,9 +101,9 @@ void game_engine::Engine::runGameLoop() {
   uint64_t prevTime = SDL_GetTicks();
   m_gameRunning.store(true);
 
-  GameState &gs = getGameState();
-  SDLState &sdl = getSDLState();
-  Resources &res = getResources();
+  // GameState &gs = getGameState();
+  // SDLState &sdl = getSDLState();
+  // Resources &res = getResources();
 
   while (m_gameRunning.load()){
     uint64_t nowTime = SDL_GetTicks();
@@ -186,7 +197,7 @@ bool game_engine::Engine::handleMultiplayerConnections() {
     // non-host client should be able to join and exit at any time.
   if (m_gameType == game_engine::Engine::Host && !m_gameServer) {
     std::cout << "starting server" << std::endl;
-    m_gameServer = std::make_unique<GameServer>(9000);
+    m_gameServer = std::make_unique<GameServer>(9000, m_gameState, m_resources);
     bool successStart = m_gameServer->Start();
     if (!successStart) {
       return false;
@@ -199,6 +210,7 @@ bool game_engine::Engine::handleMultiplayerConnections() {
     std::cout << "starting client" << std::endl;
     m_gameClient = std::make_unique<GameClient>();
   }
+
   // every render loop tries to connect to server
   if (m_gameClient) {
     if (!isConnectedToServer) {
@@ -215,22 +227,39 @@ bool game_engine::Engine::handleMultiplayerConnections() {
 
 void game_engine::Engine::runGameServerLoopThread() {
 
+  using clock = std::chrono::steady_clock;
+  const double dt = 1.0/60.0; // 60Hz
+  const size_t maxInputsPerTick = 64;
+  auto prev = clock::now();
+  double accum = 0.0;
+
   // determine delta for server loop
   while (m_gameRunning.load() && m_gameServer) {
-    // TODO the server logic to read incoming inputs
-    // generate the gameState
-    // work will be done in OnMessage() override member func
-    // this function is blocking until the server has work to do
-    m_gameServer->ProcessIncomingMessages();
+    // right now the loop blocks on ProcessIncomingMessages() and only broadcasts right after a message arrives. That ties your tick rate to network traffic; if no input arrives, clients get no snapshots. Run the server loop on a fixed timestep (e.g., sleep to 60Hz), call ProcessIncomingMessages(nMaxMessagesPerTick, /*enableWaiting=*/false) to drain some inputs, then step simulation and broadcast
+    m_gameServer->ProcessIncomingMessages(maxInputsPerTick, false);
 
+    auto now = clock::now();
+    accum += std::chrono::duration<double>(now - prev).count();
+    prev = now;
 
-    // auto snapshot = m_gameState.extractNetSnapshot();
-    // every delta, we take the current gameState, package it into a message and broadcast it to the clients
-    net::message<game_engine::GameMsgHeaders> msg;
+    // run as many fixed steps as have accumulated time
+    while (accum >= dt) {
+      m_gameServer->applyPlayerInputs();
+      // 1) pop inputs from your queue and apply to authoritative state
+      //    e.g., serverState.applyInputs(inputQueue);
+      // 2) advance physics/logic by dt
+      //    e.g., serverState.step(dt);
+      accum -= dt;
+    }
+
+    // Broadcast snapshot to all clients
+    net::message<GameMsgHeaders> msg;
     msg.header.id = GameMsgHeaders::Game_Snapshot;
-    // need serealization and deserealization for NetGameObject
-    // msg.body =
-    m_gameServer->BroadcastToClients(msg, nullptr);
+    msg.body = m_gameServer->m_currGameSnapshot.serealizeNetGameStateSnapshot();
+    msg.header.bodySize = msg.body.size();
+    m_gameServer->BroadcastToClients(msg);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
 }
 
@@ -476,8 +505,6 @@ void game_engine::Engine::updateAllObjects(float deltaTime) {
 
 
   }
-
-
 
 }
 
