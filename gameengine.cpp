@@ -774,21 +774,28 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         if (weaponTimer.isTimedOut()) {
           weaponTimer.reset();
           // create bullets
-          GameObject bullet(4, 4);
+          GameObject bullet(128, 128);
+
+          bullet.drawScale = 2.0f;
+          // float wFrac = 0.50f, hFrac = 0.50f;
+          bullet.colliderNorm = { .x=0.0, .y=0.40, .w=0.5, .h=0.1 };
+          bullet.applyScale();
+          // bullet.collider.h = -1.0;
+
           bullet.data.bullet = BulletData();
           bullet.objClass = ObjectClass::Bullet;
           bullet.direction = obj.direction;
           bullet.texture = m_resources.texBullet;
           bullet.currentAnimation = m_resources.ANIM_BULLET_MOVING;
-          bullet.collider = SDL_FRect{
-            .x = 0, .y = 0,
-            .w = static_cast<float>(m_resources.texBullet->h),
-            .h = static_cast<float>(m_resources.texBullet->h),
-          };
+          // bullet.collider = SDL_FRect{
+          //   .x = 0, .y = 0,
+          //   .w = static_cast<float>(m_resources.texBullet->h),
+          //   .h = static_cast<float>(m_resources.texBullet->h),
+          // };
           const int yJitter = 50;
           const float yVelocity = SDL_rand(yJitter) - yJitter / 2.0f;
           bullet.velocity = glm::vec2(
-            obj.velocity.x + 600.0f,
+            obj.velocity.x + 400.0f,
             yVelocity
           ) * obj.direction;
           bullet.maxSpeedX = 1000.0f;
@@ -801,7 +808,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           const float xOffset = left + right * t;
           bullet.position = glm::vec2(
             obj.position.x + xOffset,
-            obj.position.y + obj.spritePixelH / 2 + 1
+            obj.position.y + (obj.spritePixelH/bullet.drawScale) / 2
           );
 
           bool foundInactive = false;
@@ -850,7 +857,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           }
         }
 
-        handleShooting(entityRes.texIdle, m_resources.texShoot, m_resources.ANIM_IDLE, m_resources.ANIM_SHOOT);
+        handleShooting(entityRes.texIdle, entityRes.texShoot, m_resources.ANIM_IDLE, m_resources.ANIM_SHOOT);
 
         break;
       }
@@ -861,9 +868,9 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         }
         // move in opposite dir of velocity, sliding
         if (obj.velocity.x * obj.direction < 0 && obj.grounded) {
-          handleShooting(entityRes.texSlide, m_resources.texSlideShoot, m_resources.ANIM_SLIDE, m_resources.ANIM_SLIDE_SHOOT);
+          handleShooting(entityRes.texSlide, entityRes.texSlideShoot, m_resources.ANIM_SLIDE, m_resources.ANIM_SLIDE_SHOOT);
         } else {
-          handleShooting(entityRes.texRun, m_resources.texRunShoot, m_resources.ANIM_RUN, m_resources.ANIM_RUN);
+          handleShooting(entityRes.texRun, entityRes.texRunShoot, m_resources.ANIM_RUN, m_resources.ANIM_RUN);
           // sprite sheets have same frames so we can seamlessly swap between the two sheets
         }
 
@@ -871,7 +878,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
       }
       case PlayerState::jumping:
       {
-        handleShooting(entityRes.texJump, m_resources.texRunShoot, m_resources.ANIM_JUMP, m_resources.ANIM_JUMP);
+        handleShooting(entityRes.texJump, entityRes.texRunShoot, m_resources.ANIM_JUMP, m_resources.ANIM_JUMP);
         // handleShooting(m_resources.texRun, m_resources.texRunShoot, m_resources.ANIM_PLAYER_RUN, m_resources.ANIM_PLAYER_RUN);
         // obj.texture = m_resources.texJump;
         // obj.currentAnimation = m_resources.ANIM_PLAYER_JUMP;
@@ -1106,6 +1113,10 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
             }
             break;
           }
+          case ObjectClass::Player:
+          {
+             passthrough = true;
+          }
         }
 
         if (!passthrough) {
@@ -1265,7 +1276,18 @@ bool game_engine::Engine::initAllTiles() {
 
           // enemy.data.enemy.srcW = 128; // unsued
           // enemy.data.enemy.srcH = 128;// unsued
-          enemy.drawScale = 2.0f;
+          switch (spriteType) {
+            case SpriteType::Minotaur_1:
+            {
+              enemy.drawScale = 2.0f;
+              break;
+            }
+            case SpriteType::Skeleton_Warrior:
+            {
+              enemy.drawScale = 1.5f;
+              break;
+            }
+          }
           float wFrac = 0.30f, hFrac = 0.60f;
           enemy.colliderNorm = { .x=0.35f, .y=0.85f - hFrac, .w=wFrac, .h=hFrac };
           enemy.applyScale();
@@ -1283,6 +1305,7 @@ bool game_engine::Engine::initAllTiles() {
 
         }
 
+        // Must handle multiple players here; all players start in same position, so here we create a player
         if (obj.type == "Player") {
           SpriteType spriteType = characterNameToSpriteType.at(obj.name);
           GameObject player = createObject(1, 1, res.texCharacterMap.at(spriteType).texIdle, ObjectClass::Player, 128, 128, 0, 0);
@@ -1293,8 +1316,19 @@ bool game_engine::Engine::initAllTiles() {
           // Position collision box to overlay on character (character is left of center in sprite)
           // adjust
           player.colliderNorm = { .x=0.10f, .y=0.9f - hFrac, .w=wFrac, .h=hFrac };
-          player.applyScale();
+          switch (spriteType) {
+            case SpriteType::Player_Knight:
+            {
+              break;
+            }
+            case SpriteType::Player_Mage:
+            {
+              player.colliderNorm = { .x=0.30f, .y=0.9f - hFrac, .w=wFrac, .h=hFrac };
+              break;
+            }
+          };
 
+          player.applyScale();
           float drawW = player.spritePixelW / player.drawScale;
           float drawH = player.spritePixelH / player.drawScale;
 

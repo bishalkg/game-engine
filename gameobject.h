@@ -23,6 +23,7 @@ enum class SpriteType: std::uint32_t {
 static std::unordered_map<std::string, SpriteType> characterNameToSpriteType = {
   {"Player_Knight", SpriteType::Player_Knight},
   {"Player_Mage", SpriteType::Player_Mage},
+  {"Player_Mage", SpriteType::Player_Mage},
   {"Minotaur_1", SpriteType::Minotaur_1},
   {"Skeleton_Warrior", SpriteType::Skeleton_Warrior},
 };

@@ -203,9 +203,9 @@ namespace game_engine {
       // *texPanel,
     SDL_Texture  *texBg1, *texBg2, *texBg3, *texBg4, // background textures for paralllax
 
-      *texBullet, *texBulletHit, // tex of bullets
+      *texBullet, *texBulletHit; // tex of bullets
 
-      *texShoot, *texRunShoot, *texSlideShoot;
+      // *texShoot, *texRunShoot, *texSlideShoot;
 
       // *texEnemy, *texEnemyHit, *texEnemyDie, *texEnemyRun;
 
@@ -311,6 +311,15 @@ namespace game_engine {
       texCharacterMap[SpriteType::Player_Knight].anims[ANIM_SWING] = Animation(4, 1.0f);
       texCharacterMap[SpriteType::Player_Knight].anims[ANIM_JUMP] = Animation(6, 0.5f);
 
+      texCharacterMap[SpriteType::Player_Mage].anims.resize(10); // not reserve
+      texCharacterMap[SpriteType::Player_Mage].anims[ANIM_IDLE] = Animation(8, 1.6f); // 8 frames in 1.6 sec
+      texCharacterMap[SpriteType::Player_Mage].anims[ANIM_RUN] = Animation(8, 1.2f); //4
+      texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SLIDE] = Animation(4, 0.5f);
+      texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SHOOT] = Animation(7, 0.6f);
+      texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SLIDE_SHOOT] = Animation(7, 0.5f);
+      texCharacterMap[SpriteType::Player_Mage].anims[ANIM_JUMP] = Animation(8, 0.7f);
+      texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SWING] = Animation(4, 1.0f);
+
       if (!headless) {
         // texIdle = loadTexture(state.renderer,  "data/players/Knight_3/Idle.png");
         // // texIdle = loadTexture(state.renderer,  "data/move_helmet_marie_42.png");
@@ -331,24 +340,26 @@ namespace game_engine {
         texCharacterMap[SpriteType::Player_Knight].texSlideShoot = loadTexture(state.renderer,  "data/players/Knight_3/Run+Attack.png");
         texCharacterMap[SpriteType::Player_Knight].texSwing = loadTexture(state.renderer,  "data/players/Knight_3/Attack 2.png");
         texCharacterMap[SpriteType::Player_Knight].texJump = loadTexture(state.renderer,  "data/players/Knight_3/Jump.png");
+
+        texCharacterMap[SpriteType::Player_Mage].texIdle = loadTexture(state.renderer,  "data/players/Mage/Idle.png");
+        texCharacterMap[SpriteType::Player_Mage].texWalk = loadTexture(state.renderer,  "data/players/Mage/Walk.png");
+        texCharacterMap[SpriteType::Player_Mage].texRun = loadTexture(state.renderer, "data/players/Mage/Run.png");
+        texCharacterMap[SpriteType::Player_Mage].texSlide = loadTexture(state.renderer,  "data/players/Mage/Hurt.png");
+        texCharacterMap[SpriteType::Player_Mage].texShoot = loadTexture(state.renderer,  "data/players/Mage/Attack_1.png");
+        texCharacterMap[SpriteType::Player_Mage].texRunShoot = loadTexture(state.renderer,  "data/players/Mage/Attack_1.png");
+        texCharacterMap[SpriteType::Player_Mage].texSlideShoot = loadTexture(state.renderer,  "data/players/Mage/Attack_1.png");
+        texCharacterMap[SpriteType::Player_Mage].texSwing = loadTexture(state.renderer,  "data/players/Mage/Attack_1.png");
+        texCharacterMap[SpriteType::Player_Mage].texJump = loadTexture(state.renderer,  "data/players/Mage/Jump.png");
       }
 
-
-      // texBrick = loadTexture(state.renderer, "data/tiles/brick.png");
-      // texGrass = loadTexture(state.renderer, "data/tiles/grass.png");
-      // texGround = loadTexture(state.renderer, "data/tiles/ground.png");
-      // texPanel = loadTexture(state.renderer, "data/tiles/panel.png");
-      // texBg1 = loadTexture(state.renderer, "data/bg/bg_layer1.png");
-      // texBg2 = loadTexture(state.renderer, "data/bg/bg_layer2.png");
-      // texBg3 = loadTexture(state.renderer, "data/bg/bg_layer3.png");
-      // texBg4 = loadTexture(state.renderer, "data/bg/bg_layer4.png");
-
       bulletAnims.resize(2);
-      bulletAnims[ANIM_BULLET_MOVING] = Animation(4, 0.05f);
+      bulletAnims[ANIM_BULLET_MOVING] = Animation(9, 1.0f);
       bulletAnims[ANIM_BULLET_HIT] = Animation(4, 0.15f);
       if (!headless) {
-        texBullet = loadTexture(state.renderer, "data/bullet.png");
-        texBulletHit = loadTexture(state.renderer, "data/bullet_hit.png");
+        // texBullet = loadTexture(state.renderer, "data/bullet.png");
+        // texBulletHit = loadTexture(state.renderer, "data/bullet_hit.png");
+        texBulletHit = loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
+        texBullet = loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
       }
 
       texCharacterMap[SpriteType::Minotaur_1].anims.resize(10);
@@ -366,59 +377,9 @@ namespace game_engine {
       texCharacterMap[SpriteType::Skeleton_Warrior].anims[ANIM_HIT] = Animation(2, 0.5f);
       texCharacterMap[SpriteType::Skeleton_Warrior].anims[ANIM_DIE] =  Animation(4, 0.5f);
       texCharacterMap[SpriteType::Skeleton_Warrior].anims[ANIM_SWING] = Animation(5, 1.0f); // TODO
-      // texCharacterMap[SpriteType::Skeleton_Warrior].anims[ANIM_JUMP] = Animation(6, 0.5f); // TODO
-      // enemyAnims[ANIM_ENEMY] = Animation(8, 2.0f);
-      // enemyAnims[ANIM_ENEMY_HIT] = Animation(8, 1.0f);
-      // enemyAnims[ANIM_ENEMY_DIE] = Animation(18, 2.0f);
-      // texEnemy = loadTexture(state.renderer, "data/enemy.png");
-      // texEnemyHit = loadTexture(state.renderer, "data/enemy_hit.png");
-      // texEnemyDie = loadTexture(state.renderer, "data/enemy_die.png");
-
-      // skeleton
-      // enemyAnims[ANIM_ENEMY] = Animation(7, 0.6f);
-      // enemyAnims[ANIM_ENEMY_HIT] = Animation(3, 0.3f);
-      // enemyAnims[ANIM_ENEMY_DIE] = Animation(3, 0.5f);
-      // enemyAnims[ANIM_ENEMY_RUN] = Animation(8, 0.5f);
-
-      // black werewolf
-      // enemyAnims[ANIM_ENEMY] = Animation(8, 0.6f);
-      // enemyAnims[ANIM_ENEMY_HIT] = Animation(2, 0.3f);
-      // enemyAnims[ANIM_ENEMY_DIE] = Animation(3, 0.5f);
-      // enemyAnims[ANIM_ENEMY_RUN] = Animation(9, 0.5f);
-
-      // enemyAnims[ANIM_ENEMY] = Animation(10, 1.0f);
-      // enemyAnims[ANIM_ENEMY_HIT] = Animation(3, 0.5f);
-      // enemyAnims[ANIM_ENEMY_DIE] = Animation(5, 0.5f);
-      // enemyAnims[ANIM_ENEMY_RUN] = Animation(12, 1.0f);
 
       // 896 × 128
       if (!headless) {
-        // texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Idle.png");
-        // // texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Attack_1.png");
-        // texEnemyRun = loadTexture(state.renderer, "data/enemies/skeleton/Run.png");
-        // texEnemyHit = loadTexture(state.renderer, "data/enemies/skeleton/Hurt.png");
-        // texEnemyDie = loadTexture(state.renderer, "data/enemies/skeleton/Dead.png");
-
-        // werewolf
-        // texEnemy = loadTexture(state.renderer, "data/enemies/Black_Werewolf/Idle.png");
-        // // texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Attack_1.png");
-        // texEnemyRun = loadTexture(state.renderer, "data/enemies/Black_Werewolf/Run.png");
-        // texEnemyHit = loadTexture(state.renderer, "data/enemies/Black_Werewolf/Hurt.png");
-        // texEnemyDie = loadTexture(state.renderer, "data/enemies/Black_Werewolf/Dead.png");
-
-        // // minataur
-        // texEnemy = loadTexture(state.renderer, "data/enemies/Minotaur_1/Idle.png");
-        // // minotaurTex.texIdle = loadTexture(state.renderer, "data/enemies/Minotaur_1/Idle.png");
-
-        // texEnemyRun = loadTexture(state.renderer, "data/enemies/Minotaur_1/Walk.png");
-        // // minotaurTex.texWalk = loadTexture(state.renderer, "data/enemies/Minotaur_1/Walk.png");
-
-        // texEnemyHit = loadTexture(state.renderer, "data/enemies/Minotaur_1/Hurt.png");
-        // // minotaurTex.texHit = loadTexture(state.renderer, "data/enemies/Minotaur_1/Hurt.png");
-
-        // texEnemyDie = loadTexture(state.renderer, "data/enemies/Minotaur_1/Dead.png");
-        // minotaurTex.texDie = loadTexture(state.renderer, "data/enemies/Minotaur_1/Dead.png");
-
         texCharacterMap[SpriteType::Minotaur_1].texIdle = loadTexture(state.renderer,  "data/enemies/Minotaur_1/Idle.png");
         texCharacterMap[SpriteType::Minotaur_1].texWalk = loadTexture(state.renderer, "data/enemies/Minotaur_1/Walk.png");
         texCharacterMap[SpriteType::Minotaur_1].texRun = loadTexture(state.renderer, "data/enemies/Minotaur_1/Walk.png");
