@@ -95,7 +95,7 @@ namespace game_engine {
             {
               uint32_t nRemovalID = 0;
               msg >> nRemovalID;
-              m_latestSnapshot.m_gameObjects.erase(std::pair(ObjectType::Player, nRemovalID));
+              m_latestSnapshot.m_gameObjects.erase(std::pair(ObjectClass::Player, nRemovalID));
               break;
             }
 

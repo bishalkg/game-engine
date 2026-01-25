@@ -16,6 +16,17 @@ enum class EnemyState: std::uint32_t {
   idle, dying, dead
 };
 
+enum class SpriteType: std::uint32_t {
+  Player_Knight, Player_Mage, Minotaur_1, Skeleton_Warrior
+};
+
+static std::unordered_map<std::string, SpriteType> characterNameToSpriteType = {
+  {"Player_Knight", SpriteType::Player_Knight},
+  {"Player_Mage", SpriteType::Player_Mage},
+  {"Minotaur_1", SpriteType::Minotaur_1},
+  {"Skeleton_Warrior", SpriteType::Skeleton_Warrior},
+};
+
 struct PlayerData {
   PlayerState state;
   Timer damageTimer;
@@ -59,7 +70,7 @@ union ObjectData {
   ~ObjectData() {}  // and destroy the active member appropriately if you change it
 };
 
-enum class ObjectType : std::uint32_t
+enum class ObjectClass : std::uint32_t
 {
   Player, Level, Enemy, Bullet, Sword
 };
@@ -67,7 +78,8 @@ enum class ObjectType : std::uint32_t
 // define all objects in the game
 struct GameObject {
   uint32_t id = 0;
-  ObjectType type;
+  ObjectClass objClass;
+  SpriteType spriteType;
   ObjectData data; // by making this a union, the different object types can have different fields in their structs
   glm::vec2 position, velocity, acceleration; // we have x and y positions/velocities/accelerations
   float direction;
@@ -89,7 +101,7 @@ struct GameObject {
   int spriteFrame;
 
   GameObject(float spriteH, float spriteW): data(), spritePixelW(spriteW), spritePixelH(spriteH), collider{0}, flashTimer(0.05f) {
-    type = ObjectType::Level;
+    objClass = ObjectClass::Level;
     maxSpeedX = 0;
     direction = 1;
     position = velocity = acceleration = glm::vec2(0);

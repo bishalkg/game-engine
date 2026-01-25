@@ -80,7 +80,7 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
 
   // load game assets
   m_resources.loadAllAssets(m_sdlState, false);
-  if (!m_resources.texIdle) {
+  if (!m_resources.texCharacterMap[SpriteType::Player_Knight].texIdle) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Idle Texture load failed", "Failed to load idle image", nullptr);
     cleanup();
     return false;
@@ -524,7 +524,7 @@ void game_engine::Engine::drawAllObjects(float deltaTime) {
   // draw all interactable objects
   for (auto &layer : m_gameState.layers) {
     for (GameObject &obj : layer) {
-      if (obj.type == ObjectType::Level) {
+      if (obj.objClass == ObjectClass::Level) {
         // if level tile, let src and dst override so that
         // src points to a specfic 32x32 tile texture from the whole png; dst is where on our window we want to place it
         SDL_FRect dst = obj.data.level.dst;
@@ -731,7 +731,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
   }
 
   float currDirection = 0;
-  if (obj.type == ObjectType::Player) {
+  if (obj.objClass == ObjectClass::Player) {
 
     // this way player cant spam jump and fly; but sometimes gets stuck and is unable to jump
     // if (state.keys[SDL_SCANCODE_DOWN]) {
@@ -749,6 +749,8 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     //     handleKeyInput(obj, SDL_SCANCODE_UP, false); // key just went up (if you care)
     // }
     // prevUpPressed = upPressed;
+
+    EntityResources entityRes = m_resources.texCharacterMap[obj.spriteType];
 
     // update direction
     if (m_sdlState.keys[SDL_SCANCODE_LEFT]) {
@@ -774,7 +776,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           // create bullets
           GameObject bullet(4, 4);
           bullet.data.bullet = BulletData();
-          bullet.type = ObjectType::Bullet;
+          bullet.objClass = ObjectClass::Bullet;
           bullet.direction = obj.direction;
           bullet.texture = m_resources.texBullet;
           bullet.currentAnimation = m_resources.ANIM_BULLET_MOVING;
@@ -833,8 +835,8 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
       {
         if (currDirection != 0) {
           obj.data.player.state = PlayerState::running;
-          obj.texture = m_resources.texRun;
-          obj.currentAnimation = m_resources.ANIM_PLAYER_RUN;
+          obj.texture = entityRes.texRun;
+          obj.currentAnimation = m_resources.ANIM_RUN;
         } else {
           // decelerate faster than we speed up
           if (obj.velocity.x) {
@@ -848,7 +850,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           }
         }
 
-        handleShooting(m_resources.texIdle, m_resources.texShoot, m_resources.ANIM_PLAYER_IDLE, m_resources.ANIM_PLAYER_SHOOT);
+        handleShooting(entityRes.texIdle, m_resources.texShoot, m_resources.ANIM_IDLE, m_resources.ANIM_SHOOT);
 
         break;
       }
@@ -857,12 +859,11 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         if (currDirection == 0) {
           obj.data.player.state = PlayerState::idle;
         }
-
         // move in opposite dir of velocity, sliding
         if (obj.velocity.x * obj.direction < 0 && obj.grounded) {
-          handleShooting(m_resources.texSlide, m_resources.texSlideShoot, m_resources.ANIM_PLAYER_SLIDE, m_resources.ANIM_PLAYER_SLIDE_SHOOT);
+          handleShooting(entityRes.texSlide, m_resources.texSlideShoot, m_resources.ANIM_SLIDE, m_resources.ANIM_SLIDE_SHOOT);
         } else {
-          handleShooting(m_resources.texRun, m_resources.texRunShoot, m_resources.ANIM_PLAYER_RUN, m_resources.ANIM_PLAYER_RUN);
+          handleShooting(entityRes.texRun, m_resources.texRunShoot, m_resources.ANIM_RUN, m_resources.ANIM_RUN);
           // sprite sheets have same frames so we can seamlessly swap between the two sheets
         }
 
@@ -870,14 +871,14 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
       }
       case PlayerState::jumping:
       {
-        handleShooting(m_resources.texJump, m_resources.texRunShoot, m_resources.ANIM_PLAYER_JUMP, m_resources.ANIM_PLAYER_JUMP);
+        handleShooting(entityRes.texJump, m_resources.texRunShoot, m_resources.ANIM_JUMP, m_resources.ANIM_JUMP);
         // handleShooting(m_resources.texRun, m_resources.texRunShoot, m_resources.ANIM_PLAYER_RUN, m_resources.ANIM_PLAYER_RUN);
         // obj.texture = m_resources.texJump;
         // obj.currentAnimation = m_resources.ANIM_PLAYER_JUMP;
         break;
       }
     }
-  } else if (obj.type == ObjectType::Bullet) {
+  } else if (obj.objClass == ObjectClass::Bullet) {
 
     switch (obj.data.bullet.state) {
       case BulletState::moving:
@@ -897,8 +898,9 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         break;
       }
     }
-  } else if (obj.type == ObjectType::Enemy) {
+  } else if (obj.objClass == ObjectClass::Enemy) {
 
+    EntityResources entityRes = m_resources.texCharacterMap[obj.spriteType];
     switch (obj.data.enemy.state) {
       case EnemyState::idle:
       {
@@ -910,12 +912,12 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
             currDirection = -1;
           };
           obj.acceleration = glm::vec2(30, 0);
-          obj.texture = m_resources.texEnemyRun;
+          obj.texture = entityRes.texRun;
         } else {
           // stop them from moving when too far away
           obj.acceleration = glm::vec2(0);
           obj.velocity.x = 0;
-          obj.texture = m_resources.texEnemy;
+          obj.texture = entityRes.texIdle;
         }
 
         break;
@@ -924,8 +926,8 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
       {
         if (obj.data.enemy.damageTimer.step(deltaTime)) {
           obj.data.enemy.state = EnemyState::idle;
-          obj.texture = m_resources.texEnemy;
-          obj.currentAnimation = m_resources.ANIM_ENEMY;
+          obj.texture = entityRes.texIdle;
+          obj.currentAnimation = m_resources.ANIM_IDLE;
           obj.data.enemy.damageTimer.reset();
         }
         break;
@@ -954,7 +956,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     obj.position.x -= positionShift; // Keep world position constant
 
     // If this is the player, adjust camera to prevent screen jump
-    if (obj.type == ObjectType::Player) {
+    if (obj.objClass == ObjectClass::Player) {
       m_gameState.mapViewport.x -= positionShift;
     }
 
@@ -982,7 +984,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         this->handleCollision(obj, objB, deltaTime);
 
         // update ground sensor only when landing on level tiles
-        if (objB.type == ObjectType::Level) {
+        if (objB.objClass == ObjectClass::Level) {
           SDL_FRect sensor{
             .x = obj.position.x + obj.collider.x,
             .y = obj.position.y + obj.collider.y + obj.collider.h,
@@ -1009,7 +1011,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
   if (obj.grounded != foundGround) {
     // switching grounded state
     obj.grounded = foundGround;
-    if (foundGround && obj.type == ObjectType::Player) {
+    if (foundGround && obj.objClass == ObjectClass::Player) {
       obj.data.player.state = PlayerState::running;
     }
   }
@@ -1043,33 +1045,33 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
     }
   };
 
-  if (objA.type == ObjectType::Player) {
-    switch (objB.type) {
-      case ObjectType::Level:
+  if (objA.objClass == ObjectClass::Player) {
+    switch (objB.objClass) {
+      case ObjectClass::Level:
       {
         defaultResponse();
         break;
       }
-      case ObjectType::Enemy:
+      case ObjectClass::Enemy:
       {
         if (objB.data.enemy.state != EnemyState::dead) {
           objA.velocity = glm::vec2(50, 0) * - objA.direction;
         }
         break;
       }
-      case ObjectType::Player:
+      case ObjectClass::Player:
       {
         break;
       }
     }
-  } else if (objA.type == ObjectType::Bullet) {
+  } else if (objA.objClass == ObjectClass::Bullet) {
 
     bool passthrough = false;
     switch (objA.data.bullet.state) {
       case BulletState::moving:
       {
-        switch (objB.type) {
-          case ObjectType::Level:
+        switch (objB.objClass) {
+          case ObjectClass::Level:
           {
             if (!MIX_PlayTrack(m_resources.hitTrack, 0)) {
             // SDL_Log("Play failed: %s", SDL_GetError());
@@ -1077,23 +1079,25 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
 
             break;
           }
-          case ObjectType::Enemy:
+          case ObjectClass::Enemy:
           {
+
+            EntityResources entityRes = m_resources.texCharacterMap.at(objB.spriteType);
             EnemyData &d = objB.data.enemy;
             if (d.state != EnemyState::dead) {
               objB.direction = -1 * objA.direction;
               objB.shouldFlash = true;
               objB.flashTimer.reset();
-              objB.texture = m_resources.texEnemyHit;
-              objB.currentAnimation = m_resources.ANIM_ENEMY_HIT;
+              objB.texture = entityRes.texHit;
+              objB.currentAnimation = m_resources.ANIM_HIT;
               d.state = EnemyState::dying;
 
               // damage and flag dead
               d.healthPoints -= 10;
               if (d.healthPoints <= 0) {
                 d.state = EnemyState::dead;
-                objB.texture = m_resources.texEnemyDie;
-                objB.currentAnimation = m_resources.ANIM_ENEMY_DIE;
+                objB.texture = entityRes.texDie;
+                objB.currentAnimation = m_resources.ANIM_DIE;
                 MIX_PlayTrack(m_resources.enemyDieTrack, 0);
               }
               MIX_PlayTrack(m_resources.enemyHitTrack, 0);
@@ -1116,7 +1120,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
     }
 
   }
-  else if (objA.type == ObjectType::Enemy) {
+  else if (objA.objClass == ObjectClass::Enemy) {
     defaultResponse(); // ensure enemy doesnt fall through floor
   }
 
@@ -1158,15 +1162,15 @@ bool game_engine::Engine::initAllTiles() {
     const tmx::TileSet* pickTileset(uint32_t gid) {
       const tmx::TileSet* match = nullptr;
       for (const auto& ts : res.map->tileSets) {
-          if (gid >= (uint32_t)ts.firstgid) match = &ts;
-          else break;
+        if (gid >= (uint32_t)ts.firstgid) match = &ts;
+        else break;
       }
-          return match; // assumes sets are sorted by firstGid
+      return match; // assumes sets are sorted by firstGid
     }
 
-    const GameObject createObject(int r, int c, SDL_Texture *tex, ObjectType type, float spriteH, float spriteW, int srcX, int srcY) {
+    const GameObject createObject(int r, int c, SDL_Texture *tex, ObjectClass type, float spriteH, float spriteW, int srcX, int srcY) {
       GameObject o(spriteH, spriteW);
-      o.type = type;
+      o.objClass = type;
       // o.position = glm::vec2(c * TILE_SIZE, state.logH - (20 - r) * TILE_SIZE);
       o.texture = tex;
 
@@ -1179,7 +1183,7 @@ bool game_engine::Engine::initAllTiles() {
         .h = spriteH
       };
 
-      if (type == ObjectType::Level) {
+      if (type == ObjectClass::Level) {
         o.position = { c * spriteW, r * spriteH };
         // o.position = glm::vec2(c * TILE_SIZE, state.logH - (20 - r) * TILE_SIZE);
         // pick out the exact tile from the tilesheet
@@ -1205,24 +1209,29 @@ bool game_engine::Engine::initAllTiles() {
     {
       std::vector<GameObject> newLayer;
       for (int r = 0; r < res.map->mapHeight; ++r){
+
         for (int c = 0; c < res.map->mapWidth; ++c) {
-          const int tGid = layer.data[r * res.map->mapWidth + c]; // because its a 1D representation of a 2D map
-          if (tGid) {
+          const uint32_t rawGid = layer.data[r * res.map->mapWidth + c]; // packed Tiled GID (includes flip flags)
+
+          // Tiled encodes flips in the top 3 bits; mask them off so we lookup the real tile index.
+          // Without this the computed srcY can overflow the texture height, causing tiles to vanish.
+          const uint32_t gid = rawGid & 0x1FFFFFFF; // clear H/V/diag flip flags
+          if (gid) {
 
             // find the texture corresponding to this gID
             // const auto itr = std::find_if(res.map->tileSets.begin(), res.map->tileSets.end(),
             // [tGid](const tmx::TileSet &ts) {
             //   return tGid >= ts.firstgid && tGid < ts.firstgid + ts.texture.size();
             // });
-            const tmx::TileSet* ts = pickTileset(tGid);
+            const tmx::TileSet* ts = pickTileset(gid);
 
             if (!ts) continue;
 
-            uint32_t localId = tGid - ts->firstgid; // local index within the tileSet data array
+            uint32_t localId = rawGid - ts->firstgid; // local index within the tileSet data array
             int srcX = (localId % ts->columns) * ts->tileWidth; // col * tileWidth;
             int srcY = (localId / ts->columns) * ts->tileHeight; // row * tileHeight
 
-            auto tile = createObject(r, c, ts->texture, ObjectType::Level, ts->tileHeight, ts->tileWidth, srcX, srcY);
+            auto tile = createObject(r, c, ts->texture, ObjectClass::Level, ts->tileHeight, ts->tileWidth, srcX, srcY);
             if (layer.name != "Level") {
               tile.collider.w = tile.collider.h = 0;
             }
@@ -1248,7 +1257,11 @@ bool game_engine::Engine::initAllTiles() {
 
 
         if (obj.type == "Enemy") {
-          GameObject enemy = createObject(1, 1, res.texEnemy, ObjectType::Enemy, 128, 128, 0, 0);
+
+          SpriteType spriteType = characterNameToSpriteType.at(obj.name);
+          GameObject enemy = createObject(1, 1, res.texCharacterMap.at(spriteType).texIdle, ObjectClass::Enemy, 128, 128, 0, 0);
+          enemy.spriteType = spriteType;
+          // set the appropriate texture based on the obj.name
 
           // enemy.data.enemy.srcW = 128; // unsued
           // enemy.data.enemy.srcH = 128;// unsued
@@ -1262,8 +1275,8 @@ bool game_engine::Engine::initAllTiles() {
           enemy.position.x = centerX - enemy.collider.w * 0.5f;        // collider centered
           enemy.position.y = feetY - (enemy.collider.y + enemy.collider.h); // collider bottom on feet
           enemy.data.enemy = EnemyData();
-          enemy.currentAnimation = res.ANIM_ENEMY;
-          enemy.animations = res.enemyAnims;
+          enemy.currentAnimation = res.ANIM_IDLE;
+          enemy.animations = res.texCharacterMap.at(spriteType).anims;
           enemy.dynamic = true;
           enemy.maxSpeedX = 15;
           newLayer.push_back(enemy);
@@ -1271,7 +1284,9 @@ bool game_engine::Engine::initAllTiles() {
         }
 
         if (obj.type == "Player") {
-          GameObject player = createObject(1, 1, res.texIdle, ObjectType::Player, 128, 128, 0, 0);
+          SpriteType spriteType = characterNameToSpriteType.at(obj.name);
+          GameObject player = createObject(1, 1, res.texCharacterMap.at(spriteType).texIdle, ObjectClass::Player, 128, 128, 0, 0);
+          player.spriteType = spriteType;
           player.drawScale = 1.5f;
 
           float wFrac = 0.30f, hFrac = 0.40f;
@@ -1292,8 +1307,8 @@ bool game_engine::Engine::initAllTiles() {
           player.position.y = feetY   - drawH;
 
           player.data.player = PlayerData();
-          player.animations = res.playerAnims;
-          player.currentAnimation = res.ANIM_PLAYER_IDLE;
+          player.animations = res.texCharacterMap.at(spriteType).anims;
+          player.currentAnimation = res.ANIM_IDLE;
           player.acceleration = glm::vec2(200, 0);
           player.maxSpeedX = 100;
           player.dynamic = true;
@@ -1320,7 +1335,7 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
 
   // TODO send input msg to server
 
-  if (obj.type == ObjectType::Player) {
+  if (obj.objClass == ObjectClass::Player) {
     switch (obj.data.player.state) {
       case PlayerState::idle:
       {

@@ -96,7 +96,7 @@ namespace game_engine {
   struct NetGameObjectSnapshot {
     uint32_t id = 0;
     uint32_t layer; // flattened so need? or since all updateable objects are in the same layer may not need..
-    ObjectType type;   //  ObjectType type; uint32_t
+    ObjectClass type;   //  ObjectType type; uint32_t
     glm::vec2 position, velocity, acceleration;
     uint32_t spriteFrame;
     uint32_t currentAnimation; // determined by the server
@@ -114,10 +114,10 @@ namespace game_engine {
     ObjectData data; // this is a union
   };
 
-  using GameObjectKey = std::pair<ObjectType, uint32_t>;
+  using GameObjectKey = std::pair<ObjectClass, uint32_t>;
   struct GameObjectKeyHash {
     size_t operator()(const GameObjectKey& k) const noexcept {
-      using U = std::underlying_type_t<ObjectType>;
+      using U = std::underlying_type_t<ObjectClass>;
       const auto h1 = std::hash<U>{}(static_cast<U>(k.first));
       const auto h2 = std::hash<uint32_t>{}(k.second);
       return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
@@ -144,7 +144,7 @@ namespace game_engine {
 
           w.write_u32(obj.id); // std::pair<ObjectType, uint32_t>;
           w.write_u32(obj.layer);
-          w.write_enum<ObjectType>(obj.type); // std::pair<ObjectType, uint32_t>;
+          w.write_enum<ObjectClass>(obj.type); // std::pair<ObjectType, uint32_t>;
           w.write_glm_vec2(obj.position);
           w.write_glm_vec2(obj.velocity);
           w.write_glm_vec2(obj.acceleration);
@@ -158,23 +158,23 @@ namespace game_engine {
 
         // for ObjectData Union
         switch (obj.type) {
-          case ObjectType::Player: {
+          case ObjectClass::Player: {
             w.write_enum<PlayerState>(obj.data.player.state);
             w.write_u32(static_cast<uint32_t>(obj.data.player.healthPoints));
             break;
           }
-          case ObjectType::Bullet: {
+          case ObjectClass::Bullet: {
             w.write_enum<BulletState>(obj.data.bullet.state);
             break;
           }
-          case ObjectType::Enemy: {
+          case ObjectClass::Enemy: {
             w.write_enum<EnemyState>(obj.data.enemy.state);
             w.write_u32(static_cast<uint32_t>(obj.data.enemy.healthPoints));
             w.write_u32(static_cast<uint32_t>(obj.data.enemy.srcH));
             w.write_u32(static_cast<uint32_t>(obj.data.enemy.srcW));
             break;
           }
-          case ObjectType::Level: {
+          case ObjectClass::Level: {
             w.write_sdl_frect(obj.data.level.src);
             w.write_sdl_frect(obj.data.level.dst);
             break;
@@ -202,7 +202,7 @@ namespace game_engine {
 
         obj.id = r.read_u32(); // std::pair<ObjectType, uint32_t>;
         obj.layer = r.read_u32();
-        obj.type = r.read_enum<ObjectType>();
+        obj.type = r.read_enum<ObjectClass>();
         obj.position = r.read_glm_vec2();
         obj.velocity = r.read_glm_vec2();
         obj.acceleration = r.read_glm_vec2();
@@ -214,18 +214,18 @@ namespace game_engine {
         obj.shouldFlash = r.read_bool();
 
         switch (obj.type) {
-          case ObjectType::Player: {
+          case ObjectClass::Player: {
             new (&obj.data.player) PlayerData{}; // set active member
             obj.data.player.state = r.read_enum<PlayerState>();
             obj.data.player.healthPoints = r.read_u32();
             break;
           }
-          case ObjectType::Bullet: {
+          case ObjectClass::Bullet: {
             new (&obj.data.bullet) BulletData{}; // set active member
             obj.data.bullet.state = r.read_enum<BulletState>();
             break;
           }
-          case ObjectType::Enemy: {
+          case ObjectClass::Enemy: {
             new (&obj.data.enemy) EnemyData{}; // set active member
             obj.data.enemy.state = r.read_enum<EnemyState>();
             obj.data.enemy.healthPoints = r.read_u32();
@@ -233,7 +233,7 @@ namespace game_engine {
             obj.data.enemy.srcW = r.read_u32();
             break;
           }
-          case ObjectType::Level: {
+          case ObjectClass::Level: {
             // already constructed as LevelData by default ctor; optional to reconstruct:
             new (&obj.data.level) LevelData{};
             obj.data.level.src = r.read_sdl_frect();

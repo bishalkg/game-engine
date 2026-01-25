@@ -22,17 +22,17 @@ bool equalSnapshots(const game_engine::NetGameObjectSnapshot& a,
   if (a.grounded != b.grounded || a.shouldFlash != b.shouldFlash) return false;
 
   switch (a.type) {
-    case ObjectType::Player:
+    case ObjectClass::Player:
       return a.data.player.state == b.data.player.state &&
              a.data.player.healthPoints == b.data.player.healthPoints;
-    case ObjectType::Enemy:
+    case ObjectClass::Enemy:
       return a.data.enemy.state == b.data.enemy.state &&
              a.data.enemy.healthPoints == b.data.enemy.healthPoints &&
              a.data.enemy.srcH == b.data.enemy.srcH &&
              a.data.enemy.srcW == b.data.enemy.srcW;
-    case ObjectType::Bullet:
+    case ObjectClass::Bullet:
       return a.data.bullet.state == b.data.bullet.state;
-    case ObjectType::Level:
+    case ObjectClass::Level:
       return a.data.level.src.x == b.data.level.src.x &&
              a.data.level.src.y == b.data.level.src.y &&
              a.data.level.src.w == b.data.level.src.w &&
@@ -41,7 +41,7 @@ bool equalSnapshots(const game_engine::NetGameObjectSnapshot& a,
              a.data.level.dst.y == b.data.level.dst.y &&
              a.data.level.dst.w == b.data.level.dst.w &&
              a.data.level.dst.h == b.data.level.dst.h;
-    case ObjectType::Sword:
+    case ObjectClass::Sword:
       // not serialized currently; treat as equal if we reach here
       return true;
   }
@@ -56,7 +56,7 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   NetGameObjectSnapshot player{};
   player.id = 1;
   player.layer = 0;
-  player.type = ObjectType::Player;
+  player.type = ObjectClass::Player;
   player.position = {1.f, 2.f};
   player.velocity = {0.5f, -0.25f};
   player.acceleration = {0.f, 0.1f};
@@ -74,7 +74,7 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   NetGameObjectSnapshot enemy{};
   enemy.id = 2;
   enemy.layer = 1;
-  enemy.type = ObjectType::Enemy;
+  enemy.type = ObjectClass::Enemy;
   enemy.position = {5.f, 6.f};
   enemy.velocity = {0.f, 0.f};
   enemy.acceleration = {0.f, 0.f};
@@ -94,7 +94,7 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   NetGameObjectSnapshot bullet{};
   bullet.id = 3;
   bullet.layer = 1;
-  bullet.type = ObjectType::Bullet;
+  bullet.type = ObjectClass::Bullet;
   bullet.position = {7.f, 8.f};
   bullet.velocity = {2.f, 0.f};
   bullet.acceleration = {0.f, 0.f};
@@ -111,7 +111,7 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   NetGameObjectSnapshot level{};
   level.id = 4;
   level.layer = 0;
-  level.type = ObjectType::Level;
+  level.type = ObjectClass::Level;
   level.position = {0.f, 0.f};
   level.velocity = {0.f, 0.f};
   level.acceleration = {0.f, 0.f};
