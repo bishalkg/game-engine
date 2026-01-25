@@ -1252,7 +1252,7 @@ bool game_engine::Engine::initAllTiles() {
 
           // enemy.data.enemy.srcW = 128; // unsued
           // enemy.data.enemy.srcH = 128;// unsued
-          enemy.drawScale = 2.5f;
+          enemy.drawScale = 2.0f;
           float wFrac = 0.30f, hFrac = 0.60f;
           enemy.colliderNorm = { .x=0.35f, .y=0.85f - hFrac, .w=wFrac, .h=hFrac };
           enemy.applyScale();
@@ -1267,13 +1267,14 @@ bool game_engine::Engine::initAllTiles() {
           enemy.dynamic = true;
           enemy.maxSpeedX = 15;
           newLayer.push_back(enemy);
+
         }
 
         if (obj.type == "Player") {
           GameObject player = createObject(1, 1, res.texIdle, ObjectType::Player, 128, 128, 0, 0);
           player.drawScale = 1.5f;
 
-          float wFrac = 0.30f, hFrac = 0.60f;
+          float wFrac = 0.30f, hFrac = 0.40f;
           // Position collision box to overlay on character (character is left of center in sprite)
           // adjust
           player.colliderNorm = { .x=0.10f, .y=0.9f - hFrac, .w=wFrac, .h=hFrac };

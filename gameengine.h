@@ -318,18 +318,45 @@ namespace game_engine {
       // texEnemy = loadTexture(state.renderer, "data/enemy.png");
       // texEnemyHit = loadTexture(state.renderer, "data/enemy_hit.png");
       // texEnemyDie = loadTexture(state.renderer, "data/enemy_die.png");
-      enemyAnims[ANIM_ENEMY] = Animation(7, 0.6f);
-      enemyAnims[ANIM_ENEMY_HIT] = Animation(3, 0.3f);
-      enemyAnims[ANIM_ENEMY_DIE] = Animation(3, 0.5f);
-      enemyAnims[ANIM_ENEMY_RUN] = Animation(8, 0.5f);
+
+      // skeleton
+      // enemyAnims[ANIM_ENEMY] = Animation(7, 0.6f);
+      // enemyAnims[ANIM_ENEMY_HIT] = Animation(3, 0.3f);
+      // enemyAnims[ANIM_ENEMY_DIE] = Animation(3, 0.5f);
+      // enemyAnims[ANIM_ENEMY_RUN] = Animation(8, 0.5f);
+
+      // black werewolf
+      // enemyAnims[ANIM_ENEMY] = Animation(8, 0.6f);
+      // enemyAnims[ANIM_ENEMY_HIT] = Animation(2, 0.3f);
+      // enemyAnims[ANIM_ENEMY_DIE] = Animation(3, 0.5f);
+      // enemyAnims[ANIM_ENEMY_RUN] = Animation(9, 0.5f);
+
+      enemyAnims[ANIM_ENEMY] = Animation(10, 1.0f);
+      enemyAnims[ANIM_ENEMY_HIT] = Animation(3, 0.5f);
+      enemyAnims[ANIM_ENEMY_DIE] = Animation(5, 0.5f);
+      enemyAnims[ANIM_ENEMY_RUN] = Animation(12, 1.0f);
 
       // 896 × 128
       if (!headless) {
-        texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Idle.png");
+        // texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Idle.png");
+        // // texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Attack_1.png");
+        // texEnemyRun = loadTexture(state.renderer, "data/enemies/skeleton/Run.png");
+        // texEnemyHit = loadTexture(state.renderer, "data/enemies/skeleton/Hurt.png");
+        // texEnemyDie = loadTexture(state.renderer, "data/enemies/skeleton/Dead.png");
+
+        // werewolf
+        // texEnemy = loadTexture(state.renderer, "data/enemies/Black_Werewolf/Idle.png");
+        // // texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Attack_1.png");
+        // texEnemyRun = loadTexture(state.renderer, "data/enemies/Black_Werewolf/Run.png");
+        // texEnemyHit = loadTexture(state.renderer, "data/enemies/Black_Werewolf/Hurt.png");
+        // texEnemyDie = loadTexture(state.renderer, "data/enemies/Black_Werewolf/Dead.png");
+
+        // minataur
+        texEnemy = loadTexture(state.renderer, "data/enemies/Minotaur_1/Idle.png");
         // texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Attack_1.png");
-        texEnemyRun = loadTexture(state.renderer, "data/enemies/skeleton/Run.png");
-        texEnemyHit = loadTexture(state.renderer, "data/enemies/skeleton/Hurt.png");
-        texEnemyDie = loadTexture(state.renderer, "data/enemies/skeleton/Dead.png");
+        texEnemyRun = loadTexture(state.renderer, "data/enemies/Minotaur_1/Walk.png");
+        texEnemyHit = loadTexture(state.renderer, "data/enemies/Minotaur_1/Hurt.png");
+        texEnemyDie = loadTexture(state.renderer, "data/enemies/Minotaur_1/Dead.png");
 
         float g = MIX_GetMasterGain(mixer);
         float chunkAudioGain = g * 3;
@@ -397,7 +424,7 @@ namespace game_engine {
       inline static constexpr int MAP_ROWS = 5;
       inline static constexpr int MAP_COLS = 50;
       inline static constexpr int TILE_SIZE = 32; // TODO all tiles are 32 right now
-      inline static constexpr float JUMP_FORCE = -200.f;
+      inline static constexpr float JUMP_FORCE = -400.f;
 
 
       bool init(int width, int height, int logW, int logH);

@@ -26,7 +26,7 @@ std::unique_ptr<tmx::Map> tmx::loadMap(const std::string &mapFilePath) {
     for (XMLElement *child = mapDoc->FirstChildElement(); child != nullptr; child = child->NextSiblingElement())
     {
       if (std::strcmp(child->Name(), "tileset") == 0) {
-        int firstgid = child->IntAttribute("firstgid");
+        uint32_t firstgid = child->IntAttribute("firstgid");
 
         if (child->FirstChildElement("image") && child) {
           // if child->has child element "image" -> extract the sourcePath, width and height
@@ -78,7 +78,7 @@ std::unique_ptr<tmx::Map> tmx::loadMap(const std::string &mapFilePath) {
 
       } else if (std::strcmp(child->Name(), "layer") == 0) {
 
-        auto layer = parseLayer(child, map->mapHeight, map->mapWidth);
+        auto layer = parseLayer(child, map->mapWidth, map->mapHeight);
         map->layers.push_back(std::move(layer));
 
       } else if (std::strcmp(child->Name(), "group") == 0) {
@@ -89,7 +89,7 @@ std::unique_ptr<tmx::Map> tmx::loadMap(const std::string &mapFilePath) {
           elem != nullptr;
           elem = elem->NextSiblingElement("layer"))
         {
-          auto layer = parseLayer(elem, map->mapHeight, map->mapWidth);
+          auto layer = parseLayer(elem, map->mapWidth, map->mapHeight);
           map->layers.push_back(std::move(layer));
         }
 
@@ -141,10 +141,37 @@ tmx::Layer tmx::parseLayer(const tinyxml2::XMLElement* child, int mapW, int mapH
     const tinyxml2::XMLElement* data = child->FirstChildElement("data");
     if (data && data->GetText()) {
         std::stringstream dataStream(data->GetText());
-        for (int i; dataStream >> i; ) {
+        for (uint32_t i; dataStream >> i; ) {
             layer.data.push_back(i);
             if (dataStream.peek() == ',') dataStream.ignore();
         }
     }
-    return layer; // NRVO/move
+
+    // DEBUG: Print layer info
+    std::cout << "Parsed layer: " << layer.name
+              << " expected=" << (mapW * mapH)
+              << " actual=" << layer.data.size()
+              << " non-zero=";
+    int nonZeroCount = 0;
+    for (auto gid : layer.data) if (gid != 0) nonZeroCount++;
+    std::cout << nonZeroCount << std::endl;
+
+    return layer;
 }
+
+// tmx::Layer tmx::parseLayer(const tinyxml2::XMLElement* child, int mapW, int mapH) {
+//     tmx::Layer layer;
+//     layer.name = child->Attribute("name");
+//     layer.id   = child->IntAttribute("id");
+//     layer.data.reserve(mapW * mapH);
+
+//     const tinyxml2::XMLElement* data = child->FirstChildElement("data");
+//     if (data && data->GetText()) {
+//         std::stringstream dataStream(data->GetText());
+//         for (int i; dataStream >> i; ) {
+//             layer.data.push_back(i);
+//             if (dataStream.peek() == ',') dataStream.ignore();
+//         }
+//     }
+//     return layer; // NRVO/move
+// }
