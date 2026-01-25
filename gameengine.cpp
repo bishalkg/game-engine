@@ -197,6 +197,7 @@ bool game_engine::Engine::handleMultiplayerConnections() {
     // non-host client should be able to join and exit at any time.
   if (m_gameType == game_engine::Engine::Host && !m_gameServer) {
     std::cout << "starting server" << std::endl;
+    // TODO buildAuthoritativeState() -> { gameState, headlessResources }
     m_gameServer = std::make_unique<GameServer>(9000, m_gameState, m_resources);
     bool successStart = m_gameServer->Start();
     if (!successStart) {
@@ -216,6 +217,7 @@ bool game_engine::Engine::handleMultiplayerConnections() {
     if (!isConnectedToServer) {
       if (m_gameClient->Connect("127.0.0.1", 9000)) {
         isConnectedToServer = true;
+        std::cout << "client connected to server" << std::endl;
       } else {
         std::cout << "failed to connect to server" << std::endl;
         // return;
@@ -395,83 +397,78 @@ void game_engine::Engine::cleanup() {
 
 void game_engine::Engine::drawObject(GameObject &obj, float height, float width, float deltaTime) {
 
-    float frameW = height;
-    float frameH = width;
-    if (obj.type == ObjectType::Enemy) {
-        frameW = obj.data.enemy.srcW;   // e.g. 128
-        frameH = obj.data.enemy.srcH;   // e.g. 128
+  float frameW = obj.spritePixelW;
+  float frameH = obj.spritePixelH;
+
+  // select frame from sprite sheet
+  float srcX = (obj.currentAnimation != -1)
+                 ? obj.animations[obj.currentAnimation].currentFrame() * frameW
+                 : (obj.spriteFrame - 1) * frameW;
+
+  SDL_FRect src{srcX, 0, frameW, frameH};
+
+  // scale sprites up or down
+  float drawW = frameW / obj.drawScale;
+  float drawH = frameH / obj.drawScale;
+
+  SDL_FRect dst{
+    obj.position.x - m_gameState.mapViewport.x,
+    obj.position.y - m_gameState.mapViewport.y,
+    drawW, drawH
+  };
+
+  SDL_FlipMode flipMode = obj.direction == -1 ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
+
+  // set flash animations on enemies
+  if (obj.shouldFlash) {
+    SDL_SetTextureColorModFloat(obj.texture, 2.5f, 1.0f, 1.0f);
+  }
+
+  SDL_RenderTextureRotated(m_sdlState.renderer, obj.texture, &src, &dst, 0, nullptr, flipMode);
+
+  if (obj.shouldFlash) {
+    SDL_SetTextureColorModFloat(obj.texture, 1.0f, 1.0f, 1.0f);
+    if (obj.flashTimer.step(deltaTime)) {
+      obj.shouldFlash = false;
     }
+  }
 
-    // pull out specific sprite frame from sprite sheet
-    float srcX = obj.currentAnimation != -1 ?
-      obj.animations[obj.currentAnimation].currentFrame() * frameW
-      : (obj.spriteFrame -1)*frameW;
+  if (m_gameState.debugMode) {
 
-    SDL_FRect src = { // src is position on animation sheet texture
-      .x = srcX, // different starting x position in sprite sheet
-      .y = 0,
-      .w = frameW, // if source sheet is larger keep the actual w/h
-      .h = frameH
-    };
-
-    // if (obj.type == ObjectType::enemy) {
-    //   src.h = obj.data.enemy.srcH;
-    //   src.w = obj.data.enemy.srcW;
-    // }
-
-
-    // obj.data.enemy.srcH // we can use these on dst to scale down the image
-    // obj.data.enemy.srcW
-
-    SDL_FRect dst = {
-      .x = obj.position.x - m_gameState.mapViewport.x, // move objects according to updated viewport position in x AND y
+    SDL_FRect spriteBox{
+      .x = obj.position.x - m_gameState.mapViewport.x,
       .y = obj.position.y - m_gameState.mapViewport.y,
-      .w = width, // if source is larger but you want to shrink it, set the w/h you want to scale it to
-      .h = height,
+      .w = obj.collider.w,
+      .h = obj.collider.h
     };
+    SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(m_sdlState.renderer, 200, 100, 0, 100);
+    SDL_RenderFillRect(m_sdlState.renderer, &spriteBox);
+    SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
 
-    if (obj.type == ObjectType::Enemy) {
-      dst.h = obj.data.enemy.srcH / 2.5f;
-      dst.w = obj.data.enemy.srcW / 2.5f;
-    }
 
-    SDL_FlipMode flipMode = obj.direction == -1 ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
+    // display each objects collision hitbox
+    SDL_FRect rectA{
+      .x = obj.position.x + obj.collider.x - m_gameState.mapViewport.x,
+      .y = obj.position.y + obj.collider.y - m_gameState.mapViewport.y,
+      .w = obj.collider.w,
+      .h = obj.collider.h
+    };
+    SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(m_sdlState.renderer, 255, 0, 0, 100);
+    SDL_RenderFillRect(m_sdlState.renderer, &rectA);
+    SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
 
-    // set flash animations on enemies
-    if (obj.shouldFlash) {
-      SDL_SetTextureColorModFloat(obj.texture, 2.5f, 1.0f, 1.0f);
-    }
-    SDL_RenderTextureRotated(m_sdlState.renderer, obj.texture, &src, &dst, 0, nullptr, flipMode);
-    if (obj.shouldFlash) {
-      SDL_SetTextureColorModFloat(obj.texture, 1.0f, 1.0f, 1.0f);
-      if (obj.flashTimer.step(deltaTime)) {
-        obj.shouldFlash = false;
-      }
-    }
-
-    if (m_gameState.debugMode) {
-      // display each objects collision hitbox
-      SDL_FRect rectA{
-        .x = obj.position.x + obj.collider.x - m_gameState.mapViewport.x,
-        .y = obj.position.y + obj.collider.y - m_gameState.mapViewport.y,
-        .w = obj.collider.w,
-        .h = obj.collider.h
-      };
-      SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_BLEND);
-      SDL_SetRenderDrawColor(m_sdlState.renderer, 255, 0, 0, 100);
-      SDL_RenderFillRect(m_sdlState.renderer, &rectA);
-      SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
-
-      SDL_FRect sensor{
-        .x = obj.position.x + obj.collider.x - m_gameState.mapViewport.x,
-        .y = obj.position.y + obj.collider.y + obj.collider.h - m_gameState.mapViewport.y,
-        .w = obj.collider.w, .h = 1
-      };
-      SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_BLEND);
-      SDL_SetRenderDrawColor(m_sdlState.renderer, 0, 0, 255, 255);
-      SDL_RenderFillRect(m_sdlState.renderer, &sensor);
-      SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
-    }
+    SDL_FRect sensor{
+      .x = obj.position.x + obj.collider.x - m_gameState.mapViewport.x,
+      .y = obj.position.y + obj.collider.y + obj.collider.h - m_gameState.mapViewport.y,
+      .w = obj.collider.w, .h = 1
+    };
+    SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(m_sdlState.renderer, 0, 0, 255, 255);
+    SDL_RenderFillRect(m_sdlState.renderer, &sensor);
+    SDL_SetRenderDrawBlendMode(m_sdlState.renderer, SDL_BLENDMODE_NONE);
+  }
 }
 
 
@@ -873,9 +870,10 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
       }
       case PlayerState::jumping:
       {
-        handleShooting(m_resources.texRun, m_resources.texRunShoot, m_resources.ANIM_PLAYER_RUN, m_resources.ANIM_PLAYER_RUN);
-        // obj.texture = res.texRun;
-        // obj.currentAnimation = res.ANIM_PLAYER_RUN;
+        handleShooting(m_resources.texJump, m_resources.texRunShoot, m_resources.ANIM_PLAYER_JUMP, m_resources.ANIM_PLAYER_JUMP);
+        // handleShooting(m_resources.texRun, m_resources.texRunShoot, m_resources.ANIM_PLAYER_RUN, m_resources.ANIM_PLAYER_RUN);
+        // obj.texture = m_resources.texJump;
+        // obj.currentAnimation = m_resources.ANIM_PLAYER_JUMP;
         break;
       }
     }
@@ -945,7 +943,23 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     }
   }
 
-  if (currDirection) {
+  if (currDirection && obj.direction != currDirection) {
+    // Direction changed - mirror the collision box offset to match flipped character
+    // and adjust position to keep collision box at same world position
+    float drawW = obj.spritePixelW / obj.drawScale;
+    float oldColliderX = obj.collider.x;
+    float newColliderX = drawW - obj.collider.x - obj.collider.w;
+    obj.collider.x = newColliderX;
+    float positionShift = newColliderX - oldColliderX;
+    obj.position.x -= positionShift; // Keep world position constant
+
+    // If this is the player, adjust camera to prevent screen jump
+    if (obj.type == ObjectType::Player) {
+      m_gameState.mapViewport.x -= positionShift;
+    }
+
+    obj.direction = currDirection;
+  } else if (currDirection) {
     obj.direction = currDirection;
   }
   // update velocity based on currDirection (which way we're facing),
@@ -1232,50 +1246,61 @@ bool game_engine::Engine::initAllTiles() {
           obj.y - res.map->tileHeight / 2 //411
         );
 
-        // glm::vec2 objPos{ obj.x, obj.y - res.map->tileHeight }; // raise by tile height so the bottom sits on Tiled Y
-        // glm::vec2 objPos{ obj.y - res.map->tileHeight, obj.x}; // raise by tile height so the bottom sits on Tiled Y
-
 
         if (obj.type == "Enemy") {
-          GameObject enemy = createObject(1, 1, res.texEnemy, ObjectType::Enemy, TILE_SIZE, TILE_SIZE, 0, 0);
-          enemy.position = objStartingPos;
+          GameObject enemy = createObject(1, 1, res.texEnemy, ObjectType::Enemy, 128, 128, 0, 0);
+
+          // enemy.data.enemy.srcW = 128; // unsued
+          // enemy.data.enemy.srcH = 128;// unsued
+          enemy.drawScale = 2.5f;
+          float wFrac = 0.30f, hFrac = 0.60f;
+          enemy.colliderNorm = { .x=0.35f, .y=0.85f - hFrac, .w=wFrac, .h=hFrac };
+          enemy.applyScale();
+
+          float feetY   = objStartingPos.y;                // baseline from Tiled
+          float centerX = objStartingPos.x;                // baseline from Tiled
+          enemy.position.x = centerX - enemy.collider.w * 0.5f;        // collider centered
+          enemy.position.y = feetY - (enemy.collider.y + enemy.collider.h); // collider bottom on feet
           enemy.data.enemy = EnemyData();
-          enemy.data.enemy.srcH = 128;
-          enemy.data.enemy.srcW = 128;
           enemy.currentAnimation = res.ANIM_ENEMY;
           enemy.animations = res.enemyAnims;
           enemy.dynamic = true;
           enemy.maxSpeedX = 15;
-          // update collider x.y position to detemine how much overlap is allowed between objects
-          enemy.collider = {
-            .x = 11,
-            .y = 10,
-            .w = 32,
-            .h = 32
-          };
           newLayer.push_back(enemy);
         }
+
         if (obj.type == "Player") {
-        {
-          GameObject player = createObject(1, 1, res.texIdle, ObjectType::Player, 32, 32, 0, 0); // TODO update with new dimensions
-          player.position = objStartingPos;
+          GameObject player = createObject(1, 1, res.texIdle, ObjectType::Player, 128, 128, 0, 0);
+          player.drawScale = 1.5f;
+
+          float wFrac = 0.30f, hFrac = 0.60f;
+          // Position collision box to overlay on character (character is left of center in sprite)
+          // adjust
+          player.colliderNorm = { .x=0.10f, .y=0.9f - hFrac, .w=wFrac, .h=hFrac };
+          player.applyScale();
+
+          float drawW = player.spritePixelW / player.drawScale;
+          float drawH = player.spritePixelH / player.drawScale;
+
+          // obj.x/obj.y from Tiled: treat as centerX/feetY
+          float centerX = obj.x;
+          float feetY   = obj.y;
+
+          // place sprite top-left so its bottom is at feetY and center on centerX
+          player.position.x = centerX - drawW * 0.5f;
+          player.position.y = feetY   - drawH;
+
           player.data.player = PlayerData();
-          player.animations = res.playerAnims; // copies via std::vector copy assignment
+          player.animations = res.playerAnims;
           player.currentAnimation = res.ANIM_PLAYER_IDLE;
-          player.acceleration = glm::vec2(300, 0);
+          player.acceleration = glm::vec2(200, 0);
           player.maxSpeedX = 100;
           player.dynamic = true;
-          player.collider = {
-            .x = 11,
-            .y = -3,
-            .w = 10,
-            .h = 26
-          };
+
           newLayer.push_back(player);
           gs.playerIndex = newLayer.size() - 1;
           gs.playerLayer = gs.layers.size();
         }
-        };
       };
       gs.layers.push_back(std::move(newLayer));
     }
@@ -1289,140 +1314,6 @@ bool game_engine::Engine::initAllTiles() {
 
   return m_gameState.playerIndex != -1;
 };
-
-// bool game_engine::Engine::initAllTiles() {
-
-//   /*
-//     1 - Ground
-//     2 - Panel
-//     3 - Enemy
-//     4 - Player
-//     5 - Grass
-//     6 - Brick
-//   */
-
-//   short map[MAP_ROWS][MAP_COLS] = {
-//     0, 0, 0, 0, 4, 0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 3, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-//     0, 0, 0, 0, 2, 0, 0, 0, 0, 3,2, 2, 2, 2, 2,2, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-//     0, 0, 0, 2, 2, 0, 0, 3, 2, 2,2, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-//     1, 1, 1, 1, 1, 1, 1, 1, 1, 1,1, 1, 1, 1, 1,1, 1, 1, 1, 1,1, 1, 1, 1, 1,1, 1, 1, 1, 1, 1, 1, 1, 1, 1,1, 1, 1, 1, 1,1, 1, 1, 1, 1,1, 1, 1, 1, 1,
-//   };
-
-//   short foregroundMap[MAP_ROWS][MAP_COLS] = {
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-//     5, 5, 5, 0, 0, 5, 5, 5, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-//   };
-
-//   short backgroundMap[MAP_ROWS][MAP_COLS] = {
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-//     0, 0, 0, 0, 0, 6, 6, 6, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,0, 0, 0, 0, 0,
-//   };
-
-//   // short maplayer[MAP_ROWS][MAP_COLS] really means short (*maplayer)[MAP_COLS]: a pointer to the first row (each row is an array of MAP_COLS shorts)
-//   // const short (&maplayer)[MAP_ROWS][MAP_COLS] if want by reference
-//   const auto loadMap = [this](short maplayer[MAP_ROWS][MAP_COLS]) {
-//     const auto createObject = [this](int r, int c, SDL_Texture *tex, ObjectType type, float spriteH, float spriteW) {
-//       GameObject o(spriteH, spriteW);
-//       o.type = type;
-//       o.position = glm::vec2(c * TILE_SIZE, state.logH - (MAP_ROWS - r) * TILE_SIZE);
-//       o.texture = tex;
-//       o.collider = {
-//         .x = 0,
-//         .y = 0,
-//         .w = TILE_SIZE,
-//         .h = TILE_SIZE
-//       };
-//       return o;
-//     };
-
-//     for (int r = 0; r < MAP_ROWS; r++) {
-//       for (int c = 0; c < MAP_COLS; c++) {
-//         switch (maplayer[r][c]) {
-//           case 1: // Ground
-//           {
-//             GameObject ground = createObject(r, c, res.texGround, ObjectType::level, TILE_SIZE, TILE_SIZE);
-//             ground.data.level = LevelData();
-//             gs.layers[LAYER_IDX_LEVEL].push_back(ground); // we do this so we can update each object and destroy the objects with easy access
-//             break;
-//           }
-//           case 2: // Panel
-//           {
-//             GameObject panel = createObject(r, c, res.texPanel, ObjectType::level, TILE_SIZE, TILE_SIZE);
-//             panel.data.level = LevelData();
-//             gs.layers[LAYER_IDX_LEVEL].push_back(panel);
-//             break;
-//           }
-//           case 3: // Enemy
-//           {
-//             GameObject enemy = createObject(r, c, res.texEnemy, ObjectType::enemy, TILE_SIZE, TILE_SIZE);
-//             enemy.data.enemy = EnemyData();
-//             enemy.currentAnimation = res.ANIM_ENEMY;
-//             enemy.animations = res.enemyAnims;
-//             enemy.dynamic = true;
-//             enemy.maxSpeedX = 15;
-//             // enemy.collider = {
-//             //   .x = 11,
-//             //   .y = 6,
-//             //   .w = 10,
-//             //   .h = 26
-//             // };
-//             gs.layers[LAYER_IDX_CHARACTERS].push_back(enemy);
-//             break;
-//           }
-//           case 4: // player
-//           {
-//             GameObject player = createObject(r, c, res.texIdle, ObjectType::player, 32, 32); // TODO update with new dimensions
-//             player.data.player = PlayerData();
-//             player.animations = res.playerAnims; // copies via std::vector copy assignment
-//             player.currentAnimation = res.ANIM_PLAYER_IDLE;
-//             player.acceleration = glm::vec2(300, 0);
-//             player.maxSpeedX = 100;
-//             player.dynamic = true;
-//             player.collider = {
-//               .x = 11,
-//               .y = 6,
-//               .w = 10,
-//               .h = 26
-//             };
-//             gs.layers[LAYER_IDX_CHARACTERS].push_back(player);
-//             gs.playerIndex = gs.layers[LAYER_IDX_CHARACTERS].size() - 1;
-//             break;
-//           }
-//           case 5:
-//           {
-//             GameObject grass = createObject(r, c, res.texGrass, ObjectType::level, TILE_SIZE, TILE_SIZE);
-//             grass.data.level = LevelData();
-//             // gs.layers[LAYER_IDX_LEVEL].push_back(grass);
-//             gs.foregroundTiles.push_back(grass);
-//             break;
-//           }
-//           case 6:
-//           {
-//             GameObject brick = createObject(r, c, res.texBrick, ObjectType::level, TILE_SIZE, TILE_SIZE);
-//             brick.data.level = LevelData();
-//             // gs.layers[LAYER_IDX_LEVEL].push_back(brick);
-//             gs.backgroundTiles.push_back(brick);
-//             break;
-//           }
-//         }
-//       }
-//     }
-//   };
-
-//   loadMap(map);
-//   loadMap(backgroundMap);
-//   loadMap(foregroundMap);
-
-//   // assert(gs.playerIndex != -1); // player index must be set
-//   return gs.playerIndex != -1;
-// };
 
 void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown, game_engine::NetGameInput &input) {
 

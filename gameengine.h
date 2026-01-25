@@ -166,6 +166,8 @@ namespace game_engine {
     const int ANIM_PLAYER_SLIDE = 2;
     const int ANIM_PLAYER_SHOOT = 3;
     const int ANIM_PLAYER_SLIDE_SHOOT = 4;
+    const int ANIM_PLAYER_SWING = 5;
+    const int ANIM_PLAYER_JUMP = 6;
     std::vector<Animation> playerAnims;
 
     const int ANIM_BULLET_MOVING = 0;
@@ -179,7 +181,7 @@ namespace game_engine {
     std::vector<Animation> enemyAnims;
 
     std::vector<SDL_Texture*> textures;
-    SDL_Texture *texIdle, *texRun, *texSlide,
+    SDL_Texture *texIdle, *texRun, *texSlide, *texSwing, *texJump,
       // *texBrick,
       // *texGrass, *texGround,
       // *texPanel,
@@ -269,22 +271,26 @@ namespace game_engine {
           return a.firstgid < b.firstgid;
       });
 
-      playerAnims.resize(5); // not reserve
-      playerAnims[ANIM_PLAYER_IDLE] = Animation(8, 1.6f); // 8 frames in 1.6 sec
-      playerAnims[ANIM_PLAYER_RUN] = Animation(4, 0.5f); //4
-      playerAnims[ANIM_PLAYER_SLIDE] = Animation(1, 1.0f);
-      playerAnims[ANIM_PLAYER_SHOOT] = Animation(4, 0.5f);
-      playerAnims[ANIM_PLAYER_SLIDE_SHOOT] = Animation(4, 0.5f);
+      playerAnims.resize(7); // not reserve
+      playerAnims[ANIM_PLAYER_IDLE] = Animation(4, 0.8f); // 8 frames in 1.6 sec
+      playerAnims[ANIM_PLAYER_RUN] = Animation(7, 0.8f); //4
+      playerAnims[ANIM_PLAYER_SLIDE] = Animation(7, 1.0f);
+      playerAnims[ANIM_PLAYER_SHOOT] = Animation(5, 0.5f);
+      playerAnims[ANIM_PLAYER_SLIDE_SHOOT] = Animation(5, 0.5f);
+      playerAnims[ANIM_PLAYER_SWING] = Animation(4, 1.0f);
+      playerAnims[ANIM_PLAYER_JUMP] = Animation(6, 0.5f);
 
       if (!headless) {
-        texIdle = loadTexture(state.renderer,  "data/idle.png");
+        texIdle = loadTexture(state.renderer,  "data/players/Knight_3/Idle.png");
         // texIdle = loadTexture(state.renderer,  "data/move_helmet_marie_42.png");
-        texRun = loadTexture(state.renderer, "data/run.png");
-        texSlide = loadTexture(state.renderer, "data/slide.png");
+        texRun = loadTexture(state.renderer, "data/players/Knight_3/Run.png");       // 1024 × 128
+        texSlide = loadTexture(state.renderer, "data/players/Knight_3/Run.png");
         // texRun = loadTexture(state.renderer, "data/move_helmet_marie_42.png");
-        texShoot = loadTexture(state.renderer, "data/shoot.png");
-        texRunShoot = loadTexture(state.renderer, "data/shoot_run.png");
-        texSlideShoot = loadTexture(state.renderer, "data/slide_shoot.png");
+        texShoot = loadTexture(state.renderer, "data/players/Knight_3/Attack 1.png");
+        texRunShoot = loadTexture(state.renderer, "data/players/Knight_3/Run+Attack.png");
+        texSlideShoot = loadTexture(state.renderer, "data/players/Knight_3/Run+Attack.png");
+        texSwing = loadTexture(state.renderer, "data/players/Knight_3/Attack 2.png");
+        texJump = loadTexture(state.renderer, "data/players/Knight_3/Jump.png");
       }
 
 
@@ -317,6 +323,7 @@ namespace game_engine {
       enemyAnims[ANIM_ENEMY_DIE] = Animation(3, 0.5f);
       enemyAnims[ANIM_ENEMY_RUN] = Animation(8, 0.5f);
 
+      // 896 × 128
       if (!headless) {
         texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Idle.png");
         // texEnemy = loadTexture(state.renderer, "data/enemies/skeleton/Attack_1.png");

@@ -77,9 +77,13 @@ struct GameObject {
   SDL_Texture *texture;
   bool dynamic;
   bool grounded;
+
+  float drawScale = 1.0f;
   float spritePixelW;
   float spritePixelH;
   SDL_FRect collider;
+  SDL_FRect colliderNorm{0.25f, 0.25f, 0.5f, 0.5f}; // x,y,w,h as fractions of scaled sprite
+
   Timer flashTimer;
   bool shouldFlash;
   int spriteFrame;
@@ -96,4 +100,22 @@ struct GameObject {
     shouldFlash = false;
     spriteFrame = 1;
   }
+
+  void applyScale() {
+    float drawW = spritePixelW / drawScale;
+    float drawH = spritePixelH / drawScale;
+    collider = {
+      colliderNorm.x * drawW,
+      colliderNorm.y * drawH,
+      colliderNorm.w * drawW,
+      colliderNorm.h * drawH,
+    };
+    //  {0.35f, 0.1f, 0.3f, 0.7f};
+    // x:29.8667 y:8.53333 w:25.6 h:59.7333
+    // x:17.92y:5.12w:15.36h:35.84
+    // x:17.92y:5.12w:15.36h:35.84
+    // x:17.92y:5.12w:15.36h:35.84
+
+    std::cout << "x: " << collider.x << " y: " << collider.y << " w: " << collider.w << " h: " << collider.h << std::endl;
+  };
 };
