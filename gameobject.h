@@ -56,7 +56,8 @@ struct EnemyData {
 
 struct BulletData{
   BulletState state;
-  BulletData(): state(BulletState::moving) {};
+  Timer liveTimer;
+  BulletData(): state(BulletState::moving), liveTimer(0.5f) {};
 };
 
 

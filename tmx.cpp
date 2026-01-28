@@ -44,6 +44,22 @@ std::unique_ptr<tmx::Map> tmx::loadMap(const std::string &mapFilePath) {
               newTileSet.image.height = image->IntAttribute("height");
             }
 
+            // process tile (id) -> objectgroup (id) -> object (x,y,w,h) to get the collider FRect
+            for (auto *tileElem = child->FirstChildElement("tile"); tileElem; tileElem = tileElem->NextSiblingElement("tile")) {
+              uint32_t localId = tileElem->IntAttribute("id");
+              auto &meta = newTileSet.tiles[localId]; // insert if dne
+
+              if (auto *og = tileElem->FirstChildElement("objectgroup")) {
+                if (auto *obj = og->FirstChildElement("object")) {
+                  meta.collider.emplace(SDL_FRect{
+                    static_cast<float>(obj->FloatAttribute("x")),
+                    static_cast<float>(obj->FloatAttribute("y")),
+                    static_cast<float>(obj->FloatAttribute("width")),
+                    static_cast<float>(obj->FloatAttribute("height"))
+                  });
+                }
+              }
+            }
             // TODO here we can also process the frame files here!
             // move all elements to map; avoid copy
             map->tileSets.push_back(std::move(newTileSet));

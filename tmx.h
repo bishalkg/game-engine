@@ -44,11 +44,13 @@ namespace tmx
   //   Image image;
   // };
 
+
   struct TileFrame { int tileId; int durationMs; };
 
   struct TileMeta {
     std::vector<TileFrame> animation; // empty if none
     // add properties here if needed
+    std::optional<SDL_FRect> collider;
   };
 
   struct TileSet
@@ -60,7 +62,7 @@ namespace tmx
 
     // runtime-only:
     SDL_Texture* texture = nullptr;
-    std::unordered_map<int, TileMeta> tiles; // only entries for <tile> elements (animations, props)
+    std::unordered_map<uint32_t, TileMeta> tiles; // only entries for <tile> elements (animations, props)
 
     public:
       TileSet(int count, int tileWidth, int tileHeight, int columns, int firstgid)

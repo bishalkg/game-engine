@@ -33,4 +33,6 @@ class Animation
 
     bool isDone() const { return timer.isTimedOut(); }
 
+    void reset() { timer.reset(); }
+
 };

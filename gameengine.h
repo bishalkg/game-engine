@@ -233,6 +233,9 @@ namespace game_engine {
     MIX_Track *backgroundTrack, *shootTrack, *hitTrack, *enemyHitTrack, *enemyDieTrack;
     std::vector<MIX_Track*> audioTracks;
     MIX_Mixer* mixer;
+    size_t projectileTrackIdx = 0; // initialize once
+    Timer whooshCooldown{0.10f};  // 100 ms. needs to be here and not on each projectile entity
+
 
 
     std::pair<MIX_Audio*, MIX_Track*> loadAudioChunk(const std::string& filepath, float gain = 1.0f) {
@@ -286,7 +289,7 @@ namespace game_engine {
     // headless is for server resources state
     void loadAllAssets(SDLState &state, bool headless){
 
-      map = tmx::loadMap("data/maps/level_1/level_1.tmx"); // only the resource struct instance can hold this pointer and it will be automatically deleted when not used (eg. when we swap out maps)
+      map = tmx::loadMap("data/maps/level_1/level_1_v2.tmx"); // only the resource struct instance can hold this pointer and it will be automatically deleted when not used (eg. when we swap out maps)
 
       if (!headless) {
         for (tmx::TileSet &tileSet: map->tileSets)
@@ -313,7 +316,7 @@ namespace game_engine {
 
       texCharacterMap[SpriteType::Player_Mage].anims.resize(10); // not reserve
       texCharacterMap[SpriteType::Player_Mage].anims[ANIM_IDLE] = Animation(8, 1.6f); // 8 frames in 1.6 sec
-      texCharacterMap[SpriteType::Player_Mage].anims[ANIM_RUN] = Animation(8, 1.2f); //4
+      texCharacterMap[SpriteType::Player_Mage].anims[ANIM_RUN] = Animation(8, 0.6f); //4
       texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SLIDE] = Animation(4, 0.5f);
       texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SHOOT] = Animation(7, 0.6f);
       texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SLIDE_SHOOT] = Animation(7, 0.5f);
@@ -400,9 +403,12 @@ namespace game_engine {
         float g = MIX_GetMasterGain(mixer);
         float chunkAudioGain = g * 3;
 
-        std::tie(audioShoot, shootTrack) = loadAudioChunk("data/audio/shoot.wav", chunkAudioGain);
-        std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/wall_hit.wav", chunkAudioGain);
-        std::tie(audioEnemyHit, enemyHitTrack) = loadAudioChunk("data/audio/enemy_hit.wav", chunkAudioGain);
+        // std::tie(audioShoot, shootTrack) = loadAudioChunk("data/audio/shoot.wav", chunkAudioGain);
+        // std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/wall_hit.wav", chunkAudioGain);
+        // std::tie(audioEnemyHit, enemyHitTrack) = loadAudioChunk("data/audio/enemy_hit.wav", chunkAudioGain);
+        std::tie(audioShoot, shootTrack) = loadAudioChunk("data/audio/fireball_whoosh.mp3", chunkAudioGain);
+        std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
+        std::tie(audioEnemyHit, enemyHitTrack) = loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
         std::tie(audioEnemyDie, enemyDieTrack) = loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
         std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk("data/audio/Level_1_Forest_Outside_Castle.wav", g);
       }
@@ -460,10 +466,8 @@ namespace game_engine {
       inline static constexpr glm::vec2 GRAVITY = glm::vec2(0, 500);
       inline static constexpr size_t LAYER_IDX_LEVEL = 0;
       inline static constexpr size_t LAYER_IDX_CHARACTERS = 1;
-      inline static constexpr int MAP_ROWS = 5;
-      inline static constexpr int MAP_COLS = 50;
-      inline static constexpr int TILE_SIZE = 32; // TODO all tiles are 32 right now
-      inline static constexpr float JUMP_FORCE = -400.f;
+      inline static constexpr int TILE_SIZE = 32;
+      inline static constexpr float JUMP_FORCE = -250.0f;
 
 
       bool init(int width, int height, int logW, int logH);

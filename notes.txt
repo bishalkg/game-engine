@@ -243,3 +243,58 @@ Yes: run Timer logic on the server and send the resolved state (shouldFlash, rem
 Don’t send SDL_Texture* (invalid across processes/threads). Instead, have the server send deterministic render hints: animation id/state, frame index, facing/direction, maybe a simple TextureId enum if animations aren’t enough. Clients map these ids to their own texture pointers.
 Server snapshot should contain: currentAnimation, spriteFrame, direction, shouldFlash, plus any animation/timebase you need (e.g., serverTick or animTime so clients can interpolate). That’s already partially in NetGameObjectSnapshot—lean on those fields, not texture pointers.
 Keep simulation-only data headless: on the server, strip SDL_Texture* and render-only fields from GameObject; use a headless variant or wrap render stuff behind a client-only view.
+
+
+
+
+Dynamic Tile Colliders:
+
+Best practice with Tiled is to author the collider per tile in the tileset and read it at load time, instead of tagging in the map:
+
+In Tiled (per tileset):
+
+Open the tileset (TSX), select a tile, click the “Collision” editor (Tile Collision Editor).
+Draw the collider you want (rect or polygon). Do this for each tile that needs a custom shape. These shapes are saved inside the tileset file under <tile id="…"><objectgroup>…</objectgroup></tile>.
+At load time:
+
+When you parse the tileset (in your tmx.cpp), also parse each <tile>’s <objectgroup> into your TileMeta (you already have a placeholder there).
+Store the collider as a list of points (polygon) or as a rect per tile ID.
+When you instantiate a tile in initAllTiles, look up its TileMeta by localId (gid - firstgid) and copy the collider into the GameObject:
+If polygon: transform points by tile position and set collider to the polygon (or approximate to a rect).
+If rect: set obj.collider = { x, y, w, h } using the tile’s local coords.
+Fallback/simple option:
+
+If you don’t want polygons, add a custom property (e.g., collider_rect = x,y,w,h) on each tile in Tiled and read that property instead of parsing the collision object.
+Why this is better:
+
+Colliders live with art; no hardcoded switch/case in code.
+Works per tile type, not per placed tile instance.
+Lets you use non-rect shapes for slopes and overhangs.
+Minimal code changes:
+
+Extend your tileset parsing to read <tile> children and their <objectgroup>/<object> shapes into TileMeta.
+In initAllTiles, after you compute localId, look up res.map->tileSets[...].tiles[localId] collider and assign it to the GameObject’s collider instead of the full tile box.
+That will give each tile its own collider, matching what you drew in Tiled.
+
+
+Parallax background:
+
+A cleaner approach is to treat each parallax layer as a standalone texture (one per layer), not as a tile layer:
+
+Authoring: In Tiled, make each parallax layer an Image Layer (or export each tile layer as a single image via “Export As Image…”). Save three PNGs: bg_far.png, bg_mid.png, bg_near.png.
+Loading: Load each PNG into its own SDL_Texture* (bg1, bg2, bg3).
+Rendering: Call drawParalaxBackground for each layer with its own scroll factor (e.g., 0.1f, 0.3f, 0.6f) and its own scrollPos accumulator. Draw them before the level tiles.
+Tiling: Keep using SDL_RenderTextureTiled as you already do; set dst.w = texture->w * 2 so it wraps.
+Y positioning: Give each layer its own y offset if needed (sky higher, near layer lower). You can add a yOffset param or store per-layer offsets.
+This avoids per-tile exports for backgrounds, keeps parallax simple, and lets you tune scroll speeds independently.
+
+
+tileset -> image -> tile -> objectgroup -> object
+
+ <tileset firstgid="4412" name="Tileset" tilewidth="32" tileheight="32" tilecount="204" columns="17">
+  <image source="../../../imgs/tilesets/craftpix-net-926878-free-platformer-game-tileset-pixel-art/TILED_files/Tileset.png" width="544" height="384"/>
+  <tile id="11">
+   <objectgroup draworder="index" id="2">
+    <object id="1" x="0" y="0.158667" width="30.8893" height="29.144"/>
+   </objectgroup>
+  </tile>

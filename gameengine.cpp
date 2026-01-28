@@ -763,9 +763,8 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     Timer &weaponTimer = obj.data.player.weaponTimer;
     weaponTimer.step(deltaTime);
 
-    const auto handleShooting = [this, &obj, &weaponTimer, &currDirection](
+    const auto handleShooting = [this, &obj, &weaponTimer, &currDirection, deltaTime](
       SDL_Texture *tex, SDL_Texture *shootTex, int animIndex, int shootAnimIndex){
-    // TODO use similar condition to prevent double jump
       if (m_sdlState.keys[SDL_SCANCODE_A]) {
 
         // set player texture during shooting anims
@@ -775,27 +774,19 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           weaponTimer.reset();
           // create bullets
           GameObject bullet(128, 128);
-
           bullet.drawScale = 2.0f;
-          // float wFrac = 0.50f, hFrac = 0.50f;
           bullet.colliderNorm = { .x=0.0, .y=0.40, .w=0.5, .h=0.1 };
           bullet.applyScale();
-          // bullet.collider.h = -1.0;
 
           bullet.data.bullet = BulletData();
           bullet.objClass = ObjectClass::Bullet;
           bullet.direction = obj.direction;
           bullet.texture = m_resources.texBullet;
           bullet.currentAnimation = m_resources.ANIM_BULLET_MOVING;
-          // bullet.collider = SDL_FRect{
-          //   .x = 0, .y = 0,
-          //   .w = static_cast<float>(m_resources.texBullet->h),
-          //   .h = static_cast<float>(m_resources.texBullet->h),
-          // };
           const int yJitter = 50;
-          const float yVelocity = SDL_rand(yJitter) - yJitter / 2.0f;
+          const float yVelocity = SDL_rand(yJitter) - yJitter / 1.5f;
           bullet.velocity = glm::vec2(
-            obj.velocity.x + 400.0f,
+            obj.velocity.x + 300.0f,
             yVelocity
           ) * obj.direction;
           bullet.maxSpeedX = 1000.0f;
@@ -825,14 +816,16 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           }
         }
 
-        // MIX_SetTrackAudio(res.shootTrack, res.audioShoot); // or MIX_SetTrackAudioWithProperties
-        if (!MIX_PlayTrack(m_resources.shootTrack, 0)) {
-            // SDL_Log("Play failed: %s", SDL_GetError());
-        };
+        // When you shoot (no loops, no track index needed):
+        m_resources.whooshCooldown.step(deltaTime);
+        if (m_resources.whooshCooldown.isTimedOut()) {
+          m_resources.whooshCooldown.reset();
+          MIX_PlayAudio(m_resources.mixer, m_resources.audioShoot);
+        }
 
       } else {
-          obj.texture = tex;
-          obj.currentAnimation = animIndex;
+        obj.texture = tex;
+        obj.currentAnimation = animIndex;
       }
     };
 
@@ -871,7 +864,6 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           handleShooting(entityRes.texSlide, entityRes.texSlideShoot, m_resources.ANIM_SLIDE, m_resources.ANIM_SLIDE_SHOOT);
         } else {
           handleShooting(entityRes.texRun, entityRes.texRunShoot, m_resources.ANIM_RUN, m_resources.ANIM_RUN);
-          // sprite sheets have same frames so we can seamlessly swap between the two sheets
         }
 
         break;
@@ -879,6 +871,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
       case PlayerState::jumping:
       {
         handleShooting(entityRes.texJump, entityRes.texRunShoot, m_resources.ANIM_JUMP, m_resources.ANIM_JUMP);
+
         // handleShooting(m_resources.texRun, m_resources.texRunShoot, m_resources.ANIM_PLAYER_RUN, m_resources.ANIM_PLAYER_RUN);
         // obj.texture = m_resources.texJump;
         // obj.currentAnimation = m_resources.ANIM_PLAYER_JUMP;
@@ -887,13 +880,20 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     }
   } else if (obj.objClass == ObjectClass::Bullet) {
 
+    obj.data.bullet.liveTimer.step(deltaTime);
     switch (obj.data.bullet.state) {
       case BulletState::moving:
       {
-        if (obj.position.x - m_gameState.mapViewport.x < 0 || obj.position.x - m_gameState.mapViewport.x > m_sdlState.logW ||
-        obj.position.y - m_gameState.mapViewport.y < 0 ||
-        obj.position.y - m_gameState.mapViewport.y > m_sdlState.logH) {
-        obj.data.bullet.state = BulletState::inactive;
+        if (
+          obj.position.x - m_gameState.mapViewport.x < 0 ||
+          obj.position.x - m_gameState.mapViewport.x > m_sdlState.logW ||
+          obj.position.y - m_gameState.mapViewport.y < 0 ||
+          obj.position.y - m_gameState.mapViewport.y > m_sdlState.logH ||
+          obj.data.bullet.liveTimer.isTimedOut()
+        ) {
+            obj.data.bullet.liveTimer.reset();
+            // obj.position.x = 0; obj.position.y = 0;
+            obj.data.bullet.state = BulletState::inactive;
         }
         break;
       }
@@ -1245,7 +1245,11 @@ bool game_engine::Engine::initAllTiles() {
             auto tile = createObject(r, c, ts->texture, ObjectClass::Level, ts->tileHeight, ts->tileWidth, srcX, srcY);
             if (layer.name != "Level") {
               tile.collider.w = tile.collider.h = 0;
-            }
+            } else if (layer.name == "Level") {
+              if (auto it = ts->tiles.find(localId); it != ts->tiles.end() && it->second.collider) {
+                tile.collider = *(it->second.collider);
+              };
+            };
 
             newLayer.push_back(tile);
 
@@ -1343,7 +1347,7 @@ bool game_engine::Engine::initAllTiles() {
           player.data.player = PlayerData();
           player.animations = res.texCharacterMap.at(spriteType).anims;
           player.currentAnimation = res.ANIM_IDLE;
-          player.acceleration = glm::vec2(200, 0);
+          player.acceleration = glm::vec2(500, 0);
           player.maxSpeedX = 100;
           player.dynamic = true;
 
@@ -1373,9 +1377,10 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
     switch (obj.data.player.state) {
       case PlayerState::idle:
       {
-        if (key == SDL_SCANCODE_UP && keyDown) {
+        if (key == SDL_SCANCODE_UP && keyDown && obj.grounded) {
           obj.velocity.y += JUMP_FORCE;
           obj.data.player.state = PlayerState::jumping;
+          obj.animations[m_resources.ANIM_JUMP].reset();
           input.move = PlayerInput::Jump;
           input.shouldSendMessage = true;
         } else if (key == SDL_SCANCODE_S && keyDown) {
@@ -1389,15 +1394,25 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
       }
       case PlayerState::jumping:
       {
-        if (!keyDown) { // once you stop holding down the key, set player state back to idle
+        // if (!keyDown) { // once you stop holding down the key, set player state back to idle
+        //   obj.velocity.y = 0;
+        //   obj.data.player.state = PlayerState::idle;
+        // }
+        if (obj.animations[m_resources.ANIM_JUMP].isDone()) {
+          // fix current frame to last frame
+          obj.currentAnimation = -1;
+        }
+
+        if (obj.grounded) { // once you stop holding down the key, set player state back to idle
           obj.velocity.y = 0;
           obj.data.player.state = PlayerState::idle;
+          obj.animations[m_resources.ANIM_JUMP].reset();
         }
         break;
       }
       case PlayerState::running:
       {
-        if (key == SDL_SCANCODE_UP && keyDown) {
+        if (key == SDL_SCANCODE_UP && keyDown && obj.grounded) {
           obj.velocity.y += JUMP_FORCE;
           obj.data.player.state = PlayerState::jumping;
           input.move = game_engine::PlayerInput::Jump;
