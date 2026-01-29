@@ -205,7 +205,7 @@ namespace game_engine {
 
       *texBullet, *texBulletHit; // tex of bullets
 
-    int bg1Idx, bg2Idx, bg3Idx;
+    int bg1Idx, bg2Idx, bg3Idx, bg4Idx;
 
       // *texShoot, *texRunShoot, *texSlideShoot;
 
@@ -303,8 +303,10 @@ namespace game_engine {
           // tilesetTextures.push_back(&tileSet); // need to fix for shutdown
           // Skyx32 (3) , Flora1x32 (2), Flora2x32 (1)
           if (imagePath.find("Skyx32") != std::string::npos) {
+            bg4Idx = i;
+          } else if (imagePath.find("Clouds_x32") != std::string::npos) {
             bg3Idx = i;
-          } else if (imagePath.find("Flora2x32") != std::string::npos) {
+          } else if (imagePath.find("Flora1x32") != std::string::npos) {
             bg2Idx = i;
           } else if (imagePath.find("Flora1x32") != std::string::npos) {
             bg1Idx = i;
@@ -423,7 +425,8 @@ namespace game_engine {
         std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
         std::tie(audioEnemyHit, enemyHitTrack) = loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
         std::tie(audioEnemyDie, enemyDieTrack) = loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
-        std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk("data/audio/Level_1_Forest_Outside_Castle.wav", g);
+        // std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk("data/audio/Level_1_Forest_Outside_Castle.wav", g);
+        std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk("data/audio/Level_2_Castle_Floor_1.wav", g);
       }
     };
 

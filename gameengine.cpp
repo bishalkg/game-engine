@@ -1250,6 +1250,9 @@ bool game_engine::Engine::initAllTiles() {
               int srcX = (localId % ts->columns) * ts->tileWidth; // col * tileWidth;
               int srcY = (localId / ts->columns) * ts->tileHeight; // row * tileHeight
 
+              auto objClass = ObjectClass::Level;
+
+
               auto tile = createObject(r, c, ts->texture, ObjectClass::Level, ts->tileHeight, ts->tileWidth, srcX, srcY);
               if (layer.name != "Level") {
                 tile.collider.w = tile.collider.h = 0;
@@ -1265,29 +1268,25 @@ bool game_engine::Engine::initAllTiles() {
 
           }
         }
-      } else if (layer.name == "Sky") { // 3
-        // if we store this in gameObject.texture
-        // create a gameObject to push to layer -> bglayer will have one object -->
-        // *texBg1, *texBg2, *texBg3, *texBg4
-        // res.texBg3 = res.map->tileSets[res.bg3Idx].texture;
+      } else if (layer.name == "Sky") { // 4
+        auto bgImg = createObject(0, 0, res.map->tileSets[res.bg4Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
+        bgImg.bgscroll = 0;
+        bgImg.scrollFactor = 0.4f;
+        newLayer.push_back(bgImg);
+      } else if (layer.name == "Clouds") { // 3
         auto bgImg = createObject(0, 0, res.map->tileSets[res.bg3Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
-        bgImg.scrollFactor = 1.01f;
+        bgImg.scrollFactor = 0.4f;
         newLayer.push_back(bgImg);
-        // const tmx::TileSet* ts = pickTileset(gid);
-        // res.map->tileSets[]
-        // store the bg4 tileset index in res as well and pull it out of maps->tileset
       } else if (layer.name == "Flora2") { // 2
-        // res.texBg2 = res.map->tileSets[res.bg2Idx].texture;
         auto bgImg = createObject(0, 0, res.map->tileSets[res.bg2Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
-        bgImg.scrollFactor = 1.06f;
+        bgImg.scrollFactor = 0.3f;
         newLayer.push_back(bgImg);
       } else if (layer.name == "Flora1") { // 1
-        // res.texBg1 = res.map->tileSets[res.bg1Idx].texture;
         auto bgImg = createObject(0, 0, res.map->tileSets[res.bg1Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
-        bgImg.scrollFactor = 1.1f;
+        bgImg.scrollFactor = 0.2f;
         newLayer.push_back(bgImg);
       }
 
@@ -1471,35 +1470,23 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
 };
 
 void game_engine::Engine::drawParalaxBackground(SDL_Texture* tex,
-                                   float cameraVelX,
+                                   float camVelX,
                                    float& scrollPos,
                                    float scrollFactor,
                                    float dt,
                                    float baseY = -175.0f) {
 
-    scrollPos -= cameraVelX * scrollFactor * dt;
+    scrollPos -= camVelX * scrollFactor * dt;
     auto scrollY = 0 * scrollFactor * dt;   // factorY ≈ 0 for sky
 
     float w = static_cast<float>(tex->w);
     scrollPos = std::fmod(scrollPos, w);
     if (scrollPos > 0) scrollPos -= w;
 
-    SDL_Rect saved{};
-    SDL_GetRenderViewport(m_sdlState.renderer, &saved);
-    SDL_SetRenderViewport(m_sdlState.renderer, nullptr);   // no camera offset for BG
-
-    // constant Y, no camera influence
-    SDL_FRect dst1{ scrollPos, baseY, w, (float)tex->h };
-    SDL_FRect dst2{ scrollPos + w, baseY, w, (float)tex->h };
+    SDL_FRect dst1{ scrollPos,        baseY + scrollY, w, (float)tex->h };
+    SDL_FRect dst2{ scrollPos + w,    baseY + scrollY, w, (float)tex->h };
     SDL_RenderTexture(m_sdlState.renderer, tex, nullptr, &dst1);
     SDL_RenderTexture(m_sdlState.renderer, tex, nullptr, &dst2);
-
-    SDL_SetRenderViewport(m_sdlState.renderer, &saved);  // restore for world tiles/entities
-
-    // SDL_FRect dst1{ scrollPos,        baseY + scrollY, w, (float)tex->h };
-    // SDL_FRect dst2{ scrollPos + w,    baseY + scrollY, w, (float)tex->h };
-    // SDL_RenderTexture(m_sdlState.renderer, tex, nullptr, &dst1);
-    // SDL_RenderTexture(m_sdlState.renderer, tex, nullptr, &dst2);
     // // advance
     // scrollPos -= cameraVelX * scrollFactor * dt;
 
