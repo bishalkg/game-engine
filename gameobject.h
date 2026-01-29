@@ -74,7 +74,7 @@ union ObjectData {
 
 enum class ObjectClass : std::uint32_t
 {
-  Player, Level, Enemy, Bullet, Sword
+  Player, Level, Background, Enemy, Bullet, Sword
 };
 
 // define all objects in the game
@@ -92,6 +92,8 @@ struct GameObject {
   bool dynamic;
   bool grounded;
 
+  float bgscroll;
+  float scrollFactor;
   float drawScale = 1.0f;
   float spritePixelW;
   float spritePixelH;

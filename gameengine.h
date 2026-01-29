@@ -205,6 +205,8 @@ namespace game_engine {
 
       *texBullet, *texBulletHit; // tex of bullets
 
+    int bg1Idx, bg2Idx, bg3Idx;
+
       // *texShoot, *texRunShoot, *texSlideShoot;
 
       // *texEnemy, *texEnemyHit, *texEnemyDie, *texEnemyRun;
@@ -292,11 +294,22 @@ namespace game_engine {
       map = tmx::loadMap("data/maps/level_1/level_1_v2.tmx"); // only the resource struct instance can hold this pointer and it will be automatically deleted when not used (eg. when we swap out maps)
 
       if (!headless) {
+        int i = 0;
         for (tmx::TileSet &tileSet: map->tileSets)
         {
+          // each tileSet already loads in each texture, including the background textures we need; need to set onto *texBg1, *texBg2, *texBg3, *texBg4
           const std::string imagePath = "data/tiles/" + std::filesystem::path(tileSet.image.source).filename().string();
           tileSet.texture = loadTexture(state.renderer, imagePath);
-          // tilesetTextures.push_back(&tileSet);
+          // tilesetTextures.push_back(&tileSet); // need to fix for shutdown
+          // Skyx32 (3) , Flora1x32 (2), Flora2x32 (1)
+          if (imagePath.find("Skyx32") != std::string::npos) {
+            bg3Idx = i;
+          } else if (imagePath.find("Flora2x32") != std::string::npos) {
+            bg2Idx = i;
+          } else if (imagePath.find("Flora1x32") != std::string::npos) {
+            bg1Idx = i;
+          }
+          i++;
         }
       }
 
@@ -467,7 +480,7 @@ namespace game_engine {
       inline static constexpr size_t LAYER_IDX_LEVEL = 0;
       inline static constexpr size_t LAYER_IDX_CHARACTERS = 1;
       inline static constexpr int TILE_SIZE = 32;
-      inline static constexpr float JUMP_FORCE = -250.0f;
+      inline static constexpr float JUMP_FORCE = -320.0f;
 
 
       bool init(int width, int height, int logW, int logH);
@@ -484,7 +497,7 @@ namespace game_engine {
       void handleCollision(GameObject &a, GameObject &b, float deltaTime);
       void collisionResponse(const SDL_FRect &rectA, const SDL_FRect &rectB, const SDL_FRect &rectC, GameObject &objA, GameObject &objB, float deltaTime);
       void handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown, game_engine::NetGameInput &input);
-      void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime);
+      void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime, float y);
       void setBackgroundSoundtrack();
       void stopBackgroundSoundtrack();
 

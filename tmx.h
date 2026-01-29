@@ -11,11 +11,20 @@
 namespace tmx
 {
 
+  struct Image
+  {
+    std::string source;// path from TSX
+    int width, height;
+  };
+
   struct Layer
   {
     int id;
     std::string name;
     std::vector<uint32_t> data;  // GIDs, size = mapWidth * mapHeight
+    std::optional<Image> img; // for background layers that are full images not tiles
+    int parallaxX = 1;
+    int parallaxY = 1;
   };
 
   struct LayerObject
@@ -30,12 +39,6 @@ namespace tmx
     int id;
     std::string name;
     std::vector<LayerObject> objects;
-  };
-
-  struct Image
-  {
-    std::string source;// path from TSX
-    int width, height;
   };
 
   // struct Tile

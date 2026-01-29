@@ -524,7 +524,12 @@ void game_engine::Engine::drawAllObjects(float deltaTime) {
   // draw all interactable objects
   for (auto &layer : m_gameState.layers) {
     for (GameObject &obj : layer) {
-      if (obj.objClass == ObjectClass::Level) {
+
+      if (obj.objClass == ObjectClass::Background) {
+        // draw background images
+        drawParalaxBackground(obj.texture, getPlayer().velocity.x, obj.bgscroll, obj.scrollFactor, deltaTime, -175.0f);
+
+      } else if (obj.objClass == ObjectClass::Level) {
         // if level tile, let src and dst override so that
         // src points to a specfic 32x32 tile texture from the whole png; dst is where on our window we want to place it
         SDL_FRect dst = obj.data.level.dst;
@@ -533,6 +538,7 @@ void game_engine::Engine::drawAllObjects(float deltaTime) {
         // dst.w = static_cast<float>(obj.texture->w);
         // dst.h = static_cast<float>(obj.texture->h);
         SDL_RenderTexture(m_sdlState.renderer, obj.texture, &obj.data.level.src, &dst);
+
         if (m_gameState.debugMode) {
           // display each objects collision hitbox
           SDL_FRect rectA{
@@ -1166,7 +1172,7 @@ bool game_engine::Engine::initAllTiles() {
 
     const SDLState &state;
     GameState &gs;
-    const Resources &res;
+    Resources &res;
 
     LayerVisitor(const SDLState &state, GameState &gs, Resources &res): state(state), gs(gs), res(res){}
 
@@ -1219,44 +1225,72 @@ bool game_engine::Engine::initAllTiles() {
     void operator()(tmx::Layer &layer)
     {
       std::vector<GameObject> newLayer;
-      for (int r = 0; r < res.map->mapHeight; ++r){
 
-        for (int c = 0; c < res.map->mapWidth; ++c) {
-          const uint32_t rawGid = layer.data[r * res.map->mapWidth + c]; // packed Tiled GID (includes flip flags)
+      if (!layer.img.has_value()) {
+        for (int r = 0; r < res.map->mapHeight; ++r){
 
-          // Tiled encodes flips in the top 3 bits; mask them off so we lookup the real tile index.
-          // Without this the computed srcY can overflow the texture height, causing tiles to vanish.
-          const uint32_t gid = rawGid & 0x1FFFFFFF; // clear H/V/diag flip flags
-          if (gid) {
+          for (int c = 0; c < res.map->mapWidth; ++c) {
+            const uint32_t rawGid = layer.data[r * res.map->mapWidth + c]; // packed Tiled GID (includes flip flags)
 
-            // find the texture corresponding to this gID
-            // const auto itr = std::find_if(res.map->tileSets.begin(), res.map->tileSets.end(),
-            // [tGid](const tmx::TileSet &ts) {
-            //   return tGid >= ts.firstgid && tGid < ts.firstgid + ts.texture.size();
-            // });
-            const tmx::TileSet* ts = pickTileset(gid);
+            // Tiled encodes flips in the top 3 bits; mask them off so we lookup the real tile index.
+            // Without this the computed srcY can overflow the texture height, causing tiles to vanish.
+            const uint32_t gid = rawGid & 0x1FFFFFFF; // clear H/V/diag flip flags
+            if (gid) {
 
-            if (!ts) continue;
+              // find the texture corresponding to this gID
+              // const auto itr = std::find_if(res.map->tileSets.begin(), res.map->tileSets.end(),
+              // [tGid](const tmx::TileSet &ts) {
+              //   return tGid >= ts.firstgid && tGid < ts.firstgid + ts.texture.size();
+              // });
+              const tmx::TileSet* ts = pickTileset(gid);
 
-            uint32_t localId = rawGid - ts->firstgid; // local index within the tileSet data array
-            int srcX = (localId % ts->columns) * ts->tileWidth; // col * tileWidth;
-            int srcY = (localId / ts->columns) * ts->tileHeight; // row * tileHeight
+              if (!ts) continue;
 
-            auto tile = createObject(r, c, ts->texture, ObjectClass::Level, ts->tileHeight, ts->tileWidth, srcX, srcY);
-            if (layer.name != "Level") {
-              tile.collider.w = tile.collider.h = 0;
-            } else if (layer.name == "Level") {
-              if (auto it = ts->tiles.find(localId); it != ts->tiles.end() && it->second.collider) {
-                tile.collider = *(it->second.collider);
+              uint32_t localId = rawGid - ts->firstgid; // local index within the tileSet data array
+              int srcX = (localId % ts->columns) * ts->tileWidth; // col * tileWidth;
+              int srcY = (localId / ts->columns) * ts->tileHeight; // row * tileHeight
+
+              auto tile = createObject(r, c, ts->texture, ObjectClass::Level, ts->tileHeight, ts->tileWidth, srcX, srcY);
+              if (layer.name != "Level") {
+                tile.collider.w = tile.collider.h = 0;
+              } else if (layer.name == "Level") {
+                if (auto it = ts->tiles.find(localId); it != ts->tiles.end() && it->second.collider) {
+                  tile.collider = *(it->second.collider);
+                };
               };
-            };
 
-            newLayer.push_back(tile);
+              newLayer.push_back(tile);
+
+            }
 
           }
-
         }
+      } else if (layer.name == "Sky") { // 3
+        // if we store this in gameObject.texture
+        // create a gameObject to push to layer -> bglayer will have one object -->
+        // *texBg1, *texBg2, *texBg3, *texBg4
+        // res.texBg3 = res.map->tileSets[res.bg3Idx].texture;
+        auto bgImg = createObject(0, 0, res.map->tileSets[res.bg3Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
+        bgImg.bgscroll = 0;
+        bgImg.scrollFactor = 1.01f;
+        newLayer.push_back(bgImg);
+        // const tmx::TileSet* ts = pickTileset(gid);
+        // res.map->tileSets[]
+        // store the bg4 tileset index in res as well and pull it out of maps->tileset
+      } else if (layer.name == "Flora2") { // 2
+        // res.texBg2 = res.map->tileSets[res.bg2Idx].texture;
+        auto bgImg = createObject(0, 0, res.map->tileSets[res.bg2Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
+        bgImg.bgscroll = 0;
+        bgImg.scrollFactor = 1.06f;
+        newLayer.push_back(bgImg);
+      } else if (layer.name == "Flora1") { // 1
+        // res.texBg1 = res.map->tileSets[res.bg1Idx].texture;
+        auto bgImg = createObject(0, 0, res.map->tileSets[res.bg1Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
+        bgImg.bgscroll = 0;
+        bgImg.scrollFactor = 1.1f;
+        newLayer.push_back(bgImg);
       }
+
       gs.layers.push_back(std::move(newLayer));
     };
 
@@ -1436,18 +1470,64 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
 
 };
 
-void game_engine::Engine::drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime) {
-  scrollPos -= xVelocity * scrollFactor * deltaTime; // scroll position passed by reference, is updated every loop
-  if (scrollPos <= -texture->w) {
-    scrollPos = 0;
-  }
+void game_engine::Engine::drawParalaxBackground(SDL_Texture* tex,
+                                   float cameraVelX,
+                                   float& scrollPos,
+                                   float scrollFactor,
+                                   float dt,
+                                   float baseY = -175.0f) {
 
-  SDL_FRect dst{
-    .x = scrollPos,
-    .y = 40,
-    .w = texture->w * 2.0f,
-    .h = static_cast<float>(texture->h)
-  };
+    scrollPos -= cameraVelX * scrollFactor * dt;
+    auto scrollY = 0 * scrollFactor * dt;   // factorY ≈ 0 for sky
 
-  SDL_RenderTextureTiled(m_sdlState.renderer, texture, nullptr, 1, &dst);
-};
+    float w = static_cast<float>(tex->w);
+    scrollPos = std::fmod(scrollPos, w);
+    if (scrollPos > 0) scrollPos -= w;
+
+    SDL_Rect saved{};
+    SDL_GetRenderViewport(m_sdlState.renderer, &saved);
+    SDL_SetRenderViewport(m_sdlState.renderer, nullptr);   // no camera offset for BG
+
+    // constant Y, no camera influence
+    SDL_FRect dst1{ scrollPos, baseY, w, (float)tex->h };
+    SDL_FRect dst2{ scrollPos + w, baseY, w, (float)tex->h };
+    SDL_RenderTexture(m_sdlState.renderer, tex, nullptr, &dst1);
+    SDL_RenderTexture(m_sdlState.renderer, tex, nullptr, &dst2);
+
+    SDL_SetRenderViewport(m_sdlState.renderer, &saved);  // restore for world tiles/entities
+
+    // SDL_FRect dst1{ scrollPos,        baseY + scrollY, w, (float)tex->h };
+    // SDL_FRect dst2{ scrollPos + w,    baseY + scrollY, w, (float)tex->h };
+    // SDL_RenderTexture(m_sdlState.renderer, tex, nullptr, &dst1);
+    // SDL_RenderTexture(m_sdlState.renderer, tex, nullptr, &dst2);
+    // // advance
+    // scrollPos -= cameraVelX * scrollFactor * dt;
+
+    // // keep in [-w, 0)
+    // float w = static_cast<float>(tex->w); // or query via SDL_GetTextureSize
+    // scrollPos = std::fmod(scrollPos, w);
+    // if (scrollPos > 0) scrollPos -= w;
+
+    // SDL_FRect dst1{ scrollPos,       y, w, static_cast<float>(tex->h) };
+    // SDL_FRect dst2{ scrollPos + w,   y, w, static_cast<float>(tex->h) };
+
+    // SDL_RenderTexture(m_sdlState.renderer, tex, nullptr, &dst1);
+    // SDL_RenderTexture(m_sdlState.renderer, tex, nullptr, &dst2);
+}
+
+// void game_engine::Engine::drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime) {
+//   scrollPos -= xVelocity * scrollFactor * deltaTime; // scroll position passed by reference, is updated every loop
+//   float wrap = static_cast<float>(texture->w);
+//   if (scrollPos <= -wrap || scrollPos >= wrap) {
+//     scrollPos = 0;
+//   }
+
+//   SDL_FRect dst{
+//     .x = scrollPos,
+//     .y = -175.0f,
+//     .w = texture->w * 2.0f,
+//     .h = static_cast<float>(texture->h)
+//   };
+
+//   SDL_RenderTextureTiled(m_sdlState.renderer, texture, nullptr, 1.0, &dst);
+// };

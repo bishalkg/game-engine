@@ -100,14 +100,47 @@ std::unique_ptr<tmx::Map> tmx::loadMap(const std::string &mapFilePath) {
       } else if (std::strcmp(child->Name(), "group") == 0) {
 
         // Background comes in multiple layers.
-        for (
-          XMLElement *elem = child->FirstChildElement("layer");
-          elem != nullptr;
-          elem = elem->NextSiblingElement("layer"))
-        {
-          auto layer = parseLayer(elem, map->mapWidth, map->mapHeight);
-          map->layers.push_back(std::move(layer));
+        // 1. Parse the imagelayer -> image source
+
+        //          <group id="4" name="Background">
+        //   <imagelayer id="13" name="Sky" parallaxx="1.1" repeatx="1">
+        //    <image source="../../Skyx32.png" width="960" height="544"/>
+        //   </imagelayer>
+        //   <imagelayer id="14" name="Flora1" parallaxx="1.2" repeatx="1">
+        //    <image source="../../Flora1x32.png" width="960" height="544"/>
+        //   </imagelayer>
+        //   <imagelayer id="15" name="Flora2" parallaxx="1.3" repeatx="1">
+        //    <image source="../../Flora2x32.png" width="960" height="544"/>
+        //   </imagelayer>
+        //   <layer id="5" name="Clouds2" width="100" height="17" parallaxx="1.1">
+        //    <data encoding="csv">
+        // 0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+
+        for (auto *elem = child->FirstChildElement(); elem; elem = elem->NextSiblingElement()) {
+
+          if (strcmp(elem->Name(), "imagelayer") == 0) {
+            tmx::Layer layer;
+            layer.name = elem->Attribute("name");
+            layer.id   = elem->IntAttribute("id");
+
+            if (auto *img = elem->FirstChildElement("image")) {
+              layer.img = Image{
+                .source = img->Attribute("source"),
+                .width  = img->IntAttribute("width"),
+                .height = img->IntAttribute("height"),
+              };
+            };
+            // optional: store parallax/repeat
+            layer.parallaxX = elem->FloatAttribute("parallaxx", 1.0f);
+            layer.parallaxY = elem->FloatAttribute("parallaxx", 1.0f);
+
+            map->layers.push_back(std::move(layer));
+          } else if (strcmp(elem->Name(), "layer") == 0) {
+            auto layer = parseLayer(elem, map->mapWidth, map->mapHeight);
+            map->layers.push_back(std::move(layer));
+          }
         }
+
 
       }  else if (std::strcmp(child->Name(), "objectgroup") == 0) {
 
