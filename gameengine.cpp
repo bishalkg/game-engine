@@ -723,8 +723,17 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
 // update updates the state of the passed in game object every render loop
 void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
+  EntityResources entityRes = m_resources.texCharacterMap[obj.spriteType];
+
   if (obj.currentAnimation != -1) {
     obj.animations[obj.currentAnimation].step(deltaTime);
+
+    // if (obj.currentAnimation == m_resources.ANIM_JUMP &&
+    //   obj.animations[m_resources.ANIM_JUMP].isDone()){
+    //   obj.currentAnimation = -1;
+    //   obj.texture = entityRes.texRun;
+    // }
+
   }
 
   // gravity applied globally; downward y force when not grounded
@@ -756,7 +765,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     // }
     // prevUpPressed = upPressed;
 
-    EntityResources entityRes = m_resources.texCharacterMap[obj.spriteType];
+    // EntityResources entityRes = m_resources.texCharacterMap[obj.spriteType];
 
     // update direction
     if (m_sdlState.keys[SDL_SCANCODE_LEFT]) {
@@ -768,14 +777,24 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
     Timer &weaponTimer = obj.data.player.weaponTimer;
     weaponTimer.step(deltaTime);
-
-    const auto handleShooting = [this, &obj, &weaponTimer, &currDirection, deltaTime](
-      SDL_Texture *tex, SDL_Texture *shootTex, int animIndex, int shootAnimIndex){
+    const auto handleShooting = [this, &obj, &entityRes, &weaponTimer, &currDirection, deltaTime](
+      SDL_Texture *tex, SDL_Texture *shootTex, int animIndex, int shootAnimIndex, bool handleJump){
       if (m_sdlState.keys[SDL_SCANCODE_A]) {
 
-        // set player texture during shooting anims
         obj.texture = shootTex;
         obj.currentAnimation = shootAnimIndex;
+
+        if (obj.animations[shootAnimIndex].currentFrame() == 4) {
+          // obj.animations[shootAnimIndex].freezeAtFrame();
+          obj.currentAnimation = -1;   // use spriteFrame path
+          obj.spriteFrame      = 4;
+
+          // TODO i want it to finish the rest of the ScanCodeA is no longer pressed
+        } else {
+          obj.currentAnimation = shootAnimIndex;
+        }
+
+
         if (weaponTimer.isTimedOut()) {
           weaponTimer.reset();
           // create bullets
@@ -799,13 +818,13 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           bullet.animations = m_resources.bulletAnims;
 
           // adjust depending on direction faced; lerp
-          const float left = 4;
-          const float right = 24;
+          const float left = -10;
+          const float right = 50;
           const float t = (obj.direction + 1) / 2.0f; // 0 or 1 taking into account neg sign
           const float xOffset = left + right * t;
           bullet.position = glm::vec2(
             obj.position.x + xOffset,
-            obj.position.y + (obj.spritePixelH/bullet.drawScale) / 2
+            obj.position.y + (obj.spritePixelH/bullet.drawScale) / 3.0
           );
 
           bool foundInactive = false;
@@ -829,7 +848,25 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           MIX_PlayAudio(m_resources.mixer, m_resources.audioShoot);
         }
 
+      } else if (handleJump) {
+        if (obj.currentAnimation != m_resources.ANIM_JUMP &&
+            obj.currentAnimation != -1) {
+            obj.currentAnimation = m_resources.ANIM_JUMP;
+            obj.animations[m_resources.ANIM_JUMP].reset();
+            obj.texture = entityRes.texJump;
+        }
+
+        if (obj.currentAnimation == m_resources.ANIM_JUMP &&
+            obj.animations[m_resources.ANIM_JUMP].isDone()) {
+            obj.currentAnimation = -1;              // mark as finished so it won’t restart
+        }
+
       } else {
+        obj.animations[m_resources.ANIM_SHOOT].reset();
+        obj.animations[m_resources.ANIM_SLIDE_SHOOT].reset();
+        // obj.animations[shootAnimIndex].unfreezeAnim();
+        // and then we need to set freezeAtFrame() when .currentFrame() == 4
+        // and unfreezeAnim when SDL_SCANCODE_A is no longer being pressed and set obj.currentAnim accordingly
         obj.texture = tex;
         obj.currentAnimation = animIndex;
       }
@@ -856,7 +893,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           }
         }
 
-        handleShooting(entityRes.texIdle, entityRes.texShoot, m_resources.ANIM_IDLE, m_resources.ANIM_SHOOT);
+        handleShooting(entityRes.texIdle, entityRes.texShoot, m_resources.ANIM_IDLE, m_resources.ANIM_SHOOT, false);
 
         break;
       }
@@ -867,16 +904,25 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         }
         // move in opposite dir of velocity, sliding
         if (obj.velocity.x * obj.direction < 0 && obj.grounded) {
-          handleShooting(entityRes.texSlide, entityRes.texSlideShoot, m_resources.ANIM_SLIDE, m_resources.ANIM_SLIDE_SHOOT);
+          handleShooting(entityRes.texSlide, entityRes.texSlideShoot, m_resources.ANIM_SLIDE, m_resources.ANIM_SLIDE_SHOOT, false);
         } else {
-          handleShooting(entityRes.texRun, entityRes.texRunShoot, m_resources.ANIM_RUN, m_resources.ANIM_RUN);
+          handleShooting(entityRes.texRun, entityRes.texRunShoot, m_resources.ANIM_RUN, m_resources.ANIM_RUN, false);
         }
 
         break;
       }
       case PlayerState::jumping:
       {
-        handleShooting(entityRes.texJump, entityRes.texRunShoot, m_resources.ANIM_JUMP, m_resources.ANIM_JUMP);
+
+        if (!obj.data.player.jumpImpulseApplied) {
+          obj.data.player.jumpWindupTimer.step(deltaTime);
+          if (obj.data.player.jumpWindupTimer.isTimedOut()) {
+              obj.velocity.y += JUMP_FORCE;   // upward impulse
+              obj.data.player.jumpImpulseApplied = true;
+          }
+        }
+
+        handleShooting(entityRes.texJump, entityRes.texRunShoot, m_resources.ANIM_JUMP, m_resources.ANIM_JUMP, true);
 
         // handleShooting(m_resources.texRun, m_resources.texRunShoot, m_resources.ANIM_PLAYER_RUN, m_resources.ANIM_PLAYER_RUN);
         // obj.texture = m_resources.texJump;
@@ -1026,6 +1072,12 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     obj.grounded = foundGround;
     if (foundGround && obj.objClass == ObjectClass::Player) {
       obj.data.player.state = PlayerState::running;
+
+      if (obj.grounded && obj.data.player.jumpImpulseApplied) {
+        obj.data.player.state = PlayerState::idle;
+        obj.data.player.jumpImpulseApplied = false;
+        obj.data.player.jumpWindupTimer.reset();
+      }
     }
   }
 }
@@ -1173,6 +1225,7 @@ bool game_engine::Engine::initAllTiles() {
     const SDLState &state;
     GameState &gs;
     Resources &res;
+    int countModColliders = 0;
 
     LayerVisitor(const SDLState &state, GameState &gs, Resources &res): state(state), gs(gs), res(res){}
 
@@ -1256,9 +1309,10 @@ bool game_engine::Engine::initAllTiles() {
               auto tile = createObject(r, c, ts->texture, ObjectClass::Level, ts->tileHeight, ts->tileWidth, srcX, srcY);
               if (layer.name != "Level") {
                 tile.collider.w = tile.collider.h = 0;
-              } else if (layer.name == "Level") {
+              } else if (layer.name == "Level") { // 4616 firstgid of Tileset
                 if (auto it = ts->tiles.find(localId); it != ts->tiles.end() && it->second.collider) {
                   tile.collider = *(it->second.collider);
+                  countModColliders += 1;
                 };
               };
 
@@ -1271,12 +1325,12 @@ bool game_engine::Engine::initAllTiles() {
       } else if (layer.name == "Sky") { // 4
         auto bgImg = createObject(0, 0, res.map->tileSets[res.bg4Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
-        bgImg.scrollFactor = 0.4f;
+        bgImg.scrollFactor = 0.2f;
         newLayer.push_back(bgImg);
       } else if (layer.name == "Clouds") { // 3
         auto bgImg = createObject(0, 0, res.map->tileSets[res.bg3Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
-        bgImg.scrollFactor = 0.4f;
+        bgImg.scrollFactor = 0.2f;
         newLayer.push_back(bgImg);
       } else if (layer.name == "Flora2") { // 2
         auto bgImg = createObject(0, 0, res.map->tileSets[res.bg2Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
@@ -1286,7 +1340,7 @@ bool game_engine::Engine::initAllTiles() {
       } else if (layer.name == "Flora1") { // 1
         auto bgImg = createObject(0, 0, res.map->tileSets[res.bg1Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
-        bgImg.scrollFactor = 0.2f;
+        bgImg.scrollFactor = 0.4f;
         newLayer.push_back(bgImg);
       }
 
@@ -1398,6 +1452,8 @@ bool game_engine::Engine::initAllTiles() {
     std::visit(visitor, layer);
   };
 
+  std::cout << "count:" << visitor.countModColliders << std::endl;
+
 
   return m_gameState.playerIndex != -1;
 };
@@ -1410,12 +1466,18 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
     switch (obj.data.player.state) {
       case PlayerState::idle:
       {
-        if (key == SDL_SCANCODE_UP && keyDown && obj.grounded) {
-          obj.velocity.y += JUMP_FORCE;
+        if (key == SDL_SCANCODE_UP && obj.grounded) {
+          // obj.velocity.y += JUMP_FORCE;
           obj.data.player.state = PlayerState::jumping;
-          obj.animations[m_resources.ANIM_JUMP].reset();
+
+          // obj.animations[m_resources.ANIM_JUMP].reset();
+
           input.move = PlayerInput::Jump;
           input.shouldSendMessage = true;
+          // obj.animations[m_resources.ANIM_JUMP].reset();
+          // obj.currentAnimation = m_resources.ANIM_JUMP;
+          obj.data.player.jumpWindupTimer.reset(); // 100 ms delay (set duration in ctor)
+          obj.data.player.jumpImpulseApplied = false;
         } else if (key == SDL_SCANCODE_S && keyDown) {
 
           // todo handle swing of sword
@@ -1431,23 +1493,29 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
         //   obj.velocity.y = 0;
         //   obj.data.player.state = PlayerState::idle;
         // }
-        if (obj.animations[m_resources.ANIM_JUMP].isDone()) {
-          // fix current frame to last frame
-          obj.currentAnimation = -1;
-        }
+        // if (obj.animations[m_resources.ANIM_JUMP].isDone()) {
+        //   // fix current frame to last frame
+        //   obj.currentAnimation = -1;
+        // }
 
         if (obj.grounded) { // once you stop holding down the key, set player state back to idle
           obj.velocity.y = 0;
           obj.data.player.state = PlayerState::idle;
-          obj.animations[m_resources.ANIM_JUMP].reset();
+
+          // obj.animations[m_resources.ANIM_JUMP].reset();
         }
         break;
       }
       case PlayerState::running:
       {
-        if (key == SDL_SCANCODE_UP && keyDown && obj.grounded) {
-          obj.velocity.y += JUMP_FORCE;
+        if (key == SDL_SCANCODE_UP && obj.grounded) {
+          // obj.velocity.y += JUMP_FORCE;
           obj.data.player.state = PlayerState::jumping;
+
+          // obj.animations[m_resources.ANIM_JUMP].reset();
+          obj.data.player.jumpWindupTimer.reset(); // 100 ms delay (set duration in ctor)
+          obj.data.player.jumpImpulseApplied = false;
+
           input.move = game_engine::PlayerInput::Jump;
           input.shouldSendMessage = true;
         }

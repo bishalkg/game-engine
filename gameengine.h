@@ -335,7 +335,7 @@ namespace game_engine {
       texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SLIDE] = Animation(4, 0.5f);
       texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SHOOT] = Animation(7, 0.6f);
       texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SLIDE_SHOOT] = Animation(7, 0.5f);
-      texCharacterMap[SpriteType::Player_Mage].anims[ANIM_JUMP] = Animation(8, 0.7f);
+      texCharacterMap[SpriteType::Player_Mage].anims[ANIM_JUMP] = Animation(8, 0.5f);
       texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SWING] = Animation(4, 1.0f);
 
       if (!headless) {
