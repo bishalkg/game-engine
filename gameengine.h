@@ -236,7 +236,7 @@ namespace game_engine {
     std::vector<MIX_Track*> audioTracks;
     MIX_Mixer* mixer;
     size_t projectileTrackIdx = 0; // initialize once
-    Timer whooshCooldown{0.10f};  // 100 ms. needs to be here and not on each projectile entity
+    Timer whooshCooldown{0.35f};  // 100 ms. needs to be here and not on each projectile entity
 
 
 

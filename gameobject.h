@@ -36,7 +36,7 @@ struct PlayerData {
   Timer jumpWindupTimer;
   bool jumpImpulseApplied;
 
-  PlayerData(): weaponTimer(0.1f), damageTimer(1.0f), jumpWindupTimer(0.05f) { state = PlayerState::idle; healthPoints = 100; };
+  PlayerData(): weaponTimer(0.35f), damageTimer(1.0f), jumpWindupTimer(0.05f) { state = PlayerState::idle; healthPoints = 100; };
 };
 
 struct LevelData {
@@ -59,7 +59,7 @@ struct EnemyData {
 struct BulletData{
   BulletState state;
   Timer liveTimer;
-  BulletData(): state(BulletState::moving), liveTimer(0.5f) {};
+  BulletData(): state(BulletState::moving), liveTimer(0.7f) {};
 };
 
 

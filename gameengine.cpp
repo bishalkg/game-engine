@@ -786,8 +786,8 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
         if (obj.animations[shootAnimIndex].currentFrame() == 4) {
           // obj.animations[shootAnimIndex].freezeAtFrame();
-          obj.currentAnimation = -1;   // use spriteFrame path
-          obj.spriteFrame      = 4;
+          // obj.currentAnimation = -1;   // use spriteFrame path
+          // obj.spriteFrame      = 4;
 
           // TODO i want it to finish the rest of the ScanCodeA is no longer pressed
         } else {
@@ -811,7 +811,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           const int yJitter = 50;
           const float yVelocity = SDL_rand(yJitter) - yJitter / 1.5f;
           bullet.velocity = glm::vec2(
-            obj.velocity.x + 300.0f,
+            obj.velocity.x + 200.0f,
             yVelocity
           ) * obj.direction;
           bullet.maxSpeedX = 1000.0f;
@@ -842,7 +842,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         }
 
         // When you shoot (no loops, no track index needed):
-        m_resources.whooshCooldown.step(deltaTime);
+        m_resources.whooshCooldown.step(deltaTime); // whooshCooldown should have same length as bullet weaponTimer
         if (m_resources.whooshCooldown.isTimedOut()) {
           m_resources.whooshCooldown.reset();
           MIX_PlayAudio(m_resources.mixer, m_resources.audioShoot);
