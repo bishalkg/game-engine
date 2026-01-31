@@ -26,6 +26,7 @@ add_executable(game_engine
   main.cpp
   app.cpp
   gameengine.cpp
+  game_server.cpp
   tmx.cpp
   vendor/tinyxml2/tinyxml2.cpp
 )
@@ -50,6 +51,14 @@ target_include_directories(game_engine PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendo
 target_link_libraries(imgui PUBLIC SDL3::SDL3)  # backend needs SDL headers
 target_link_libraries(game_engine
   PRIVATE SDL3::SDL3 SDL3_image::SDL3_image SDL3_mixer::SDL3_mixer glm::glm imgui asio
+)
+
+add_executable(net_common_tests
+  tests/net_common_tests.cpp
+)
+target_include_directories(net_common_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(net_common_tests
+  PRIVATE SDL3::SDL3 SDL3_image::SDL3_image SDL3_mixer::SDL3_mixer glm::glm asio
 )
 
 

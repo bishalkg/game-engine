@@ -2,7 +2,7 @@
 #include "net_common.h"
 #include "net_message.h"
 #include "net_ts_queue.h"
-#include "net_connection.h"
+#include "net_server.h"
 
 namespace net {
 
@@ -11,11 +11,12 @@ namespace net {
   class client_interface
   {
 
-    client_interface() : m_socket(m_context){} // init socket with io context
-
-    virtual ~client_interface() { Disconnect(); } // disconnect if client destroyed
-
     public:
+
+      client_interface() : m_socket(m_context){} // init socket with io context
+
+      virtual ~client_interface() { Disconnect(); } // disconnect if client destroyed
+
       bool Connect(const std::string& host, const uint16_t port)
       {
         try {
@@ -41,10 +42,10 @@ namespace net {
           return false;
         }
 
-        return false;
+        return true;
       }
 
-      bool Disconnect() {
+      void Disconnect() {
 
         if (IsConnected()) {
           m_connection->Disconnect();
@@ -77,6 +78,10 @@ namespace net {
         return m_qMessagesIn;
       }
 
+      // bool IsServerValidated() const {
+      //   return m_isServerValidated;
+      // }
+
     protected:
       // client owns the asio context
       asio::io_context m_context;
@@ -86,6 +91,8 @@ namespace net {
       asio::ip::tcp::socket m_socket;
       // client only holds single connection to server
       std::unique_ptr<connection<T>> m_connection;
+
+      // bool m_isServerValidated = false;
 
 
     private:

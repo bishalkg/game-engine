@@ -63,7 +63,7 @@ namespace net
         }
       }
 
-      bool ConnectToServer(const asio::ip::tcp::resolver::results_type& endpoints) {
+      void ConnectToServer(const asio::ip::tcp::resolver::results_type& endpoints) {
         if (m_nOwnerType == owner::client) {
 
           asio::async_connect(
@@ -80,7 +80,7 @@ namespace net
         }
       }
 
-      bool Disconnect() {
+      void Disconnect() {
         asio::post(m_asioContext, [this]() { m_socket.close(); });
       }
 

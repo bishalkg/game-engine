@@ -9,6 +9,8 @@ class Animation
 {
   Timer timer;
   int frameCount;
+  // bool frameFrozen;
+  // int frozenFrame;
 
   public:
     Animation() : timer(0), frameCount(0) {}
@@ -32,5 +34,23 @@ class Animation
     };
 
     bool isDone() const { return timer.isTimedOut(); }
+
+    void reset() { timer.reset(); }
+
+    // bool isFrameFrozen() { return frameFrozen; }
+
+    // void freezeAtFrame() {
+    //   auto currFrame = currentFrame();
+    //   frozenFrame = currFrame;
+    //   return;
+    // }
+
+    // void unfreezeAnim() {
+    //   frameFrozen = false;
+    // }
+
+    // int getFrozenFrame() {
+    //   return frozenFrame;
+    // }
 
 };

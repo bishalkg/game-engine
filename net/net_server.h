@@ -36,8 +36,10 @@ namespace net
         return true;
       }
 
-      bool Stop()
+      void Stop()
       {
+        m_qMessagesIn.wakeAll();
+
         m_asioContext.stop();
 
         if (m_threadContext.joinable())
@@ -45,7 +47,8 @@ namespace net
           m_threadContext.join();
         }
 
-        std::cout << "Server Stopped!\n"
+
+        std::cout << "Server Stopped!\n" << std::endl;
 
       }
 
@@ -110,7 +113,7 @@ namespace net
           }
           else
           {
-            OnClientDisconnect();
+            OnClientDisconnect(client);
             client.reset();
             // can't do erase here or could break the for loop
             shouldErase = true;
@@ -128,8 +131,8 @@ namespace net
       }
 
       // setting unsigned int to -1 sets it to max number;
-      // Update runs in a tight loop so we enable condition variable waiting to not waste cpu cycles trying to read the m_qMessagesIn when its empty
-      void ProcessIncomingMessages(size_t nMaxMessages = -1, bool enableWaiting) {
+      // ProcessIncomingMessages runs in a tight loop so we enable condition variable waiting to not waste cpu cycles trying to read the m_qMessagesIn when its empty
+      void ProcessIncomingMessages(size_t nMaxMessages = -1, bool enableWaiting = true) {
 
         // *Server Sleeps* Until input queue has msg; BLOCKING
         if (enableWaiting) {
@@ -138,15 +141,19 @@ namespace net
 
         size_t nMessageCount = 0;
 
+        // for now its ok to process one message at a time, but later we might want to process a bunch
+        // that have queued up
         // limit max number of messages being read on single Update call
         while (nMessageCount < nMaxMessages && !m_qMessagesIn.empty())
         {
           auto msg = m_qMessagesIn.pop_front();
 
+          std::cout << "ProcessIncomingMessages:" << msg << std::endl;
+
           OnMessage(msg.remote, msg.msg);
 
-          nMessageCount++
-        }
+          nMessageCount++;
+        };
 
       }
 
@@ -168,18 +175,19 @@ namespace net
         }
 
       public:
-        virtual void OnClientValidated(std::shared_ptr<conntection<T>> client) {
+        virtual void OnClientValidated(std::shared_ptr<connection<T>> client) {
 
         }
 
       protected:
+
+        asio::io_context m_asioContext;
+        std::thread m_threadContext;
+
         tsqueue<owned_message<T>> m_qMessagesIn; // server owns this incoming msg queue, passed as ref to connection
 
         // container of all valid conns
         std::deque<std::shared_ptr<connection<T>>> m_deqConns;
-
-        asio::io_context m_asioContext;
-        std::thread m_threadContext;
 
         // socket of asio server is abstracted, accepter listens on socket for connections
         asio::ip::tcp::acceptor m_asioAccepter;

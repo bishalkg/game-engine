@@ -11,11 +11,20 @@
 namespace tmx
 {
 
+  struct Image
+  {
+    std::string source;// path from TSX
+    int width, height;
+  };
+
   struct Layer
   {
     int id;
     std::string name;
     std::vector<uint32_t> data;  // GIDs, size = mapWidth * mapHeight
+    std::optional<Image> img; // for background layers that are full images not tiles
+    int parallaxX = 1;
+    int parallaxY = 1;
   };
 
   struct LayerObject
@@ -32,23 +41,19 @@ namespace tmx
     std::vector<LayerObject> objects;
   };
 
-  struct Image
-  {
-    std::string source;// path from TSX
-    int width, height;
-  };
-
   // struct Tile
   // {
   //   int id;
   //   Image image;
   // };
 
+
   struct TileFrame { int tileId; int durationMs; };
 
   struct TileMeta {
     std::vector<TileFrame> animation; // empty if none
     // add properties here if needed
+    std::optional<SDL_FRect> collider;
   };
 
   struct TileSet
@@ -60,7 +65,7 @@ namespace tmx
 
     // runtime-only:
     SDL_Texture* texture = nullptr;
-    std::unordered_map<int, TileMeta> tiles; // only entries for <tile> elements (animations, props)
+    std::unordered_map<uint32_t, TileMeta> tiles; // only entries for <tile> elements (animations, props)
 
     public:
       TileSet(int count, int tileWidth, int tileHeight, int columns, int firstgid)
