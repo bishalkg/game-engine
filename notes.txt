@@ -298,3 +298,65 @@ tileset -> image -> tile -> objectgroup -> object
     <object id="1" x="0" y="0.158667" width="30.8893" height="29.144"/>
    </objectgroup>
   </tile>
+
+
+  1) Split “global” vs “per‑level” assets
+
+Global (lives for entire run): UI fonts, menus, player/enemy sprites, bullet sprites, common sounds (whoosh, hit), mixers, shaders.
+Per‑level: TMX map + tilesets, level-only textures (parallax layers, props), level music/ambience, collision data, spawn points, scripted triggers.
+2) Introduce a lightweight Level struct
+
+struct Level {
+    std::string name;
+    std::string mapPath;          // TMX
+    std::string musicPath;
+    std::vector<std::string> parallaxPaths;
+    std::unique_ptr<tmx::Map> map;
+    std::vector<SDL_Texture*> levelTextures; // parallax, tileset textures if not shared
+    MIX_Track* musicTrack{nullptr};
+};
+Keep Resources as the owner/manager. Add std::unique_ptr<Level> currentLevel; and maybe a small cache std::unordered_map<std::string, std::unique_ptr<Level>> loadedLevels if you want quick backtracking.
+3) Loading flow
+
+bool Resources::loadLevel(const std::string& levelId) {
+    unloadLevel(); // free previous level-scoped assets
+    auto lvl = std::make_unique<Level>();
+    // parse level manifest (json/toml) to fill mapPath, parallaxPaths, musicPath
+    lvl->map = parseTMX(lvl->mapPath);
+    lvl->levelTextures = loadParallaxTextures(parallaxPaths);
+    lvl->musicTrack = loadTrack(musicPath);
+    currentLevel = std::move(lvl);
+    return true;
+}
+unloadLevel() destroys levelTextures, frees TMX map, stops level music.
+Global assets remain untouched.
+4) Switching levels in-game
+
+Detect collision with a “portal” tile/object in TMX (object layer named e.g. Portal with property dest=level_2).
+On trigger:
+Set game state to Loading (freeze gameplay, show loading screen/fade).
+Stop level music, fade audio if desired.
+Call resources.loadLevel(destId);
+Rebuild world objects: initAllTiles() using currentLevel->map, reset player position to spawn defined in that map.
+Set state back to Playing, fade in music.
+5) Async for smoothness
+
+Kick off std::thread to load the next level while showing a progress bar; only swap currentLevel pointer on the main thread when loading completes.
+Use a small “handoff” struct for thread-safe results.
+6) Level manifest
+
+Add a simple descriptor file per level (JSON/TOML) listing TMX path, parallax PNGs, music, ambient SFX, optional spawn point, sky color. This avoids hardcoding paths in code.
+7) Memory hygiene
+
+Keep tileset textures shared if multiple levels use the same atlas: store them in a global texture cache keyed by path; reference-count or track uses to avoid double-loads.
+Everything else (parallax PNGs, map) is freed on unloadLevel().
+8) Code changes (minimal)
+
+Resources gains loadLevel(id), unloadLevel(), currentLevel.
+Engine::initAllTiles() reads resources.currentLevel->map instead of a single global.
+Portal handling: in collision response, if objB has property destLevel, call a queueLevelSwitch(dest).
+9) Transition polish
+
+Fade-out → loading screen → fade-in; keep player input disabled during load; optionally fade music separately.
+Save/restore player stats between levels; position them at the new map’s spawn object.
+This keeps your current architecture intact, isolates level-specific data, and makes swapping maps predictable and safe.
