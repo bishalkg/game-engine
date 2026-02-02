@@ -14,7 +14,7 @@
 #include "gameobject.h"
 #include "game_server.h" // needs complete type for unique_ptr destructor
 #include "game_client.h"
-#include "level_manifest.h"
+#include "level_manifest.cpp"
 
 #include "imgui.h"
 #include "backends/imgui_impl_sdl3.h"
@@ -223,9 +223,7 @@ namespace game_engine {
     size_t projectileTrackIdx = 0; // initialize once
     Timer whooshCooldown{0.25f};  // 100 ms. needs to be here and not on each projectile entity
 
-    std::unique_ptr<Level> lvl;
-
-
+    std::unique_ptr<Level> m_currLevel;
 
     std::pair<MIX_Audio*, MIX_Track*> loadAudioChunk(const std::string& filepath, float gain = 1.0f) {
 
@@ -270,128 +268,118 @@ namespace game_engine {
 
       unloadLevel();
 
-      this->lvl = std::make_unique<Level>();
-      LevelAssets& assets = LevelAssetsMap.at(levelId);
+      m_currLevel = std::make_unique<Level>();
+      LevelAssets& assets = LEVEL_CONFIG.at(levelId);
 
-      lvl->map = tmx::loadMap(assets.mapPath); // only the resource struct instance can hold this pointer and it will be automatically deleted when not used (eg. when we swap out maps)
+      m_currLevel->map = tmx::loadMap(assets.mapPath); // only the resource struct instance can hold this pointer and it will be automatically deleted when not used (eg. when we swap out maps)
 
       if (!headless) {
         int i = 0;
-        for (tmx::TileSet &tileSet: lvl->map->tileSets)
+        for (tmx::TileSet &tileSet: m_currLevel->map->tileSets)
         {
           // each tileSet already loads in each texture, including the background textures we need; need to set onto *texBg1, *texBg2, *texBg3, *texBg4
           const std::string imagePath = "data/tiles/" + std::filesystem::path(tileSet.image.source).filename().string();
-          tileSet.texture = lvl->loadTexture(state.renderer, imagePath);
+          tileSet.texture = m_currLevel->loadTexture(state.renderer, imagePath);
           // tilesetTextures.push_back(&tileSet); // need to fix for shutdown
           // Skyx32 (3) , Flora1x32 (2), Flora2x32 (1)
           if (imagePath.find(assets.background4PathName) != std::string::npos) {
-            lvl->bg4Idx = i;
+            m_currLevel->bg4Idx = i;
           } else if (imagePath.find(assets.background3PathName) != std::string::npos) {
-            lvl->bg3Idx = i;
+            m_currLevel->bg3Idx = i;
           } else if (imagePath.find(assets.background2PathName) != std::string::npos) {
-            lvl->bg2Idx = i;
+            m_currLevel->bg2Idx = i;
           } else if (imagePath.find(assets.background1PathName) != std::string::npos) {
-            lvl->bg1Idx = i;
+            m_currLevel->bg1Idx = i;
           }
           i++;
         }
       }
 
-      std::sort(lvl->map->tileSets.begin(), lvl->map->tileSets.end(),
+      std::sort(m_currLevel->map->tileSets.begin(), m_currLevel->map->tileSets.end(),
       [](const tmx::TileSet& a, const tmx::TileSet& b) {
           return a.firstgid < b.firstgid;
       });
 
-      lvl->texCharacterMap[SpriteType::Player_Knight].anims.resize(10); // not reserve
-      lvl->texCharacterMap[SpriteType::Player_Knight].anims[ANIM_IDLE] = Animation(4, 0.8f); // 8 frames in 1.6 sec
-      lvl->texCharacterMap[SpriteType::Player_Knight].anims[ANIM_RUN] = Animation(7, 0.8f); //4
-      lvl->texCharacterMap[SpriteType::Player_Knight].anims[ANIM_SLIDE] = Animation(7, 1.0f);
-      lvl->texCharacterMap[SpriteType::Player_Knight].anims[ANIM_SHOOT] = Animation(5, 0.5f);
-      lvl->texCharacterMap[SpriteType::Player_Knight].anims[ANIM_SLIDE_SHOOT] = Animation(5, 0.5f);
-      lvl->texCharacterMap[SpriteType::Player_Knight].anims[ANIM_SWING] = Animation(4, 1.0f);
-      lvl->texCharacterMap[SpriteType::Player_Knight].anims[ANIM_JUMP] = Animation(6, 0.5f);
-      lvl->texCharacterMap[SpriteType::Player_Mage].anims.resize(10); // not reserve
-      lvl->texCharacterMap[SpriteType::Player_Mage].anims[ANIM_IDLE] = Animation(8, 1.6f); // 8 frames in 1.6 sec
-      lvl->texCharacterMap[SpriteType::Player_Mage].anims[ANIM_RUN] = Animation(8, 0.6f); //4
-      lvl->texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SLIDE] = Animation(4, 0.5f);
-      lvl->texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SHOOT] = Animation(7, 0.6f);
-      lvl->texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SLIDE_SHOOT] = Animation(7, 0.5f);
-      lvl->texCharacterMap[SpriteType::Player_Mage].anims[ANIM_JUMP] = Animation(8, 0.5f);
-      lvl->texCharacterMap[SpriteType::Player_Mage].anims[ANIM_SWING] = Animation(4, 1.0f);
-
+      // load enemies for this level
       if (!headless) {
-        // texIdle = loadTexture(state.renderer,  "data/players/Knight_3/Idle.png");
-        // // texIdle = loadTexture(state.renderer,  "data/move_helmet_marie_42.png");
-        // texRun = loadTexture(state.renderer, "data/players/Knight_3/Run.png");       // 1024 × 128
-        // texSlide = loadTexture(state.renderer, "data/players/Knight_3/Run.png");
-        // // texRun = loadTexture(state.renderer, "data/move_helmet_marie_42.png");
-        // texShoot = loadTexture(state.renderer, "data/players/Knight_3/Attack 1.png");
-        // texRunShoot = loadTexture(state.renderer, "data/players/Knight_3/Run+Attack.png");
-        // texSlideShoot = loadTexture(state.renderer, "data/players/Knight_3/Run+Attack.png");
-        // texSwing = loadTexture(state.renderer, "data/players/Knight_3/Attack 2.png");
-        // texJump = loadTexture(state.renderer, "data/players/Knight_3/Jump.png");
 
-        lvl->texCharacterMap[SpriteType::Player_Knight].texIdle = lvl->loadTexture(state.renderer,  "data/players/Knight_3/Idle.png");
-        lvl->texCharacterMap[SpriteType::Player_Knight].texRun = lvl->loadTexture(state.renderer, "data/players/Knight_3/Run.png");
-        lvl->texCharacterMap[SpriteType::Player_Knight].texSlide = lvl->loadTexture(state.renderer,  "data/players/Knight_3/Run.png");
-        lvl->texCharacterMap[SpriteType::Player_Knight].texShoot = lvl->loadTexture(state.renderer,  "data/players/Knight_3/Attack 1.png");
-        lvl->texCharacterMap[SpriteType::Player_Knight].texRunShoot = lvl->loadTexture(state.renderer,  "data/players/Knight_3/Run+Attack.png");
-        lvl->texCharacterMap[SpriteType::Player_Knight].texSlideShoot = lvl->loadTexture(state.renderer,  "data/players/Knight_3/Run+Attack.png");
-        lvl->texCharacterMap[SpriteType::Player_Knight].texSwing = lvl->loadTexture(state.renderer,  "data/players/Knight_3/Attack 2.png");
-        lvl->texCharacterMap[SpriteType::Player_Knight].texJump =lvl-> loadTexture(state.renderer,  "data/players/Knight_3/Jump.png");
-        lvl->texCharacterMap[SpriteType::Player_Mage].texIdle = lvl->loadTexture(state.renderer,  "data/players/Mage/Idle.png");
-        lvl->texCharacterMap[SpriteType::Player_Mage].texWalk = lvl->loadTexture(state.renderer,  "data/players/Mage/Walk.png");
-        lvl->texCharacterMap[SpriteType::Player_Mage].texRun = lvl->loadTexture(state.renderer, "data/players/Mage/Run.png");
-        lvl->texCharacterMap[SpriteType::Player_Mage].texSlide = lvl->loadTexture(state.renderer,  "data/players/Mage/Hurt.png");
-        lvl->texCharacterMap[SpriteType::Player_Mage].texShoot = lvl->loadTexture(state.renderer,  "data/players/Mage/Attack_1.png");
-        lvl->texCharacterMap[SpriteType::Player_Mage].texRunShoot = lvl->loadTexture(state.renderer,  "data/players/Mage/Attack_1.png");
-        lvl->texCharacterMap[SpriteType::Player_Mage].texSlideShoot = lvl->loadTexture(state.renderer,  "data/players/Mage/Attack_1.png");
-        lvl->texCharacterMap[SpriteType::Player_Mage].texSwing = lvl->loadTexture(state.renderer,  "data/players/Mage/Attack_1.png");
-        lvl->texCharacterMap[SpriteType::Player_Mage].texJump = lvl->loadTexture(state.renderer,  "data/players/Mage/Jump.png");
+        for (const SpriteType& character: assets.enemyTypes) {
+
+          SpriteAssets& spriteAssets = ENEMY_CONFIG.at(character);
+
+          m_currLevel->texCharacterMap[character].texIdle = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.idleTex);
+          m_currLevel->texCharacterMap[character].texWalk = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.walkTex);
+          m_currLevel->texCharacterMap[character].texRun = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.runTex);
+          m_currLevel->texCharacterMap[character].texSwing = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.attackTex);
+          m_currLevel->texCharacterMap[character].texHit = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.hitTex);
+          m_currLevel->texCharacterMap[character].texDie = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.dieTex);
+
+          m_currLevel->texCharacterMap[character].anims.resize(10);
+          auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
+          m_currLevel->texCharacterMap[character].anims[ANIM_IDLE] = Animation(idleFrames, idleSeconds);
+
+          auto [runFrames, runSeconds] = spriteAssets.animSettings.at(ANIM_RUN);
+          m_currLevel->texCharacterMap[character].anims[ANIM_RUN] = Animation(runFrames, runSeconds);
+
+          auto [hitFrames, hitSeconds] = spriteAssets.animSettings.at(ANIM_HIT);
+          m_currLevel->texCharacterMap[character].anims[ANIM_HIT] = Animation(hitFrames, hitSeconds);
+
+          auto [dieFrames, dieSeconds] = spriteAssets.animSettings.at(ANIM_DIE);
+          m_currLevel->texCharacterMap[character].anims[ANIM_DIE] = Animation(dieFrames, dieSeconds);
+
+          auto [attackFrames, attackSeconds] = spriteAssets.animSettings.at(ANIM_SWING);
+          m_currLevel->texCharacterMap[character].anims[ANIM_SWING] = Animation(attackFrames, attackSeconds);
+          // texCharacterMap[SpriteType::Minotaur_1].anims[ANIM_JUMP] = Animation(6, 0.5f);
+
+        }
       }
 
-      bulletAnims.resize(2);
-      bulletAnims[ANIM_BULLET_MOVING] = Animation(9, 1.0f);
-      bulletAnims[ANIM_BULLET_HIT] = Animation(4, 0.15f);
+      // load player assets. NEED TO MOVE THIS TO BE GLOBAL SO WE DONT RE CREATE EACH LEVEL
       if (!headless) {
-        // texBullet = loadTexture(state.renderer, "data/bullet.png");
-        // texBulletHit = loadTexture(state.renderer, "data/bullet_hit.png");
-        texBulletHit = lvl->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
-        texBullet = lvl->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
-      }
 
-      lvl->texCharacterMap[SpriteType::Minotaur_1].anims.resize(10);
-      lvl->texCharacterMap[SpriteType::Minotaur_1].anims[ANIM_IDLE] = Animation(10, 1.0f);
-      lvl->texCharacterMap[SpriteType::Minotaur_1].anims[ANIM_RUN] = Animation(12, 1.0f);
-      lvl->texCharacterMap[SpriteType::Minotaur_1].anims[ANIM_HIT] = Animation(3, 0.5f);
-      lvl->texCharacterMap[SpriteType::Minotaur_1].anims[ANIM_DIE] =  Animation(5, 0.5f);
-      lvl->texCharacterMap[SpriteType::Minotaur_1].anims[ANIM_SWING] = Animation(4, 1.0f); // TODO
-      // texCharacterMap[SpriteType::Minotaur_1].anims[ANIM_JUMP] = Animation(6, 0.5f); // TODO
+        for (auto const [character, spriteAssets]: PLAYER_CONFIG) {
 
+          m_currLevel->texCharacterMap[character].texIdle = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.idleTex);
+          m_currLevel->texCharacterMap[character].texWalk = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.walkTex);
+          m_currLevel->texCharacterMap[character].texRun = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.runTex);
+          m_currLevel->texCharacterMap[character].texSwing = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.attackTex);
+          m_currLevel->texCharacterMap[character].texHit = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.hitTex);
+          m_currLevel->texCharacterMap[character].texDie = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.dieTex);
+          m_currLevel->texCharacterMap[character].texShoot = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.shootTex);
+          m_currLevel->texCharacterMap[character].texSlide = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.slideTex);
+          m_currLevel->texCharacterMap[character].texRunShoot = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.runShootTex);
+          m_currLevel->texCharacterMap[character].texSlideShoot = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.slideShootTex);
+          m_currLevel->texCharacterMap[character].texJump = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.jumpTex);
 
-      lvl->texCharacterMap[SpriteType::Skeleton_Warrior].anims.resize(10);
-      lvl->texCharacterMap[SpriteType::Skeleton_Warrior].anims[ANIM_IDLE] = Animation(7, 1.0f);
-      lvl->texCharacterMap[SpriteType::Skeleton_Warrior].anims[ANIM_RUN] = Animation(8, 1.0f);
-      lvl->texCharacterMap[SpriteType::Skeleton_Warrior].anims[ANIM_HIT] = Animation(2, 0.5f);
-      lvl->texCharacterMap[SpriteType::Skeleton_Warrior].anims[ANIM_DIE] =  Animation(4, 0.5f);
-      lvl->texCharacterMap[SpriteType::Skeleton_Warrior].anims[ANIM_SWING] = Animation(5, 1.0f); // TODO
+          m_currLevel->texCharacterMap[character].anims.resize(10);
+          auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
+          m_currLevel->texCharacterMap[character].anims[ANIM_IDLE] = Animation(idleFrames, idleSeconds);
 
-      // 896 × 128
-      if (!headless) {
-        lvl->texCharacterMap[SpriteType::Minotaur_1].texIdle = lvl->loadTexture(state.renderer,  "data/enemies/Minotaur_1/Idle.png");
-        lvl->texCharacterMap[SpriteType::Minotaur_1].texWalk = lvl->loadTexture(state.renderer, "data/enemies/Minotaur_1/Walk.png");
-        lvl->texCharacterMap[SpriteType::Minotaur_1].texRun = lvl->loadTexture(state.renderer, "data/enemies/Minotaur_1/Walk.png");
-        lvl->texCharacterMap[SpriteType::Minotaur_1].texSwing = lvl->loadTexture(state.renderer,  "data/enemies/Minotaur_1/Attack.png");
-        lvl->texCharacterMap[SpriteType::Minotaur_1].texHit = lvl->loadTexture(state.renderer,  "data/enemies/Minotaur_1/Hurt.png");
-        lvl->texCharacterMap[SpriteType::Minotaur_1].texDie = lvl->loadTexture(state.renderer,  "data/enemies/Minotaur_1/Dead.png");
+          auto [runFrames, runSeconds] = spriteAssets.animSettings.at(ANIM_RUN);
+          m_currLevel->texCharacterMap[character].anims[ANIM_RUN] = Animation(runFrames, runSeconds);
 
+          auto [slideFrames, slideSeconds] = spriteAssets.animSettings.at(ANIM_SLIDE);
+          m_currLevel->texCharacterMap[character].anims[ANIM_SLIDE] = Animation(slideFrames, slideSeconds);
 
-        lvl->texCharacterMap[SpriteType::Skeleton_Warrior].texIdle = lvl->loadTexture(state.renderer,  "data/enemies/Skeleton_Warrior/Idle.png");
-        lvl->texCharacterMap[SpriteType::Skeleton_Warrior].texWalk = lvl->loadTexture(state.renderer, "data/enemies/Skeleton_Warrior/Walk.png");
-        lvl->texCharacterMap[SpriteType::Skeleton_Warrior].texRun = lvl->loadTexture(state.renderer, "data/enemies/Skeleton_Warrior/Run.png");
-        lvl->texCharacterMap[SpriteType::Skeleton_Warrior].texSwing = lvl->loadTexture(state.renderer,  "data/enemies/Skeleton_Warrior/Attack_1.png");
-        lvl->texCharacterMap[SpriteType::Skeleton_Warrior].texHit = lvl->loadTexture(state.renderer,  "data/enemies/Skeleton_Warrior/Hurt.png");
-        lvl->texCharacterMap[SpriteType::Skeleton_Warrior].texDie = lvl->loadTexture(state.renderer,  "data/enemies/Skeleton_Warrior/Dead.png");
+          auto [shootFrames, shootSeconds] = spriteAssets.animSettings.at(ANIM_SHOOT);
+          m_currLevel->texCharacterMap[character].anims[ANIM_SHOOT] = Animation(shootFrames, shootSeconds);
+
+          auto [slideShootFrames, slideShootSeconds] = spriteAssets.animSettings.at(ANIM_SLIDE_SHOOT);
+          m_currLevel->texCharacterMap[character].anims[ANIM_SLIDE_SHOOT] = Animation(slideShootFrames, slideShootSeconds);
+
+          auto [hitFrames, hitSeconds] = spriteAssets.animSettings.at(ANIM_HIT);
+          m_currLevel->texCharacterMap[character].anims[ANIM_HIT] = Animation(hitFrames, hitSeconds);
+
+          auto [dieFrames, dieSeconds] = spriteAssets.animSettings.at(ANIM_DIE);
+          m_currLevel->texCharacterMap[character].anims[ANIM_DIE] = Animation(dieFrames, dieSeconds);
+
+          auto [attackFrames, attackSeconds] = spriteAssets.animSettings.at(ANIM_SWING);
+          m_currLevel->texCharacterMap[character].anims[ANIM_SWING] = Animation(attackFrames, attackSeconds);
+
+          auto [jumpFrames, jumpSeconds] = spriteAssets.animSettings.at(ANIM_JUMP);
+          m_currLevel->texCharacterMap[character].anims[ANIM_JUMP] = Animation(jumpFrames, jumpSeconds);
+
+        }
       }
 
       std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk(assets.backgroundAudioPath, masterAudioGain);
@@ -414,22 +402,28 @@ namespace game_engine {
       float masterAudioGain = MIX_GetMasterGain(mixer);
       float chunkAudioGain = masterAudioGain * 3;
 
-      // std::tie(audioShoot, shootTrack) = loadAudioChunk("data/audio/shoot.wav", chunkAudioGain);
-      // std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/wall_hit.wav", chunkAudioGain);
-      // std::tie(audioEnemyHit, enemyHitTrack) = loadAudioChunk("data/audio/enemy_hit.wav", chunkAudioGain);
       std::tie(audioShoot, shootTrack) = loadAudioChunk("data/audio/fireball_whoosh.mp3", chunkAudioGain);
       std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
       std::tie(audioEnemyHit, enemyHitTrack) = loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
       std::tie(audioEnemyDie, enemyDieTrack) = loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
-      // std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk("data/audio/Level_1_Forest_Outside_Castle.wav", g);
-      // std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk("data/audio/Level_2_Castle_Floor_1.wav", g);
-      // std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk("data/audio/Level_3_Final_Floor.wav", g);
 
+      // load level specific assets
       bool lvlLoaded = loadLevel(LevelIndex::LEVEL_1, state, masterAudioGain, headless);
 
       if (!lvlLoaded) {
         static_assert("level failed to load");
         return;
+      }
+
+      // load global assets, need to more players as globalResources
+      bulletAnims.resize(2);
+      bulletAnims[ANIM_BULLET_MOVING] = Animation(9, 1.0f);
+      bulletAnims[ANIM_BULLET_HIT] = Animation(4, 0.15f);
+      if (!headless) {
+        // texBullet = loadTexture(state.renderer, "data/bullet.png");
+        // texBulletHit = loadTexture(state.renderer, "data/bullet_hit.png");
+        texBulletHit = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
+        texBullet = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
       }
 
     }
@@ -483,7 +477,7 @@ namespace game_engine {
       Engine() : m_sdlState{}, m_gameState(m_sdlState), m_resources{}, m_gameType(SinglePlayer) {}
       ~Engine();
 
-      inline static constexpr glm::vec2 GRAVITY = glm::vec2(0, 500);
+      inline static constexpr glm::vec2 GRAVITY = glm::vec2(0, 600);
       inline static constexpr size_t LAYER_IDX_LEVEL = 0;
       inline static constexpr size_t LAYER_IDX_CHARACTERS = 1;
       inline static constexpr int TILE_SIZE = 32;

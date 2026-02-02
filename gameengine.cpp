@@ -80,7 +80,7 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
 
   // load game assets
   m_resources.loadAllAssets(m_sdlState, false);
-  if (!m_resources.lvl->texCharacterMap[SpriteType::Player_Knight].texIdle) {
+  if (!m_resources.m_currLevel->texCharacterMap[SpriteType::Player_Knight].texIdle) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Idle Texture load failed", "Failed to load idle image", nullptr);
     cleanup();
     return false;
@@ -506,8 +506,8 @@ void game_engine::Engine::updateAllObjects(float deltaTime) {
 }
 
 void game_engine::Engine::updateMapViewport(GameObject& player) {
-  int mapWpx = m_resources.lvl->map->mapWidth * m_resources.lvl->map->tileWidth;
-  int mapHpx = m_resources.lvl->map->mapHeight * m_resources.lvl->map->tileHeight;
+  int mapWpx = m_resources.m_currLevel->map->mapWidth * m_resources.m_currLevel->map->tileWidth;
+  int mapHpx = m_resources.m_currLevel->map->mapHeight * m_resources.m_currLevel->map->tileHeight;
 
   m_gameState.mapViewport.x = std::clamp(
       (player.position.x + player.spritePixelW * 0.5f) - m_gameState.mapViewport.w * 0.5f,
@@ -723,7 +723,7 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
 // update updates the state of the passed in game object every render loop
 void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
-  EntityResources entityRes = m_resources.lvl->texCharacterMap[obj.spriteType];
+  EntityResources entityRes = m_resources.m_currLevel->texCharacterMap[obj.spriteType];
 
   if (obj.currentAnimation != -1) {
     obj.animations[obj.currentAnimation].step(deltaTime);
@@ -960,7 +960,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     }
   } else if (obj.objClass == ObjectClass::Enemy) {
 
-    EntityResources entityRes = m_resources.lvl->texCharacterMap[obj.spriteType];
+    EntityResources entityRes = m_resources.m_currLevel->texCharacterMap[obj.spriteType];
     switch (obj.data.enemy.state) {
       case EnemyState::idle:
       {
@@ -1148,7 +1148,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
           case ObjectClass::Enemy:
           {
 
-            EntityResources entityRes = m_resources.lvl->texCharacterMap.at(objB.spriteType);
+            EntityResources entityRes = m_resources.m_currLevel->texCharacterMap.at(objB.spriteType);
             EnemyData &d = objB.data.enemy;
             if (d.state != EnemyState::dead) {
               objB.direction = -1 * objA.direction;
@@ -1232,7 +1232,7 @@ bool game_engine::Engine::initAllTiles() {
 
     const tmx::TileSet* pickTileset(uint32_t gid) {
       const tmx::TileSet* match = nullptr;
-      for (const auto& ts : res.lvl->map->tileSets) {
+      for (const auto& ts : res.m_currLevel->map->tileSets) {
         if (gid >= (uint32_t)ts.firstgid) match = &ts;
         else break;
       }
@@ -1281,10 +1281,10 @@ bool game_engine::Engine::initAllTiles() {
       std::vector<GameObject> newLayer;
 
       if (!layer.img.has_value()) {
-        for (int r = 0; r < res.lvl->map->mapHeight; ++r){
+        for (int r = 0; r < res.m_currLevel->map->mapHeight; ++r){
 
-          for (int c = 0; c < res.lvl->map->mapWidth; ++c) {
-            const uint32_t rawGid = layer.data[r * res.lvl->map->mapWidth + c]; // packed Tiled GID (includes flip flags)
+          for (int c = 0; c < res.m_currLevel->map->mapWidth; ++c) {
+            const uint32_t rawGid = layer.data[r * res.m_currLevel->map->mapWidth + c]; // packed Tiled GID (includes flip flags)
 
             // Tiled encodes flips in the top 3 bits; mask them off so we lookup the real tile index.
             // Without this the computed srcY can overflow the texture height, causing tiles to vanish.
@@ -1324,22 +1324,22 @@ bool game_engine::Engine::initAllTiles() {
           }
         }
       } else if (layer.name == "Sky") { // 4
-        auto bgImg = createObject(0, 0, res.lvl->map->tileSets[res.lvl->bg4Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
+        auto bgImg = createObject(0, 0, res.m_currLevel->map->tileSets[res.m_currLevel->bg4Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
         bgImg.scrollFactor = 0.2f;
         newLayer.push_back(bgImg);
       } else if (layer.name == "Clouds") { // 3
-        auto bgImg = createObject(0, 0, res.lvl->map->tileSets[res.lvl->bg3Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
+        auto bgImg = createObject(0, 0, res.m_currLevel->map->tileSets[res.m_currLevel->bg3Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
         bgImg.scrollFactor = 0.2f;
         newLayer.push_back(bgImg);
       } else if (layer.name == "Flora2") { // 2
-        auto bgImg = createObject(0, 0, res.lvl->map->tileSets[res.lvl->bg2Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
+        auto bgImg = createObject(0, 0, res.m_currLevel->map->tileSets[res.m_currLevel->bg2Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
         bgImg.scrollFactor = 0.3f;
         newLayer.push_back(bgImg);
       } else if (layer.name == "Flora1") { // 1
-        auto bgImg = createObject(0, 0, res.lvl->map->tileSets[res.lvl->bg1Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
+        auto bgImg = createObject(0, 0, res.m_currLevel->map->tileSets[res.m_currLevel->bg1Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
         bgImg.scrollFactor = 0.4f;
         newLayer.push_back(bgImg);
@@ -1354,15 +1354,15 @@ bool game_engine::Engine::initAllTiles() {
       for (tmx::LayerObject &obj : objectGroup.objects)
       {
         glm::vec2 objStartingPos(
-          obj.x - res.lvl->map->tileWidth / 2, //17
-          obj.y - res.lvl->map->tileHeight / 2 //411
+          obj.x - res.m_currLevel->map->tileWidth / 2, //17
+          obj.y - res.m_currLevel->map->tileHeight / 2 //411
         );
 
 
         if (obj.type == "Enemy") {
 
-          SpriteType spriteType = characterNameToSpriteType.at(obj.name);
-          GameObject enemy = createObject(1, 1, res.lvl->texCharacterMap.at(spriteType).texIdle, ObjectClass::Enemy, 128, 128, 0, 0);
+          SpriteType spriteType = CHARACTER_NAME_TO_SPRITE_TYPE.at(obj.name);
+          GameObject enemy = createObject(1, 1, res.m_currLevel->texCharacterMap.at(spriteType).texIdle, ObjectClass::Enemy, 128, 128, 0, 0);
           enemy.spriteType = spriteType;
           // set the appropriate texture based on the obj.name
 
@@ -1390,7 +1390,7 @@ bool game_engine::Engine::initAllTiles() {
           enemy.position.y = feetY - (enemy.collider.y + enemy.collider.h); // collider bottom on feet
           enemy.data.enemy = EnemyData();
           enemy.currentAnimation = res.ANIM_IDLE;
-          enemy.animations = res.lvl->texCharacterMap.at(spriteType).anims;
+          enemy.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
           enemy.dynamic = true;
           enemy.maxSpeedX = 15;
           newLayer.push_back(enemy);
@@ -1399,8 +1399,8 @@ bool game_engine::Engine::initAllTiles() {
 
         // Must handle multiple players here; all players start in same position, so here we create a player
         if (obj.type == "Player") {
-          SpriteType spriteType = characterNameToSpriteType.at(obj.name);
-          GameObject player = createObject(1, 1, res.lvl->texCharacterMap.at(spriteType).texIdle, ObjectClass::Player, 128, 128, 0, 0);
+          SpriteType spriteType = CHARACTER_NAME_TO_SPRITE_TYPE.at(obj.name);
+          GameObject player = createObject(1, 1, res.m_currLevel->texCharacterMap.at(spriteType).texIdle, ObjectClass::Player, 128, 128, 0, 0);
           player.spriteType = spriteType;
           player.drawScale = 1.5f;
 
@@ -1433,7 +1433,7 @@ bool game_engine::Engine::initAllTiles() {
           player.position.y = feetY   - drawH;
 
           player.data.player = PlayerData();
-          player.animations = res.lvl->texCharacterMap.at(spriteType).anims;
+          player.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
           player.currentAnimation = res.ANIM_IDLE;
           player.acceleration = glm::vec2(500, 0);
           player.maxSpeedX = 100;
@@ -1449,7 +1449,7 @@ bool game_engine::Engine::initAllTiles() {
   };
 
   LayerVisitor visitor(m_sdlState, m_gameState, m_resources);
-  for (std::variant<tmx::Layer, tmx::ObjectGroup> &layer : m_resources.lvl->map->layers) {
+  for (std::variant<tmx::Layer, tmx::ObjectGroup> &layer : m_resources.m_currLevel->map->layers) {
     std::visit(visitor, layer);
   };
 
