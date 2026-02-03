@@ -8,6 +8,7 @@ static std::unordered_map<std::string, SpriteType> CHARACTER_NAME_TO_SPRITE_TYPE
   {"Player_Mage", SpriteType::Player_Mage},
   {"Minotaur_1", SpriteType::Minotaur_1},
   {"Skeleton_Warrior", SpriteType::Skeleton_Warrior},
+  {"Red_Werewolf", SpriteType::Red_Werewolf},
 };
 
 
@@ -114,21 +115,53 @@ static std::unordered_map<SpriteType, SpriteAssets> ENEMY_CONFIG = {
       },
     },
   },
+  {
+    SpriteType::Red_Werewolf,
+    SpriteAssets{
+      .paths = SpriteAssetPaths{
+        .idleTex = "data/enemies/Red_Werewolf/Idle.png",
+        .walkTex = "data/enemies/Red_Werewolf/Walk.png",  // 11 frames
+        .runTex = "data/enemies/Red_Werewolf/Walk.png",
+        .attackTex = "data/enemies/Red_Werewolf/Attack_1.png",
+        .hitTex = "data/enemies/Red_Werewolf/Hurt.png",
+        .dieTex = "data/enemies/Red_Werewolf/Dead.png",
+      },
+      .animSettings = {
+        { ANIM_IDLE,{ 8, 1.0f } },
+        { ANIM_RUN, { 11, 1.0f } },
+        { ANIM_HIT, { 2, 0.5f } },
+        { ANIM_DIE , { 2, 0.5f } },
+        { ANIM_SWING , { 5, 1.0f } },
+      },
+    },
+  },
 };
 
 
-// Define config for
+// Define config for each level
 inline std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
   {
     LevelIndex::LEVEL_1,
     LevelAssets{
-      .mapPath = "data/maps/level_1/level_1_v2.tmx",
+      .mapPath = "data/maps/level_1/level_1.tmx",
       .background4PathName = "Skyx32",
       .background3PathName = "Clouds_x32",
       .background2PathName = "Flora2x32",
       .background1PathName = "Flora1x32",
-      .backgroundAudioPath = "data/audio/Level_3_Final_Floor.wav",
-      .enemyTypes = { SpriteType::Minotaur_1,  SpriteType::Skeleton_Warrior},
+      .backgroundAudioPath = "data/audio/Level_1_Forest_Outside_Castle.wav",
+      .enemyTypes = { SpriteType::Minotaur_1,  SpriteType::Skeleton_Warrior },
+    },
+  },
+  {
+    LevelIndex::LEVEL_2,
+    LevelAssets{
+      .mapPath = "data/maps/level_2/level_2.tmx",
+      .background4PathName = "background1",
+      .background3PathName = "background3",
+      .background2PathName = "background4a",
+      .background1PathName = "background4b",
+      .backgroundAudioPath = "data/audio/Level_2_Castle_Floor_1.wav",
+      .enemyTypes = { SpriteType::Red_Werewolf,  SpriteType::Skeleton_Warrior},
     },
   },
 };

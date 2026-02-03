@@ -169,9 +169,9 @@ namespace game_engine {
 
   struct Level {
     LevelIndex lvlIdx;
-    std::string name;
-    std::string mapPath;
-    std::string backgroundMusicPath;
+    // std::string name;
+    // std::string mapPath;
+    // std::string backgroundMusicPath;
     std::unique_ptr<tmx::Map> map;
     std::unordered_map<SpriteType, EntityResources> texCharacterMap;
     int bg1Idx, bg2Idx, bg3Idx, bg4Idx; // indexes of where in the map are the bg tilsets
@@ -241,22 +241,7 @@ namespace game_engine {
 
       MIX_SetTrackAudio(track, audio);
 
-      // MIX_GetTrackGain(track) / 2)
       MIX_SetTrackGain(track, gain);
-
-      // // in game loop
-      // SDL_PropertiesID opts = SDL_CreateProperties();
-      // SDL_SetNumberProperty(opts, MIX_PROP_PLAY_LOOPS_NUMBER, -1);
-      // SDL_SetNumberProperty(opts, MIX_PROP_PLAY_FADE_IN_MILLISECONDS_NUMBER, 200);
-
-
-      // when firing
-      // MIX_SetTrackAudio(shootTrack, audioShoot); // or MIX_SetTrackAudioWithProperties
-      // MIX_PlayTrack(shootTrack, 0); // defaults: no loop, no fade
-      // if (!MIX_PlayTrack(track, 0)) {
-      //     SDL_Log("Play failed: %s", SDL_GetError());
-      // }
-      // SDL_DestroyProperties(opts);  // once you’re done with the bag
 
       // return the audio, and the track to set
       return {audio, track};
@@ -408,7 +393,7 @@ namespace game_engine {
       std::tie(audioEnemyDie, enemyDieTrack) = loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
 
       // load level specific assets
-      bool lvlLoaded = loadLevel(LevelIndex::LEVEL_1, state, masterAudioGain, headless);
+      bool lvlLoaded = loadLevel(LevelIndex::LEVEL_2, state, masterAudioGain, headless);
 
       if (!lvlLoaded) {
         static_assert("level failed to load");

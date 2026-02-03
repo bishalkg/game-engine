@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <unordered_map>
 #include <string>
+#include <vector>
 
 
 enum class LevelIndex: std::uint32_t  {
@@ -22,7 +23,7 @@ const int ANIM_HIT = 8;
 const int ANIM_DIE = 9;
 
 enum class SpriteType: std::uint32_t {
-  Player_Knight, Player_Mage, Minotaur_1, Skeleton_Warrior
+  Player_Knight, Player_Mage, Minotaur_1, Skeleton_Warrior, Red_Werewolf
 };
 
 struct SpriteAssetPaths {

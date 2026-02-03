@@ -1323,22 +1323,22 @@ bool game_engine::Engine::initAllTiles() {
 
           }
         }
-      } else if (layer.name == "Sky") { // 4
+      } else if (layer.name == "Sky" || layer.name == "Background_4") { // 4
         auto bgImg = createObject(0, 0, res.m_currLevel->map->tileSets[res.m_currLevel->bg4Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
         bgImg.scrollFactor = 0.2f;
         newLayer.push_back(bgImg);
-      } else if (layer.name == "Clouds") { // 3
+      } else if (layer.name == "Clouds" || layer.name == "Background_3") { // 3
         auto bgImg = createObject(0, 0, res.m_currLevel->map->tileSets[res.m_currLevel->bg3Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
         bgImg.scrollFactor = 0.2f;
         newLayer.push_back(bgImg);
-      } else if (layer.name == "Flora2") { // 2
+      } else if (layer.name == "Flora2" || layer.name == "Background_2") { // 2
         auto bgImg = createObject(0, 0, res.m_currLevel->map->tileSets[res.m_currLevel->bg2Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
         bgImg.scrollFactor = 0.3f;
         newLayer.push_back(bgImg);
-      } else if (layer.name == "Flora1") { // 1
+      } else if (layer.name == "Flora1" || layer.name == "Background_1") { // 1
         auto bgImg = createObject(0, 0, res.m_currLevel->map->tileSets[res.m_currLevel->bg1Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
         bgImg.scrollFactor = 0.4f;
@@ -1379,9 +1379,14 @@ bool game_engine::Engine::initAllTiles() {
               enemy.drawScale = 1.5f;
               break;
             }
+            case SpriteType::Red_Werewolf:
+            {
+              enemy.drawScale = 1.5f;
+              break;
+            }
           }
-          float wFrac = 0.30f, hFrac = 0.60f;
-          enemy.colliderNorm = { .x=0.35f, .y=0.85f - hFrac, .w=wFrac, .h=hFrac };
+          float wFrac = 0.30f, hFrac = 0.6f;
+          enemy.colliderNorm = { .x=0.35f, .y=0.4, .w=wFrac, .h=0.6}; // TODO setting .y = 0.5 and h = 0.5 worked well for level2
           enemy.applyScale();
 
           float feetY   = objStartingPos.y;                // baseline from Tiled
@@ -1394,7 +1399,6 @@ bool game_engine::Engine::initAllTiles() {
           enemy.dynamic = true;
           enemy.maxSpeedX = 15;
           newLayer.push_back(enemy);
-
         }
 
         // Must handle multiple players here; all players start in same position, so here we create a player
@@ -1415,7 +1419,7 @@ bool game_engine::Engine::initAllTiles() {
             }
             case SpriteType::Player_Mage:
             {
-              player.colliderNorm = { .x=0.30f, .y=0.9f - hFrac, .w=wFrac, .h=hFrac };
+              player.colliderNorm = { .x=0.30f, .y=0.5f, .w=wFrac, .h=0.5f };
               break;
             }
           };
