@@ -143,11 +143,11 @@ inline std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
   {
     LevelIndex::LEVEL_1,
     LevelAssets{
-      .mapPath = "data/maps/level_1/level_1.tmx",
+      .mapPath = "data/maps/level_1/level_1.2.tmx",
       .background4PathName = "Skyx32",
       .background3PathName = "Clouds_x32",
-      .background2PathName = "Flora2x32",
-      .background1PathName = "Flora1x32",
+      .background2PathName = "Flora1x32",
+      .background1PathName = "Flora2x32",
       .backgroundAudioPath = "data/audio/Level_1_Forest_Outside_Castle.wav",
       .enemyTypes = { SpriteType::Minotaur_1,  SpriteType::Skeleton_Warrior },
     },

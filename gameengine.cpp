@@ -228,6 +228,12 @@ bool game_engine::Engine::handleMultiplayerConnections() {
   return true;
 }
 
+void game_engine::Engine::asyncSwitchToLevel(LevelIndex lvl) {
+  m_gameState.currentView = GameScreen::LevelLoading;
+  m_gameState.setLevelLoadProgress(0);
+  m_levelLoadThd = std::thread(&game_engine::Engine::initNextLevel, this, lvl);
+}
+
 void game_engine::Engine::initNextLevel(LevelIndex lvl) {
 
   m_gameState.setLevelLoadProgress(10);
@@ -243,8 +249,12 @@ void game_engine::Engine::initNextLevel(LevelIndex lvl) {
   m_gameState.setLevelLoadProgress(70);
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  {
+    std::lock_guard<std::mutex> lock(m_levelMutex);
+    m_gameState = std::move(newGameState);
+  }
 
-  m_gameState = std::move(newGameState); // now its safe to transfer ownership
+  // m_gameState = std::move(newGameState); // now its safe to transfer ownership
   m_gameState.setLevelLoadProgress(100);
 }
 
@@ -548,7 +558,7 @@ void game_engine::Engine::drawAllObjects(float deltaTime) {
 
       if (obj.objClass == ObjectClass::Background) {
         // draw background images
-        drawParalaxBackground(obj.texture, getPlayer().velocity.x, obj.bgscroll, obj.scrollFactor, deltaTime, -175.0f);
+        drawParalaxBackground(obj.texture, getPlayer().velocity.x, obj.bgscroll, obj.scrollFactor, deltaTime, -80.0f);
 
       } else if (obj.objClass == ObjectClass::Level) {
         // if level tile, let src and dst override so that
@@ -700,19 +710,32 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
       }
       case GameScreen::LevelLoading:
       {
-        float p = m_gameState.getLevelLoadProgress();  // store as 0..1 or convert
-        if (p >= 100.0f) {
+        {
+          std::lock_guard<std::mutex> lock(m_levelMutex);
+          uint8_t p = m_gameState.getLevelLoadProgress();  // store as 0..1 or convert
+          if (p >= 100) {
             if (m_levelLoadThd.joinable()) {
                 m_levelLoadThd.join();
             }
-
             m_gameState.currentView = GameScreen::Playing;
             break;
-        }
+          }
 
-        ImGui::Begin("Loading", nullptr, m_sdlState.ImGuiWindowFlags);
-        ImGui::Text("Loading level...");
-        ImGui::ProgressBar(p <= 1.0f ? p : p * 0.01f, ImVec2(200, 0));
+          ImGui::Begin("Loading", nullptr, m_sdlState.ImGuiWindowFlags);
+          ImGui::Text("Loading level...");
+          ImGui::ProgressBar(p <= 1.0f ? p : p * 0.01f, ImVec2(200, 0));
+          ImGui::End();
+        }
+        break;
+      }
+      case GameScreen::GameOver:
+      {
+        // When player
+        ImGui::Begin("GameOver", nullptr, m_sdlState.ImGuiWindowFlags);
+        ImGui::Text("GAME OVER");
+        if (ImGui::Button("Try Again")) {
+          asyncSwitchToLevel(m_resources.m_currLevelIdx);
+        }
         ImGui::End();
         break;
       }
@@ -758,6 +781,10 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
           ImGui::SameLine(0, 2.0f);
           if (ImGui::Button("Save Game", buttonSize)) {
             // TODO
+          }
+          ImGui::SameLine(0, 2.0f);
+          if (ImGui::Button("Start Over (Debug)", buttonSize)) {
+            asyncSwitchToLevel(m_resources.m_currLevelIdx);
           }
           ImGui::PopItemFlag();
           ImGui::PopStyleVar();
@@ -1174,21 +1201,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
       }
       case ObjectClass::Portal:
       {
-
-        m_gameState.currentView = GameScreen::LevelLoading;
-        m_gameState.setLevelLoadProgress(0);
-
-        m_levelLoadThd = std::thread(&game_engine::Engine::initNextLevel, this, objB.data.portal.nextLevel);
-
-
-        // Handle new level
-        // objB.data.portal.nextLevel can pass this along
-        // std::cout << "PORTAALLLLLLLL" << std::endl;
-        // new thread to load new level
-        // after thread is done loading, set currentViewBack to
-        // GameScreen::Playing:
-        // be careful for race conditions.
-
+        asyncSwitchToLevel(objB.data.portal.nextLevel);
         break;
       }
       case ObjectClass::Player:
@@ -1442,7 +1455,7 @@ bool game_engine::Engine::initAllTiles(GameState &newGameState) {
             portal.applyScale();
             portal.position = objStartingPos;
 
-            newLayer.push_back(portal);
+            newLayer.push_back(std::move(portal));
         }
 
 
@@ -1485,7 +1498,7 @@ bool game_engine::Engine::initAllTiles(GameState &newGameState) {
           enemy.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
           enemy.dynamic = true;
           enemy.maxSpeedX = 15;
-          newLayer.push_back(enemy);
+          newLayer.push_back(std::move(enemy));
         }
 
         // Must handle multiple players here; all players start in same position, so here we create a player
@@ -1634,7 +1647,7 @@ void game_engine::Engine::drawParalaxBackground(SDL_Texture* tex,
                                    float& scrollPos,
                                    float scrollFactor,
                                    float dt,
-                                   float baseY = -175.0f) {
+                                   float baseY = -175.0f) { // horoz/vert offsets should be from tilesheet
 
     scrollPos -= camVelX * scrollFactor * dt;
     auto scrollY = 0 * scrollFactor * dt;   // factorY ≈ 0 for sky
@@ -1645,6 +1658,8 @@ void game_engine::Engine::drawParalaxBackground(SDL_Texture* tex,
 
     SDL_FRect dst1{ scrollPos,        baseY + scrollY, w, (float)tex->h };
     SDL_FRect dst2{ scrollPos + w,    baseY + scrollY, w, (float)tex->h };
+    // SDL_FRect dst1{ scrollPos,        baseY*1.5f + scrollY, w*1.5f, (float)tex->h*1.5f };
+    // SDL_FRect dst2{ scrollPos + w,    baseY*1.5f + scrollY, w*1.5f, (float)tex->h*1.5f };
     SDL_RenderTexture(m_sdlState.renderer, tex, nullptr, &dst1);
     SDL_RenderTexture(m_sdlState.renderer, tex, nullptr, &dst2);
     // // advance

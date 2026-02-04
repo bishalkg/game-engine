@@ -76,6 +76,7 @@ namespace game_engine {
       MainMenu,
       PauseMenu,
       LevelLoading,
+      GameOver,
       MultiPlayerOptionsMenu, // this menu will show host or client buttons
   };
 
@@ -119,7 +120,7 @@ namespace game_engine {
       return *this;
     }
 
-      std::atomic_int16_t m_loadProgress = 100;
+      std::atomic<uint8_t> m_loadProgress = 100;
 
       GameScreen currentView;
 
@@ -148,8 +149,8 @@ namespace game_engine {
       // get current player
       GameObject &player(size_t layer_idx_chars) { return layers[playerLayer][playerIndex]; }
 
-      void setLevelLoadProgress(float progress) {m_loadProgress.store(progress); }
-      float getLevelLoadProgress() { return m_loadProgress.load(); }
+      void setLevelLoadProgress(uint8_t progress) {m_loadProgress.store(progress); }
+      uint8_t getLevelLoadProgress() { return m_loadProgress.load(); }
 
       game_engine::NetGameStateSnapshot extractNetSnapshot() const {
         NetGameStateSnapshot snapshot;
@@ -271,6 +272,7 @@ namespace game_engine {
     Timer whooshCooldown{0.25f};  // 100 ms. needs to be here and not on each projectile entity
 
     std::unique_ptr<Level> m_currLevel;
+    LevelIndex m_currLevelIdx;
 
     std::pair<MIX_Audio*, MIX_Track*> loadAudioChunk(const std::string& filepath, float gain = 1.0f) {
 
@@ -301,6 +303,7 @@ namespace game_engine {
       unloadLevel();
       gs.setLevelLoadProgress(20);
 
+      m_currLevelIdx = levelId;
       m_currLevel = std::make_unique<Level>(levelId);
       LevelAssets& assets = LEVEL_CONFIG.at(levelId);
 
@@ -524,6 +527,7 @@ namespace game_engine {
       GameState m_gameState;
       Resources m_resources;
       std::atomic<bool> m_gameRunning{false};
+      std::mutex m_levelMutex;
       GameRunMode m_gameType;
 
       std::unique_ptr<GameServer> m_gameServer = nullptr; // only create if gameType==Host
@@ -541,7 +545,7 @@ namespace game_engine {
       inline static constexpr size_t LAYER_IDX_LEVEL = 0;
       inline static constexpr size_t LAYER_IDX_CHARACTERS = 1;
       inline static constexpr int TILE_SIZE = 32;
-      inline static constexpr float JUMP_FORCE = -320.0f;
+      inline static constexpr float JUMP_FORCE = -400.0f;
 
 
       bool init(int width, int height, int logW, int logH);
@@ -574,6 +578,7 @@ namespace game_engine {
       bool handleMultiplayerConnections();
       void runGameServerLoopThread();
       void initNextLevel(LevelIndex lvl);
+      void asyncSwitchToLevel(LevelIndex lvl);
       // MIX_PauseTrack(track) / MIX_ResumeTrack(track)
 
       // getters
