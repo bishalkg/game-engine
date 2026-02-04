@@ -75,85 +75,129 @@ namespace game_engine {
       Playing,
       MainMenu,
       PauseMenu,
+      LevelLoading,
       MultiPlayerOptionsMenu, // this menu will show host or client buttons
   };
 
   struct GameState {
 
-    GameScreen currentView;
+    GameState() = default;
+    GameState(const GameState&) = delete;
+    GameState& operator=(const GameState&) = delete;
 
-    uint64_t m_stateLastUpdatedAt; // when the gameState was last updated, by local or by server msg
+    // std::atomic is neither copy- nor move-assignable, so provide a custom move
+    GameState(GameState&& other) noexcept
+      : m_loadProgress(other.m_loadProgress.load()),
+        currentView(other.currentView),
+        m_stateLastUpdatedAt(other.m_stateLastUpdatedAt),
+        layers(std::move(other.layers)),
+        bullets(std::move(other.bullets)),
+        debugMode(other.debugMode),
+        playerLayer(other.playerLayer),
+        playerIndex(other.playerIndex),
+        mapViewport(other.mapViewport),
+        bg2scroll(other.bg2scroll),
+        bg3scroll(other.bg3scroll),
+        bg4scroll(other.bg4scroll)
+    {}
 
-    std::vector<std::vector<GameObject>> layers;
-    // std::vector<GameObject> backgroundTiles;
-    // std::vector<GameObject> foregroundTiles;
-    std::vector<GameObject> bullets;
-    bool debugMode;
-
-    int playerLayer, playerIndex;
-    SDL_FRect mapViewport; // viewable part of map
-    float bg2scroll, bg3scroll, bg4scroll;
-
-    GameState(const SDLState &state): bg2scroll(0), bg3scroll(0), bg4scroll(0), currentView(GameScreen::MainMenu) {
-      playerIndex = -1;
-      mapViewport = SDL_FRect{
-        .x = 0, .y = 0,
-        .w = static_cast<float>(state.logW),
-        .h = static_cast<float>(state.logH)
-      };
-      debugMode = false;
+    GameState& operator=(GameState&& other) noexcept {
+      if (this != &other) {
+        m_loadProgress.store(other.m_loadProgress.load());
+        currentView         = other.currentView;
+        m_stateLastUpdatedAt= other.m_stateLastUpdatedAt;
+        layers              = std::move(other.layers);
+        bullets             = std::move(other.bullets);
+        debugMode           = other.debugMode;
+        playerLayer         = other.playerLayer;
+        playerIndex         = other.playerIndex;
+        mapViewport         = other.mapViewport;
+        bg2scroll           = other.bg2scroll;
+        bg3scroll           = other.bg3scroll;
+        bg4scroll           = other.bg4scroll;
+      }
+      return *this;
     }
 
-    // get current player
-    GameObject &player(size_t layer_idx_chars) { return layers[playerLayer][playerIndex]; }
+      std::atomic_int16_t m_loadProgress = 100;
 
-    game_engine::NetGameStateSnapshot extractNetSnapshot() const {
-      NetGameStateSnapshot snapshot;
-      snapshot.m_stateLastUpdatedAt = m_stateLastUpdatedAt;
+      GameScreen currentView;
 
-      for (size_t layerIdx = 0; layerIdx < layers.size(); ++layerIdx) {
-          for (const auto& obj : layers[layerIdx]) {
-            if (obj.dynamic) {
-              NetGameObjectSnapshot s{};
-              s.id = obj.id;
-              s.layer = static_cast<uint32_t>(layerIdx);
-              s.type = obj.objClass;
-              s.position = obj.position;
-              s.velocity = obj.velocity;
-              s.acceleration = obj.acceleration;
-              s.direction = obj.direction;
-              s.maxSpeedX = obj.maxSpeedX;
-              s.currentAnimation = static_cast<uint32_t>(obj.currentAnimation);
-              s.grounded = obj.grounded;
-              s.shouldFlash = obj.shouldFlash;
-              s.spriteFrame = static_cast<uint32_t>(obj.spriteFrame);
-              s.data = obj.data; // union to be handled in encodeNetGameStateSnapshot
-              snapshot.m_gameObjects[{obj.objClass, obj.id}] = s;
+      uint64_t m_stateLastUpdatedAt; // when the gameState was last updated, by local or by server msg
+
+      std::vector<std::vector<GameObject>> layers;
+      // std::vector<GameObject> backgroundTiles;
+      // std::vector<GameObject> foregroundTiles;
+      std::vector<GameObject> bullets;
+      bool debugMode;
+
+      int playerLayer, playerIndex;
+      SDL_FRect mapViewport; // viewable part of map
+      float bg2scroll, bg3scroll, bg4scroll;
+
+      GameState(const SDLState &state): bg2scroll(0), bg3scroll(0), bg4scroll(0), currentView(GameScreen::MainMenu) {
+        playerIndex = -1;
+        mapViewport = SDL_FRect{
+          .x = 0, .y = 0,
+          .w = static_cast<float>(state.logW),
+          .h = static_cast<float>(state.logH)
+        };
+        debugMode = false;
+      }
+
+      // get current player
+      GameObject &player(size_t layer_idx_chars) { return layers[playerLayer][playerIndex]; }
+
+      void setLevelLoadProgress(float progress) {m_loadProgress.store(progress); }
+      float getLevelLoadProgress() { return m_loadProgress.load(); }
+
+      game_engine::NetGameStateSnapshot extractNetSnapshot() const {
+        NetGameStateSnapshot snapshot;
+        snapshot.m_stateLastUpdatedAt = m_stateLastUpdatedAt;
+
+        for (size_t layerIdx = 0; layerIdx < layers.size(); ++layerIdx) {
+            for (const auto& obj : layers[layerIdx]) {
+              if (obj.dynamic) {
+                NetGameObjectSnapshot s{};
+                s.id = obj.id;
+                s.layer = static_cast<uint32_t>(layerIdx);
+                s.type = obj.objClass;
+                s.position = obj.position;
+                s.velocity = obj.velocity;
+                s.acceleration = obj.acceleration;
+                s.direction = obj.direction;
+                s.maxSpeedX = obj.maxSpeedX;
+                s.currentAnimation = static_cast<uint32_t>(obj.currentAnimation);
+                s.grounded = obj.grounded;
+                s.shouldFlash = obj.shouldFlash;
+                s.spriteFrame = static_cast<uint32_t>(obj.spriteFrame);
+                s.data = obj.data; // union to be handled in encodeNetGameStateSnapshot
+                snapshot.m_gameObjects[{obj.objClass, obj.id}] = s;
+              };
             };
-          };
-      };
+        };
 
-      for (const auto& obj : bullets) {
-        // if (obj.dynamic) {
-        NetGameObjectSnapshot s{};
-        s.id = obj.id;
-        s.layer = static_cast<uint32_t>(playerLayer);
-        s.type = obj.objClass;
-        s.position = obj.position;
-        s.velocity = obj.velocity;
-        s.acceleration = obj.acceleration;
-        s.direction = obj.direction;
-        s.maxSpeedX = obj.maxSpeedX;
-        s.currentAnimation = static_cast<uint32_t>(obj.currentAnimation);
-        s.grounded = obj.grounded;
-        s.shouldFlash = obj.shouldFlash;
-        s.spriteFrame = static_cast<uint32_t>(obj.spriteFrame);
-        snapshot.m_gameObjects[{obj.objClass, obj.id}] = s;
-        // }
-      };
+        for (const auto& obj : bullets) {
+          // if (obj.dynamic) {
+          NetGameObjectSnapshot s{};
+          s.id = obj.id;
+          s.layer = static_cast<uint32_t>(playerLayer);
+          s.type = obj.objClass;
+          s.position = obj.position;
+          s.velocity = obj.velocity;
+          s.acceleration = obj.acceleration;
+          s.direction = obj.direction;
+          s.maxSpeedX = obj.maxSpeedX;
+          s.currentAnimation = static_cast<uint32_t>(obj.currentAnimation);
+          s.grounded = obj.grounded;
+          s.shouldFlash = obj.shouldFlash;
+          s.spriteFrame = static_cast<uint32_t>(obj.spriteFrame);
+          snapshot.m_gameObjects[{obj.objClass, obj.id}] = s;
+          // }
+        };
 
-      return snapshot;
-    };
+        return snapshot;
+      };
   };
 
   // struct TileSetTextures {
@@ -178,6 +222,8 @@ namespace game_engine {
     std::vector<SDL_Texture*> textures; // store textures to cleanup later
     MIX_Audio *backgroundAudio{nullptr};
     MIX_Track *backgroundTrack{nullptr};
+
+    Level(LevelIndex lvl): lvlIdx(lvl) {};
 
     SDL_Texture *loadTexture(SDL_Renderer *renderer, const std::string &filepath){
       SDL_Texture *tex = IMG_LoadTexture(renderer, filepath.c_str()); // textures on gpu, surface in cpu memory (we can access)
@@ -215,10 +261,11 @@ namespace game_engine {
 
     SDL_Texture  *texBullet, *texBulletHit; // tex of bullets
         //MIX_Audio and use the new loading/track APIs (MIX_LoadAudio, MIX_CreateTrack
-    std::vector<MIX_Audio*> audioBuff;
-    MIX_Audio *backgroundAudio, *audioShoot, *audioShootHit, *audioEnemyHit, *audioEnemyDie;
-    MIX_Track *backgroundTrack, *shootTrack, *hitTrack, *enemyHitTrack, *enemyDieTrack;
-    std::vector<MIX_Track*> audioTracks;
+    // std::vector<MIX_Audio*> audioBuff;
+    MIX_Audio *audioShoot, *audioShootHit, *audioEnemyHit, *audioEnemyDie;
+    MIX_Track *shootTrack, *hitTrack, *enemyHitTrack, *enemyDieTrack;
+    // std::vector<MIX_Track*> audioTracks;
+    float m_masterAudioGain = 0;
     MIX_Mixer* mixer;
     size_t projectileTrackIdx = 0; // initialize once
     Timer whooshCooldown{0.25f};  // 100 ms. needs to be here and not on each projectile entity
@@ -232,12 +279,12 @@ namespace game_engine {
       // then in this func load the audio
       MIX_Audio* audio = MIX_LoadAudio(mixer, filepath.c_str(), false);
       if (!audio) return {nullptr, nullptr};
-      audioBuff.push_back(audio);
+      // audioBuff.push_back(audio);
 
       // need one for EACH sound that will be played
       MIX_Track* track = MIX_CreateTrack(mixer);
       if (!track) return {nullptr, nullptr};
-      audioTracks.push_back(track);
+      // audioTracks.push_back(track);
 
       MIX_SetTrackAudio(track, audio);
 
@@ -249,15 +296,16 @@ namespace game_engine {
     };
 
 
-    bool loadLevel(const LevelIndex levelId, SDLState &state, float masterAudioGain, bool headless) {
+    bool loadLevel(const LevelIndex levelId, SDLState &state, GameState &gs, float masterAudioGain, bool headless) {
 
       unloadLevel();
+      gs.setLevelLoadProgress(20);
 
-      m_currLevel = std::make_unique<Level>();
+      m_currLevel = std::make_unique<Level>(levelId);
       LevelAssets& assets = LEVEL_CONFIG.at(levelId);
 
       m_currLevel->map = tmx::loadMap(assets.mapPath); // only the resource struct instance can hold this pointer and it will be automatically deleted when not used (eg. when we swap out maps)
-
+      gs.setLevelLoadProgress(40);
       if (!headless) {
         int i = 0;
         for (tmx::TileSet &tileSet: m_currLevel->map->tileSets)
@@ -280,6 +328,7 @@ namespace game_engine {
         }
       }
 
+      gs.setLevelLoadProgress(50);
       std::sort(m_currLevel->map->tileSets.begin(), m_currLevel->map->tileSets.end(),
       [](const tmx::TileSet& a, const tmx::TileSet& b) {
           return a.firstgid < b.firstgid;
@@ -319,6 +368,7 @@ namespace game_engine {
         }
       }
 
+      gs.setLevelLoadProgress(60);
       // load player assets. NEED TO MOVE THIS TO BE GLOBAL SO WE DONT RE CREATE EACH LEVEL
       if (!headless) {
 
@@ -367,25 +417,46 @@ namespace game_engine {
         }
       }
 
-      std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk(assets.backgroundAudioPath, masterAudioGain);
-
+      auto [backgroundAudio, backgroundTrack] = loadAudioChunk(assets.backgroundAudioPath, masterAudioGain);
+      // auto std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk(assets.backgroundAudioPath, masterAudioGain);
+      m_currLevel->backgroundAudio = backgroundAudio;
+      m_currLevel->backgroundTrack = backgroundTrack;
       // this->lvl = std::move(lvl);
       return true;
     };
 
     void unloadLevel() {
 
-      for (SDL_Texture *tex : textures) {
-        SDL_DestroyTexture(tex);
+      if (!m_currLevel) {
+        return;
       }
+
+      if (m_currLevel->backgroundTrack && MIX_TrackPlaying(m_currLevel->backgroundTrack)) {
+        MIX_StopTrack(m_currLevel->backgroundTrack, 0);
+      }
+
+      if (m_currLevel->backgroundTrack) { MIX_DestroyTrack(m_currLevel->backgroundTrack); }
+      if (m_currLevel->backgroundAudio) { MIX_DestroyAudio(m_currLevel->backgroundAudio); }
+
+      for (SDL_Texture *tex : textures) {
+        if (tex) {
+          SDL_DestroyTexture(tex);
+        }
+      }
+      m_currLevel->textures.clear();
+
+      // deletes the owned obj and sets to nullptr
+      m_currLevel->map.reset();
+      m_currLevel.reset();
+
 
     };
 
     // headless is for server resources state
-    void loadAllAssets(SDLState &state, bool headless){
+    void loadAllAssets(SDLState &state, GameState &gs, bool headless){
 
-      float masterAudioGain = MIX_GetMasterGain(mixer);
-      float chunkAudioGain = masterAudioGain * 3;
+      m_masterAudioGain = MIX_GetMasterGain(mixer);
+      float chunkAudioGain = m_masterAudioGain * 3;
 
       std::tie(audioShoot, shootTrack) = loadAudioChunk("data/audio/fireball_whoosh.mp3", chunkAudioGain);
       std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
@@ -393,7 +464,7 @@ namespace game_engine {
       std::tie(audioEnemyDie, enemyDieTrack) = loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
 
       // load level specific assets
-      bool lvlLoaded = loadLevel(LevelIndex::LEVEL_2, state, masterAudioGain, headless);
+      bool lvlLoaded = loadLevel(LevelIndex::LEVEL_1, state, gs, m_masterAudioGain, headless);
 
       if (!lvlLoaded) {
         static_assert("level failed to load");
@@ -413,21 +484,24 @@ namespace game_engine {
 
     }
 
+    // TODO: unload global resources and currLevel resources
     void unload() {
       // for (SDL_Texture *tex : textures) {
       //   SDL_DestroyTexture(tex);
       // }
 
-      // cleanup audio
-      for (MIX_Audio* chunk: audioBuff) {
 
-      // destroy chunks
-        MIX_DestroyAudio(chunk);
-      };
+      unloadLevel(); // todo need to fix
+      // // cleanup audio
+      // for (MIX_Audio* chunk: audioBuff) {
 
-      for (MIX_Track* track: audioTracks) {
-        MIX_DestroyTrack(track);
-      }
+      // // destroy chunks
+      //   MIX_DestroyAudio(chunk);
+      // };
+
+      // for (MIX_Track* track: audioTracks) {
+      //   MIX_DestroyTrack(track);
+      // }
 
     };
 
@@ -456,6 +530,7 @@ namespace game_engine {
       bool isConnectedToServer = false;
       std::unique_ptr<GameClient> m_gameClient = nullptr; // only create if gameType!=SinglePlayer
       std::thread m_serverLoopThd;
+      std::thread m_levelLoadThd;
 
 
     public:
@@ -478,7 +553,7 @@ namespace game_engine {
       void cleanup(); // can be ref or pointer; if using pointer, need to use -> instead of .
       void drawObject(GameObject &obj, float height, float width, float deltaTime);
       void updateGameObject(GameObject &obj, float deltaTime);
-      bool initAllTiles();
+      bool initAllTiles(GameState &gameState);
       // const tmx::TileSet* pickTileset(uint32_t gid);
       void handleCollision(GameObject &a, GameObject &b, float deltaTime);
       void collisionResponse(const SDL_FRect &rectA, const SDL_FRect &rectB, const SDL_FRect &rectC, GameObject &objA, GameObject &objB, float deltaTime);
@@ -498,6 +573,7 @@ namespace game_engine {
       void buildAuthoritativeStateForServer();
       bool handleMultiplayerConnections();
       void runGameServerLoopThread();
+      void initNextLevel(LevelIndex lvl);
       // MIX_PauseTrack(track) / MIX_ResumeTrack(track)
 
       // getters

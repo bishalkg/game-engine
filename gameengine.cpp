@@ -29,10 +29,10 @@ game_engine::Resources &game_engine::Engine::getResources() {
 };
 
 void game_engine::Engine::setBackgroundSoundtrack() {
-  if (!MIX_TrackPlaying(m_resources.backgroundTrack)) {
+  if (!MIX_TrackPlaying(m_resources.m_currLevel->backgroundTrack)) {
     SDL_PropertiesID opts = SDL_CreateProperties();
     SDL_SetNumberProperty(opts, MIX_PROP_PLAY_LOOPS_NUMBER, -1); // loop forever
-    if (!MIX_PlayTrack(m_resources.backgroundTrack, opts)) {
+    if (!MIX_PlayTrack(m_resources.m_currLevel->backgroundTrack, opts)) {
         SDL_Log("Background Music Play failed: %s", SDL_GetError());
     }
     SDL_DestroyProperties(opts); // destory internal resources
@@ -40,8 +40,8 @@ void game_engine::Engine::setBackgroundSoundtrack() {
 };
 
 void game_engine::Engine::stopBackgroundSoundtrack() {
-  if (MIX_TrackPlaying(m_resources.backgroundTrack)) {
-    if (!MIX_StopTrack(m_resources.backgroundTrack, 10)) {
+  if (MIX_TrackPlaying(m_resources.m_currLevel->backgroundTrack)) {
+    if (!MIX_StopTrack(m_resources.m_currLevel->backgroundTrack, 10)) {
         SDL_Log("stopping Background Music Play failed: %s", SDL_GetError());
     }
   }
@@ -78,8 +78,10 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
 
   MIX_SetMasterGain(m_resources.mixer, 0.5f);  // 50% master
 
+  m_gameState = std::move(GameState(m_sdlState));
+
   // load game assets
-  m_resources.loadAllAssets(m_sdlState, false);
+  m_resources.loadAllAssets(m_sdlState, m_gameState, false);
   if (!m_resources.m_currLevel->texCharacterMap[SpriteType::Player_Knight].texIdle) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Idle Texture load failed", "Failed to load idle image", nullptr);
     cleanup();
@@ -87,12 +89,11 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
   }
 
   // setup game data
-  m_gameState = GameState(m_sdlState);
   // gs.mapViewport.x = 0;
   // gs.mapViewport.y = 0;
   // gs.mapViewport.w = state.logW; // or state.width/state.logW
   // gs.mapViewport.h = state.logH; // or state.height/state.logH
-  return initAllTiles();
+  return initAllTiles(m_gameState);
 }
 
 
@@ -225,6 +226,26 @@ bool game_engine::Engine::handleMultiplayerConnections() {
     }
   }
   return true;
+}
+
+void game_engine::Engine::initNextLevel(LevelIndex lvl) {
+
+  m_gameState.setLevelLoadProgress(10);
+
+  m_resources.loadLevel(lvl, m_sdlState, m_gameState, m_resources.m_masterAudioGain, false);
+
+  // throw away old world; create new gameState that will be updated in initAllTiles
+  GameState newGameState(m_sdlState);
+  newGameState.currentView = GameScreen::LevelLoading;
+
+  // rebuild layers/objects from the newly loaded map
+  initAllTiles(newGameState); // this mutates gameState
+  m_gameState.setLevelLoadProgress(70);
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  m_gameState = std::move(newGameState); // now its safe to transfer ownership
+  m_gameState.setLevelLoadProgress(100);
 }
 
 void game_engine::Engine::runGameServerLoopThread() {
@@ -656,6 +677,7 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
 
     switch (m_gameState.currentView) {
       case GameScreen::MainMenu:
+      {
         this->stopBackgroundSoundtrack();
         ImGui::Begin("Main Menu", nullptr, m_sdlState.ImGuiWindowFlags);
         ImGui::Text("Hello from ImGui in SDL3!");
@@ -675,13 +697,35 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
         }
         ImGui::End();
         break;
+      }
+      case GameScreen::LevelLoading:
+      {
+        float p = m_gameState.getLevelLoadProgress();  // store as 0..1 or convert
+        if (p >= 100.0f) {
+            if (m_levelLoadThd.joinable()) {
+                m_levelLoadThd.join();
+            }
+
+            m_gameState.currentView = GameScreen::Playing;
+            break;
+        }
+
+        ImGui::Begin("Loading", nullptr, m_sdlState.ImGuiWindowFlags);
+        ImGui::Text("Loading level...");
+        ImGui::ProgressBar(p <= 1.0f ? p : p * 0.01f, ImVec2(200, 0));
+        ImGui::End();
+        break;
+      }
       case GameScreen::PauseMenu:
+      {
         ImGui::Begin("Pause", nullptr, m_sdlState.ImGuiWindowFlags);
         if (ImGui::Button("Resume")) m_gameState.currentView = GameScreen::Playing;
         if (ImGui::Button("Quit")) m_gameRunning.store(false);
         ImGui::End();
         break;
+      }
       case GameScreen::MultiPlayerOptionsMenu:
+      {
         // drawSettings();
         ImGui::Begin("MultiPlayer Menu", nullptr, m_sdlState.ImGuiWindowFlags);
         if (ImGui::Button("Host A Game",buttonSize)) {
@@ -698,7 +742,9 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
         }
         ImGui::End();
         break;
+      }
       case GameScreen::Playing:
+      {
         ImGuiWindowFlags ImGuiWindowFlags =
           m_sdlState.ImGuiWindowFlags | ImGuiWindowFlags_NoBackground;
           // ImGuiWindowFlags_NoSavedSettings;
@@ -717,6 +763,7 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
           ImGui::PopStyleVar();
           ImGui::End();
         break;
+      }
     }
 }
 
@@ -1125,6 +1172,25 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
         }
         break;
       }
+      case ObjectClass::Portal:
+      {
+
+        m_gameState.currentView = GameScreen::LevelLoading;
+        m_gameState.setLevelLoadProgress(0);
+
+        m_levelLoadThd = std::thread(&game_engine::Engine::initNextLevel, this, objB.data.portal.nextLevel);
+
+
+        // Handle new level
+        // objB.data.portal.nextLevel can pass this along
+        // std::cout << "PORTAALLLLLLLL" << std::endl;
+        // new thread to load new level
+        // after thread is done loading, set currentViewBack to
+        // GameScreen::Playing:
+        // be careful for race conditions.
+
+        break;
+      }
       case ObjectClass::Player:
       {
         break;
@@ -1218,7 +1284,7 @@ void game_engine::Engine::handleCollision(GameObject &a, GameObject &b, float de
   };
 };
 
-bool game_engine::Engine::initAllTiles() {
+bool game_engine::Engine::initAllTiles(GameState &newGameState) {
 
   struct LayerVisitor
   {
@@ -1254,7 +1320,7 @@ bool game_engine::Engine::initAllTiles() {
         .h = spriteH
       };
 
-      if (type == ObjectClass::Level) {
+      if (type == ObjectClass::Level || type == ObjectClass::Portal) {
         o.position = { c * spriteW, r * spriteH };
         // o.position = glm::vec2(c * TILE_SIZE, state.logH - (20 - r) * TILE_SIZE);
         // pick out the exact tile from the tilesheet
@@ -1305,9 +1371,12 @@ bool game_engine::Engine::initAllTiles() {
               int srcY = (localId / ts->columns) * ts->tileHeight; // row * tileHeight
 
               auto objClass = ObjectClass::Level;
+              // if (layer.name == "Portal") {
+              //   objClass = ObjectClass::Portal;
+              // }
 
 
-              auto tile = createObject(r, c, ts->texture, ObjectClass::Level, ts->tileHeight, ts->tileWidth, srcX, srcY);
+              auto tile = createObject(r, c, ts->texture, objClass, ts->tileHeight, ts->tileWidth, srcX, srcY);
               if (layer.name != "Level") {
                 tile.collider.w = tile.collider.h = 0;
               } else if (layer.name == "Level") { // 4616 firstgid of Tileset
@@ -1357,6 +1426,24 @@ bool game_engine::Engine::initAllTiles() {
           obj.x - res.m_currLevel->map->tileWidth / 2, //17
           obj.y - res.m_currLevel->map->tileHeight / 2 //411
         );
+
+        if (obj.type == "Portal") {
+            GameObject portal = createObject(1, 1, nullptr, ObjectClass::Portal, 32, 32, 0, 0); // todo populate w/h passing from tmx file
+
+            LevelIndex lvl = LevelIndex::LEVEL_2;
+            if (res.m_currLevel->lvlIdx == LevelIndex::LEVEL_1) {
+              lvl = LevelIndex::LEVEL_2;
+            }
+            if (res.m_currLevel->lvlIdx == LevelIndex::LEVEL_2) {
+              lvl = LevelIndex::LEVEL_3;
+            }
+            portal.data.portal = PortalData(lvl);
+            portal.colliderNorm = { .x=0.0, .y=0.5, .w=1.0, .h=1.0}; // TODO setting .y = 0.5 and h = 0.5 worked well for level2
+            portal.applyScale();
+            portal.position = objStartingPos;
+
+            newLayer.push_back(portal);
+        }
 
 
         if (obj.type == "Enemy") {
@@ -1452,7 +1539,7 @@ bool game_engine::Engine::initAllTiles() {
     }
   };
 
-  LayerVisitor visitor(m_sdlState, m_gameState, m_resources);
+  LayerVisitor visitor(m_sdlState, newGameState, m_resources);
   for (std::variant<tmx::Layer, tmx::ObjectGroup> &layer : m_resources.m_currLevel->map->layers) {
     std::visit(visitor, layer);
   };
@@ -1460,7 +1547,7 @@ bool game_engine::Engine::initAllTiles() {
   std::cout << "count:" << visitor.countModColliders << std::endl;
 
 
-  return m_gameState.playerIndex != -1;
+  return newGameState.playerIndex != -1;
 };
 
 void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown, game_engine::NetGameInput &input) {

@@ -33,6 +33,11 @@ struct LevelData {
   SDL_FRect    dst{};
 };
 
+struct PortalData {
+  LevelIndex nextLevel;
+  PortalData(LevelIndex idx): nextLevel(idx) {};
+};
+
 struct EnemyData {
   EnemyState state;
   Timer damageTimer;
@@ -57,6 +62,7 @@ union ObjectData {
   PlayerData player;
   LevelData level;
   EnemyData enemy;
+  PortalData portal;
   BulletData bullet;
 
   ObjectData() { new (&level) LevelData{}; }   // pick one as default
@@ -65,7 +71,7 @@ union ObjectData {
 
 enum class ObjectClass : std::uint32_t
 {
-  Player, Level, Background, Enemy, Bullet, Sword
+  Player, Level, Portal, Background, Enemy, Bullet, Sword
 };
 
 // define all objects in the game
