@@ -229,7 +229,7 @@ bool game_engine::Engine::handleMultiplayerConnections() {
 }
 
 void game_engine::Engine::asyncSwitchToLevel(LevelIndex lvl) {
-  m_gameState.currentView = GameScreen::LevelLoading;
+  m_gameState.currentView = GameView::LevelLoading;
   m_gameState.setLevelLoadProgress(0);
   m_levelLoadThd = std::thread(&game_engine::Engine::initNextLevel, this, lvl);
 }
@@ -242,7 +242,7 @@ void game_engine::Engine::initNextLevel(LevelIndex lvl) {
 
   // throw away old world; create new gameState that will be updated in initAllTiles
   GameState newGameState(m_sdlState);
-  newGameState.currentView = GameScreen::LevelLoading;
+  newGameState.currentView = GameView::LevelLoading;
 
   // rebuild layers/objects from the newly loaded map
   initAllTiles(newGameState); // this mutates gameState
@@ -557,7 +557,8 @@ void game_engine::Engine::drawAllObjects(float deltaTime) {
     for (GameObject &obj : layer) {
 
       if (obj.objClass == ObjectClass::Background) {
-        // draw background images
+        // draw background images;
+        // TODO needs to be sorted by background layers; comes from a map of uncertain order
         drawParalaxBackground(obj.texture, getPlayer().velocity.x, obj.bgscroll, obj.scrollFactor, deltaTime, -80.0f);
 
       } else if (obj.objClass == ObjectClass::Level) {
@@ -609,7 +610,7 @@ void game_engine::Engine::drawAllObjects(float deltaTime) {
 
 void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& player) {
 
-  if (m_gameState.currentView == GameScreen::Playing) {
+  if (m_gameState.currentView == GameView::Playing) {
       setBackgroundSoundtrack(); // TODO we will want to set background track per level
 
       // update & draw game world to sdl.renderer here (before ImGui::Render)
@@ -617,46 +618,7 @@ void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& playe
 
       updateMapViewport(player);
 
-      // TODO wrap all below in Render() function
-      // calculate viewport position based on player updated position
-      // gs.mapViewport.x = (player.position.x + player.spritePixelW / 2) - gs.mapViewport.w / 2;
-      // gs.mapViewport.y = (player.position.y + player.spritePixelH / 2) - gs.mapViewport.h / 2;
-
-      // SDL_SetRenderDrawColor(sdl.renderer, 20, 10, 30, 255);
-
-      // // clear the backbuffer before drawing onto it with black from draw color above
-      // SDL_RenderClear(sdl.renderer);
-
-      // Perform drawing commands:
-
-      // draw background images
-      // SDL_RenderTexture(sdl.renderer, res.texBg1, nullptr, nullptr);
-      // this->drawParalaxBackground(res.texBg4, player.velocity.x, gs.bg4scroll, 0.075f, deltaTime);
-      // this->drawParalaxBackground(res.texBg3, player.velocity.x, gs.bg3scroll, 0.15f, deltaTime);
-      // this->drawParalaxBackground(res.texBg2, player.velocity.x, gs.bg2scroll, 0.3f, deltaTime);
-
-      // draw all background objects
-      // for (auto &tile : gs.backgroundTiles) {
-      //   SDL_FRect dst{
-      //     .x = tile.position.x - gs.mapViewport.x,
-      //     .y = tile.position.y,
-      //     .w = static_cast<float>(tile.texture->w),
-      //     .h = static_cast<float>(tile.texture->h),
-      //   };
-      //   SDL_RenderTexture(sdl.renderer, tile.texture, nullptr, &dst);
-      // }
       drawAllObjects(deltaTime);
-
-      // draw all foreground objects
-      // for (auto &tile : gs.foregroundTiles) {
-      //   SDL_FRect dst{
-      //     .x = tile.position.x - gs.mapViewport.x,
-      //     .y = tile.position.y,
-      //     .w = static_cast<float>(tile.texture->w),
-      //     .h = static_cast<float>(tile.texture->h),
-      //   };
-      //   SDL_RenderTexture(sdl.renderer, tile.texture, nullptr, &dst);
-      // }
 
       // debugging
       if (m_gameState.debugMode) {
@@ -686,7 +648,7 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
     ImVec2 buttonSize = ImVec2(150, 50); // TODO put in config
 
     switch (m_gameState.currentView) {
-      case GameScreen::MainMenu:
+      case GameView::MainMenu:
       {
         this->stopBackgroundSoundtrack();
         ImGui::Begin("Main Menu", nullptr, m_sdlState.ImGuiWindowFlags);
@@ -694,11 +656,11 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
         if (ImGui::Button("Single Player", buttonSize)) {
             std::cout << "start game" << std::endl;
             std::puts("Start clicked");
-            m_gameState.currentView = GameScreen::Playing;
+            m_gameState.currentView = GameView::Playing;
             m_gameType = game_engine::Engine::SinglePlayer;
         }
         if (ImGui::Button("Multiplayer",buttonSize)) {
-          m_gameState.currentView = GameScreen::MultiPlayerOptionsMenu;
+          m_gameState.currentView = GameView::MultiPlayerOptionsMenu;
           std::cout << "multi game" << std::endl;
         }
         if (ImGui::Button("Quit", buttonSize)) {
@@ -708,7 +670,7 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
         ImGui::End();
         break;
       }
-      case GameScreen::LevelLoading:
+      case GameView::LevelLoading:
       {
         {
           std::lock_guard<std::mutex> lock(m_levelMutex);
@@ -717,7 +679,7 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
             if (m_levelLoadThd.joinable()) {
                 m_levelLoadThd.join();
             }
-            m_gameState.currentView = GameScreen::Playing;
+            m_gameState.currentView = GameView::Playing;
             break;
           }
 
@@ -728,9 +690,10 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
         }
         break;
       }
-      case GameScreen::GameOver:
+      case GameView::GameOver:
       {
         // When player
+        stopBackgroundSoundtrack();
         ImGui::Begin("GameOver", nullptr, m_sdlState.ImGuiWindowFlags);
         ImGui::Text("GAME OVER");
         if (ImGui::Button("Try Again")) {
@@ -739,56 +702,39 @@ void game_engine::Engine::updateImGuiMenuRenderState() {
         ImGui::End();
         break;
       }
-      case GameScreen::PauseMenu:
+      case GameView::PauseMenu:
       {
         ImGui::Begin("Pause", nullptr, m_sdlState.ImGuiWindowFlags);
-        if (ImGui::Button("Resume")) m_gameState.currentView = GameScreen::Playing;
+        if (ImGui::Button("Resume")) m_gameState.currentView = GameView::Playing;
         if (ImGui::Button("Quit")) m_gameRunning.store(false);
         ImGui::End();
         break;
       }
-      case GameScreen::MultiPlayerOptionsMenu:
+      case GameView::MultiPlayerOptionsMenu:
       {
         // drawSettings();
         ImGui::Begin("MultiPlayer Menu", nullptr, m_sdlState.ImGuiWindowFlags);
         if (ImGui::Button("Host A Game",buttonSize)) {
           m_gameType = game_engine::Engine::Host;
-          m_gameState.currentView = GameScreen::Playing;
+          m_gameState.currentView = GameView::Playing;
         }
         if (ImGui::Button("Join A Game", buttonSize)) {
           m_gameType = game_engine::Engine::Client;
-          m_gameState.currentView = GameScreen::Playing;
+          m_gameState.currentView = GameView::Playing;
         }
         if (ImGui::Button("Back to Menu", buttonSize)) {
           // todo; should reset game state unless saved
-          m_gameState.currentView = GameScreen::MainMenu;
+          m_gameState.currentView = GameView::MainMenu;
         }
         ImGui::End();
         break;
       }
-      case GameScreen::Playing:
+      case GameView::Playing:
       {
-        ImGuiWindowFlags ImGuiWindowFlags =
-          m_sdlState.ImGuiWindowFlags | ImGuiWindowFlags_NoBackground;
-          // ImGuiWindowFlags_NoSavedSettings;
-          ImGui::Begin("HUD", nullptr, ImGuiWindowFlags);
-          // Optional: remove padding so the button hugs the corner
-          ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
-          ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-          if (ImGui::Button("Back to Menu", buttonSize)) {
-              m_gameState.currentView = GameScreen::MainMenu;
-          }
-          ImGui::SameLine(0, 2.0f);
-          if (ImGui::Button("Save Game", buttonSize)) {
-            // TODO
-          }
-          ImGui::SameLine(0, 2.0f);
-          if (ImGui::Button("Start Over (Debug)", buttonSize)) {
-            asyncSwitchToLevel(m_resources.m_currLevelIdx);
-          }
-          ImGui::PopItemFlag();
-          ImGui::PopStyleVar();
-          ImGui::End();
+        if (m_gameState.drawMenuSettingsDuringGameplay(buttonSize)) {
+           asyncSwitchToLevel(m_resources.m_currLevelIdx);
+        }
+        m_gameState.drawPlayerHealthBar();
         break;
       }
     }
@@ -821,6 +767,10 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
   float currDirection = 0;
   if (obj.objClass == ObjectClass::Player) {
+
+
+
+    m_gameState.evaluateGameOver();
 
     // this way player cant spam jump and fly; but sometimes gets stuck and is unable to jump
     // if (state.keys[SDL_SCANCODE_DOWN]) {
@@ -970,6 +920,25 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
         handleShooting(entityRes.texIdle, entityRes.texShoot, m_resources.ANIM_IDLE, m_resources.ANIM_SHOOT, false);
 
+        break;
+      }
+      case PlayerState::hurt: {
+        if (obj.data.player.damageTimer.step(deltaTime)) {
+          obj.data.player.state = PlayerState::idle;
+          obj.texture = entityRes.texIdle;
+          obj.currentAnimation = m_resources.ANIM_IDLE;
+          obj.data.player.damageTimer.reset();
+        }
+        break;
+      }
+      case PlayerState::dead:
+      {
+        if (obj.currentAnimation != -1 && obj.animations[obj.currentAnimation].isDone()) {
+          obj.currentAnimation = -1; // prevent animation from looping after death
+          obj.spriteFrame = 4;
+
+          m_gameState.currentView = GameView::GameOver;
+        }
         break;
       }
       case PlayerState::running:
@@ -1189,7 +1158,36 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
     switch (objB.objClass) {
       case ObjectClass::Level:
       {
-        defaultResponse();
+        if (objB.data.level.isHazard) {
+            EntityResources entityRes = m_resources.m_currLevel->texCharacterMap.at(objA.spriteType);
+            PlayerData &d = objA.data.player;
+            if (d.state != PlayerState::dead) {
+              // objA.direction = -1 * objA.direction;
+              objA.position.y -= rectC.h; // up
+              objA.shouldFlash = true;
+              objA.flashTimer.reset();
+              objA.texture = entityRes.texHit;
+              objA.currentAnimation = m_resources.ANIM_HIT;
+              d.state = PlayerState::hurt;
+
+              // damage and flag dead
+              if (!d.damageTimer.isTimedOut()) {
+                d.healthPoints -= 50.0;
+              }
+              if (d.healthPoints <= 0) {
+                d.state = PlayerState::dead;
+                objA.texture = entityRes.texDie;
+                objA.currentAnimation = m_resources.ANIM_DIE;
+                MIX_PlayTrack(m_resources.enemyDieTrack, 0);
+                objA.velocity = glm::vec2(0);
+                // m_gameState.currentView = GameView::GameOver;
+              }
+              MIX_PlayTrack(m_resources.enemyHitTrack, 0);
+            }
+
+        } else {
+          defaultResponse();
+        }
         break;
       }
       case ObjectClass::Enemy:
@@ -1238,7 +1236,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               d.state = EnemyState::dying;
 
               // damage and flag dead
-              d.healthPoints -= 10;
+              d.healthPoints -= 100;
               if (d.healthPoints <= 0) {
                 d.state = EnemyState::dead;
                 objB.texture = entityRes.texDie;
@@ -1383,20 +1381,24 @@ bool game_engine::Engine::initAllTiles(GameState &newGameState) {
               int srcX = (localId % ts->columns) * ts->tileWidth; // col * tileWidth;
               int srcY = (localId / ts->columns) * ts->tileHeight; // row * tileHeight
 
-              auto objClass = ObjectClass::Level;
-              // if (layer.name == "Portal") {
-              //   objClass = ObjectClass::Portal;
-              // }
+              bool isHazard = false;
+              if (layer.name == "Hazard") {
+                isHazard = true;
+              }
 
+              auto tile = createObject(r, c, ts->texture, ObjectClass::Level, ts->tileHeight, ts->tileWidth, srcX, srcY);
 
-              auto tile = createObject(r, c, ts->texture, objClass, ts->tileHeight, ts->tileWidth, srcX, srcY);
               if (layer.name != "Level") {
                 tile.collider.w = tile.collider.h = 0;
-              } else if (layer.name == "Level") { // 4616 firstgid of Tileset
+              }
+
+              if (layer.name == "Level" || isHazard) { // 4616 firstgid of Tileset
                 if (auto it = ts->tiles.find(localId); it != ts->tiles.end() && it->second.collider) {
                   tile.collider = *(it->second.collider);
+                  tile.data.level.isHazard = isHazard;
                   countModColliders += 1;
                 };
+
               };
 
               newLayer.push_back(tile);

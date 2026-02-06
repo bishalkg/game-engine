@@ -71,7 +71,7 @@ namespace game_engine {
     SDLState() : keys(SDL_GetKeyboardState(nullptr)) {}
   };
 
-  enum class GameScreen {
+  enum class GameView {
       Playing,
       MainMenu,
       PauseMenu,
@@ -122,7 +122,7 @@ namespace game_engine {
 
       std::atomic<uint8_t> m_loadProgress = 100;
 
-      GameScreen currentView;
+      GameView currentView;
 
       uint64_t m_stateLastUpdatedAt; // when the gameState was last updated, by local or by server msg
 
@@ -136,7 +136,7 @@ namespace game_engine {
       SDL_FRect mapViewport; // viewable part of map
       float bg2scroll, bg3scroll, bg4scroll;
 
-      GameState(const SDLState &state): bg2scroll(0), bg3scroll(0), bg4scroll(0), currentView(GameScreen::MainMenu) {
+      GameState(const SDLState &state): bg2scroll(0), bg3scroll(0), bg4scroll(0), currentView(GameView::MainMenu) {
         playerIndex = -1;
         mapViewport = SDL_FRect{
           .x = 0, .y = 0,
@@ -151,6 +151,56 @@ namespace game_engine {
 
       void setLevelLoadProgress(uint8_t progress) {m_loadProgress.store(progress); }
       uint8_t getLevelLoadProgress() { return m_loadProgress.load(); }
+
+      void evaluateGameOver() {
+
+        GameObject& p = player(playerIndex);
+
+        if (!p.grounded && p.position.y > 1500) {
+          currentView = GameView::GameOver;
+        }
+
+      };
+
+      bool drawMenuSettingsDuringGameplay(ImVec2 buttonSize) {
+        ImGuiWindowFlags ImGuiWindowFlags =
+          ImGuiWindowFlags | ImGuiWindowFlags_NoBackground;
+          // ImGuiWindowFlags_NoSavedSettings;
+          ImGui::Begin("HUD", nullptr, ImGuiWindowFlags);
+          // Optional: remove padding so the button hugs the corner
+          ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+          ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+          if (ImGui::Button("Back to Menu", buttonSize)) {
+              currentView = GameView::MainMenu;
+          }
+          ImGui::SameLine(0, 2.0f);
+          if (ImGui::Button("Save Game", buttonSize)) {
+            // TODO
+          }
+          ImGui::SameLine(0, 2.0f);
+          if (ImGui::Button("Start Over (Debug)", buttonSize)) {
+            return true;
+          }
+          return false;
+      };
+
+      void drawPlayerHealthBar() {
+          // health bar
+          ImGui::PopItemFlag();
+          ImGui::PopStyleVar();
+          ImGui::End();
+          ImGui::SetNextWindowPos(ImVec2(10, 10));
+          ImGui::Begin("HUD", nullptr, ImGuiWindowFlags_NoTitleBar |
+                                      ImGuiWindowFlags_NoBackground |
+                                      ImGuiWindowFlags_NoResize |
+                                      ImGuiWindowFlags_NoMove);
+          int playerHP = player(playerIndex).data.player.healthPoints;
+          float hpFrac = static_cast<float>(playerHP) / 100.0; // 0..1
+          ImGui::Text("HP");
+          ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(0, 200, 0, 255)); // green
+          ImGui::ProgressBar(hpFrac, ImVec2(150, 24));ImGui::PopStyleColor();
+          ImGui::End();
+      };
 
       game_engine::NetGameStateSnapshot extractNetSnapshot() const {
         NetGameStateSnapshot snapshot;
@@ -197,8 +247,9 @@ namespace game_engine {
           // }
         };
 
-        return snapshot;
-      };
+          return snapshot;
+        };
+
   };
 
   // struct TileSetTextures {
@@ -415,7 +466,7 @@ namespace game_engine {
           m_currLevel->texCharacterMap[character].anims[ANIM_SWING] = Animation(attackFrames, attackSeconds);
 
           auto [jumpFrames, jumpSeconds] = spriteAssets.animSettings.at(ANIM_JUMP);
-          m_currLevel->texCharacterMap[character].anims[ANIM_JUMP] = Animation(jumpFrames, jumpSeconds);
+          m_currLevel->texCharacterMap[character].anims[ANIM_JUMP] = Animation(jumpFrames, jumpSeconds, 2);
 
         }
       }

@@ -6,7 +6,7 @@
 #include "level_manifest.h"
 
 enum class PlayerState: std::uint32_t {
-  idle, running, jumping, swingWeapon
+  idle, running, jumping, swingWeapon, hurt, dead
 };
 
 enum class BulletState: std::uint32_t {
@@ -31,6 +31,7 @@ struct PlayerData {
 struct LevelData {
   SDL_FRect     src{};
   SDL_FRect    dst{};
+  bool isHazard{false};
 };
 
 struct PortalData {
