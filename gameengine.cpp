@@ -1016,6 +1016,18 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           };
           obj.acceleration = glm::vec2(30, 0);
           obj.texture = entityRes.texRun;
+
+
+          // step the attack timer here
+          // if the timer is done switch state to attack
+          if (obj.data.enemy.attackTimer.step(deltaTime)) {
+            obj.data.enemy.state = EnemyState::attack;
+            obj.texture = entityRes.texAttack;
+            obj.currentAnimation = m_resources.ANIM_SWING;
+            obj.data.enemy.attackTimer.reset();
+          }
+
+
         } else {
           // stop them from moving when too far away
           obj.acceleration = glm::vec2(0);
@@ -1025,7 +1037,16 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
         break;
       }
-      case EnemyState::dying:
+      case EnemyState::attack:
+      {
+        if (obj.data.enemy.idleTimer.step(deltaTime)) {
+          obj.data.enemy.state = EnemyState::idle;
+          obj.texture = entityRes.texIdle;
+          obj.currentAnimation = m_resources.ANIM_IDLE;
+          obj.data.enemy.idleTimer.reset();
+        }
+      }
+      case EnemyState::hurt:
       {
         if (obj.data.enemy.damageTimer.step(deltaTime)) {
           obj.data.enemy.state = EnemyState::idle;
@@ -1233,7 +1254,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               objB.flashTimer.reset();
               objB.texture = entityRes.texHit;
               objB.currentAnimation = m_resources.ANIM_HIT;
-              d.state = EnemyState::dying;
+              d.state = EnemyState::hurt;
 
               // damage and flag dead
               d.healthPoints -= 100;
@@ -1268,7 +1289,49 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
 
   }
   else if (objA.objClass == ObjectClass::Enemy) {
-    defaultResponse(); // ensure enemy doesnt fall through floor
+    switch (objB.objClass) {
+      case ObjectClass::Level:
+      {
+        if (objB.data.level.isHazard) {
+            EntityResources entityRes = m_resources.m_currLevel->texCharacterMap.at(objA.spriteType);
+            EnemyData &d = objA.data.enemy;
+            if (d.state != EnemyState::dead) {
+              // objA.direction = -1 * objA.direction;
+              objA.position.y -= rectC.h; // up
+              objA.shouldFlash = true;
+              objA.flashTimer.reset();
+              objA.texture = entityRes.texHit;
+              objA.currentAnimation = m_resources.ANIM_HIT;
+              d.state = EnemyState::hurt;
+
+              // damage and flag dead
+              if (!d.damageTimer.isTimedOut()) {
+                d.healthPoints -= 50.0;
+              }
+              if (d.healthPoints <= 0) {
+                d.state = EnemyState::dead;
+                objA.texture = entityRes.texDie;
+                objA.currentAnimation = m_resources.ANIM_DIE;
+                MIX_PlayTrack(m_resources.enemyDieTrack, 0);
+                objA.velocity = glm::vec2(0);
+                // m_gameState.currentView = GameView::GameOver;
+              }
+              MIX_PlayTrack(m_resources.enemyHitTrack, 0);
+            }
+
+        } else {
+          defaultResponse();
+        }
+        break;
+      }
+      case ObjectClass::Enemy:
+      {
+        if (objB.data.enemy.state != EnemyState::dead) {
+          objA.velocity = glm::vec2(50, 0) * - objA.direction;
+        }
+        break;
+      }
+    }
   }
 
 }

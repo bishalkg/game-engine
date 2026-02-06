@@ -14,7 +14,7 @@ enum class BulletState: std::uint32_t {
 };
 
 enum class EnemyState: std::uint32_t {
-  idle, dying, dead
+  idle, hurt, dead, attack
 };
 
 struct PlayerData {
@@ -42,11 +42,13 @@ struct PortalData {
 struct EnemyData {
   EnemyState state;
   Timer damageTimer;
+  Timer attackTimer;
+  Timer idleTimer;
   int healthPoints;
   int srcH, srcW;
 
 
-  EnemyData(): state(EnemyState::idle), damageTimer(1.0f) {
+  EnemyData(): state(EnemyState::idle), damageTimer(1.0f), attackTimer(1.0), idleTimer(1.0) {
     healthPoints = 100;
   };
 };

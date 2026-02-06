@@ -85,7 +85,7 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   enemy.grounded = false;
   enemy.shouldFlash = true;
   new (&enemy.data.enemy) EnemyData{};
-  enemy.data.enemy.state = EnemyState::dying;
+  enemy.data.enemy.state = EnemyState::hurt;
   enemy.data.enemy.healthPoints = 50;
   enemy.data.enemy.srcH = 16;
   enemy.data.enemy.srcW = 24;

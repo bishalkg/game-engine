@@ -258,7 +258,7 @@ namespace game_engine {
   // };
 
   struct EntityResources {
-    SDL_Texture *texIdle, *texWalk, *texRun, *texSlide, *texSwing, *texJump, *texHit, *texDie,
+    SDL_Texture *texIdle, *texWalk, *texRun, *texSlide, *texAttack, *texJump, *texHit, *texDie,
           *texShoot, *texRunShoot, *texSlideShoot;
     std::vector<Animation> anims;
   };
@@ -398,7 +398,7 @@ namespace game_engine {
           m_currLevel->texCharacterMap[character].texIdle = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.idleTex);
           m_currLevel->texCharacterMap[character].texWalk = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.walkTex);
           m_currLevel->texCharacterMap[character].texRun = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.runTex);
-          m_currLevel->texCharacterMap[character].texSwing = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.attackTex);
+          m_currLevel->texCharacterMap[character].texAttack = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.attackTex);
           m_currLevel->texCharacterMap[character].texHit = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.hitTex);
           m_currLevel->texCharacterMap[character].texDie = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.dieTex);
 
@@ -431,7 +431,7 @@ namespace game_engine {
           m_currLevel->texCharacterMap[character].texIdle = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.idleTex);
           m_currLevel->texCharacterMap[character].texWalk = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.walkTex);
           m_currLevel->texCharacterMap[character].texRun = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.runTex);
-          m_currLevel->texCharacterMap[character].texSwing = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.attackTex);
+          m_currLevel->texCharacterMap[character].texAttack = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.attackTex);
           m_currLevel->texCharacterMap[character].texHit = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.hitTex);
           m_currLevel->texCharacterMap[character].texDie = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.dieTex);
           m_currLevel->texCharacterMap[character].texShoot = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.shootTex);
