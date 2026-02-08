@@ -23,7 +23,7 @@ const int ANIM_HIT = 8;
 const int ANIM_DIE = 9;
 
 enum class SpriteType: std::uint32_t {
-  Player_Knight, Player_Mage, Minotaur_1, Skeleton_Warrior, Red_Werewolf
+  Player_Knight, Player_Mage, Minotaur_1, Skeleton_Warrior, Red_Werewolf, Player_Marie, Skeleton_Pikeman
 };
 
 struct SpriteAssetPaths {
@@ -55,5 +55,6 @@ struct LevelAssets {
   std::string background2PathName; //Flora1x32
   std::string background1PathName; //Flora1x32
   std::string backgroundAudioPath; // data/audio/Level_3_Final_Floor.wav
+  std::string gameOverAudioPath;
   std::vector<SpriteType> enemyTypes;
 };

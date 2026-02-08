@@ -5,9 +5,10 @@
 static std::unordered_map<std::string, SpriteType> CHARACTER_NAME_TO_SPRITE_TYPE = {
   {"Player_Knight", SpriteType::Player_Knight},
   {"Player_Mage", SpriteType::Player_Mage},
-  {"Player_Mage", SpriteType::Player_Mage},
+  {"Player_Marie", SpriteType::Player_Marie},
   {"Minotaur_1", SpriteType::Minotaur_1},
   {"Skeleton_Warrior", SpriteType::Skeleton_Warrior},
+  {"Skeleton_Pikeman", SpriteType::Skeleton_Pikeman},
   {"Red_Werewolf", SpriteType::Red_Werewolf},
 };
 
@@ -59,14 +60,43 @@ static std::unordered_map<SpriteType, SpriteAssets> PLAYER_CONFIG = {
         .jumpTex = "data/players/Knight_3/Jump.png",
       },
       .animSettings = {
-        { ANIM_IDLE,{ 4, 0.8f } },
-        { ANIM_RUN, { 7, 0.8f } },
+        { ANIM_IDLE,{ 4, 0.5f } },
+        { ANIM_RUN, { 7, 0.5f } },
         { ANIM_SLIDE, { 7, 1.0f } },
         { ANIM_SHOOT, { 5, 0.5f } },
         { ANIM_HIT, { 2, 0.6f } },
         { ANIM_DIE, { 6, 0.6f } },
         { ANIM_SLIDE_SHOOT, { 5, 0.5f } },
-        { ANIM_JUMP , { 6, 1.0f } },
+        { ANIM_JUMP , { 6, 0.5f } },
+        { ANIM_SWING , { 5, 0.5f } },
+      },
+    },
+  },
+  {
+    SpriteType::Player_Marie,
+    SpriteAssets{
+      .paths = SpriteAssetPaths{
+        .idleTex = "data/players/Marie/Idle.png",
+        .walkTex = "data/players/Mage/Walk.png",
+        .runTex = "data/players/Marie/Run.png",
+        .attackTex = "data/players/Mage/Attack_2.png",
+        .hitTex = "data/players/Mage/Hurt.png",
+        .dieTex = "data/players/Mage/Dead.png",
+        .shootTex = "data/players/Mage/Attack_1.png",
+        .slideTex = "data/players/Mage/Hurt.png",
+        .runShootTex = "data/players/Mage/Attack_1.png",
+        .slideShootTex = "data/players/Mage/Attack_1.png",
+        .jumpTex = "data/players/Marie/Jump.png",
+      },
+      .animSettings = {
+        { ANIM_IDLE,{ 8, 1.6f } },
+        { ANIM_RUN, { 8, 0.6f } },
+        { ANIM_SLIDE, { 4, 0.5f } },
+        { ANIM_SHOOT, { 7, 0.6f } },
+        { ANIM_HIT, { 4, 0.6f } },
+        { ANIM_DIE, { 4, 0.6f } },
+        { ANIM_SLIDE_SHOOT, { 7, 0.5f } },
+        { ANIM_JUMP , { 8, 0.5f } },
         { ANIM_SWING , { 4, 1.0f } },
       },
     },
@@ -91,7 +121,7 @@ static std::unordered_map<SpriteType, SpriteAssets> ENEMY_CONFIG = {
         { ANIM_RUN, { 12, 1.0f } },
         { ANIM_HIT, { 3, 0.5f } },
         { ANIM_DIE , { 5, 0.5f } },
-        { ANIM_SWING , { 4, 1.0f } },
+        { ANIM_SWING , { 4, 0.5f } },
       },
     },
   },
@@ -111,7 +141,7 @@ static std::unordered_map<SpriteType, SpriteAssets> ENEMY_CONFIG = {
         { ANIM_RUN, { 8, 1.0f } },
         { ANIM_HIT, { 2, 0.5f } },
         { ANIM_DIE , { 4, 0.5f } },
-        { ANIM_SWING , { 5, 1.0f } },
+        { ANIM_SWING , { 5, 0.5f } },
       },
     },
   },
@@ -135,8 +165,30 @@ static std::unordered_map<SpriteType, SpriteAssets> ENEMY_CONFIG = {
       },
     },
   },
+  {
+    SpriteType::Skeleton_Pikeman,
+    SpriteAssets{
+      .paths = SpriteAssetPaths{
+        .idleTex = "data/enemies/Skeleton_Spearman/Idle.png",
+        .walkTex = "data/enemies/Skeleton_Spearman/Walk.png",  // 11 frames
+        .runTex = "data/enemies/Skeleton_Spearman/Run.png",
+        .attackTex = "data/enemies/Skeleton_Spearman/Attack_1.png",
+        .hitTex = "data/enemies/Skeleton_Spearman/Hurt.png",
+        .dieTex = "data/enemies/Skeleton_Spearman/Dead.png",
+      },
+      .animSettings = {
+        { ANIM_IDLE,{ 7, 1.0f } },
+        { ANIM_RUN, { 6, 1.0f } },
+        { ANIM_HIT, { 3, 0.5f } },
+        { ANIM_DIE , { 5, 0.5f } },
+        { ANIM_SWING , { 4, 0.5f } },
+      },
+    },
+  },
 };
 
+
+inline constexpr const char* DEFAULT_GAME_OVER_SOUND = "data/audio/game_over.mp3";
 
 // Define config for each level
 inline std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
@@ -148,8 +200,11 @@ inline std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
       .background3PathName = "Clouds_x32",
       .background2PathName = "Flora2x32",
       .background1PathName = "Flora1x32",
-      .backgroundAudioPath = "data/audio/Level_1_Forest_Outside_Castle.wav",
-      .enemyTypes = { SpriteType::Minotaur_1,  SpriteType::Skeleton_Warrior },
+      // .backgroundAudioPath = "data/audio/Level_1_Forest_Outside_Castle.wav",
+      // .backgroundAudioPath = "data/audio/1. Dawn of Blades.wav",
+      .backgroundAudioPath = "data/audio/1. Dawn of Blades.wav",
+      .gameOverAudioPath = DEFAULT_GAME_OVER_SOUND,
+      .enemyTypes = { SpriteType::Minotaur_1,  SpriteType::Skeleton_Warrior},
     },
   },
   {
@@ -160,8 +215,9 @@ inline std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
       .background3PathName = "background3",
       .background2PathName = "background4a",
       .background1PathName = "background4b",
-      .backgroundAudioPath = "data/audio/Level_2_Castle_Floor_1.wav",
-      .enemyTypes = { SpriteType::Red_Werewolf,  SpriteType::Skeleton_Warrior},
+      .backgroundAudioPath = "data/audio/11. Whispers in the Fog.wav",
+      .gameOverAudioPath = DEFAULT_GAME_OVER_SOUND,
+      .enemyTypes = { SpriteType::Red_Werewolf,  SpriteType::Skeleton_Warrior,SpriteType::Skeleton_Pikeman },
     },
   },
 };

@@ -152,13 +152,15 @@ namespace game_engine {
       void setLevelLoadProgress(uint8_t progress) {m_loadProgress.store(progress); }
       uint8_t getLevelLoadProgress() { return m_loadProgress.load(); }
 
-      void evaluateGameOver() {
+      bool evaluateGameOver() {
 
         GameObject& p = player(playerIndex);
 
         if (!p.grounded && p.position.y > 1500) {
           currentView = GameView::GameOver;
+          return true;
         }
+        return false;
 
       };
 
@@ -274,6 +276,8 @@ namespace game_engine {
     std::vector<SDL_Texture*> textures; // store textures to cleanup later
     MIX_Audio *backgroundAudio{nullptr};
     MIX_Track *backgroundTrack{nullptr};
+    MIX_Audio *gameOverAudio{nullptr};
+    MIX_Track *gameOverAudioTrack{nullptr};
 
     Level(LevelIndex lvl): lvlIdx(lvl) {};
 
@@ -316,6 +320,7 @@ namespace game_engine {
     // std::vector<MIX_Audio*> audioBuff;
     MIX_Audio *audioShoot, *audioShootHit, *audioEnemyHit, *audioEnemyDie;
     MIX_Track *shootTrack, *hitTrack, *enemyHitTrack, *enemyDieTrack;
+
     // std::vector<MIX_Track*> audioTracks;
     float m_masterAudioGain = 0;
     MIX_Mixer* mixer;
@@ -472,9 +477,14 @@ namespace game_engine {
       }
 
       auto [backgroundAudio, backgroundTrack] = loadAudioChunk(assets.backgroundAudioPath, masterAudioGain);
+
+      auto [gameOverAudio, gameOverAudioTrack] = loadAudioChunk(assets.gameOverAudioPath, masterAudioGain);
       // auto std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk(assets.backgroundAudioPath, masterAudioGain);
       m_currLevel->backgroundAudio = backgroundAudio;
       m_currLevel->backgroundTrack = backgroundTrack;
+      m_currLevel->gameOverAudio = gameOverAudio;
+      m_currLevel->gameOverAudioTrack = gameOverAudioTrack;
+
       // this->lvl = std::move(lvl);
       return true;
     };
@@ -616,12 +626,14 @@ namespace game_engine {
       void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime, float y);
       void setBackgroundSoundtrack();
       void stopBackgroundSoundtrack();
+      void setGameOverSoundtrack();
+      void stopGameOverSoundtrack();
 
       void updateGameplayState(float deltaTime, GameObject& player);
       void updateAllObjects(float deltaTime);
       void updateMapViewport(GameObject& player);
       void drawAllObjects(float deltaTime);
-      void updateImGuiMenuRenderState();
+      bool updateImGuiMenuRenderState();
       void clearRenderer();
       void renderUpdates();
 
