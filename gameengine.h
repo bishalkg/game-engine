@@ -261,7 +261,7 @@ namespace game_engine {
 
   struct EntityResources {
     SDL_Texture *texIdle, *texWalk, *texRun, *texSlide, *texAttack, *texJump, *texHit, *texDie,
-          *texShoot, *texRunShoot, *texSlideShoot;
+          *texShoot, *texRunShoot, *texSlideShoot, *texRunAttack;
     std::vector<Animation> anims;
   };
 
@@ -308,6 +308,7 @@ namespace game_engine {
     const int ANIM_WALK = 7;
     const int ANIM_HIT = 8;
     const int ANIM_DIE = 9;
+    const int ANIM_RUN_ATTACK = 10;
 
     const int ANIM_BULLET_MOVING = 0;
     const int ANIM_BULLET_HIT = 1;
@@ -437,6 +438,7 @@ namespace game_engine {
           m_currLevel->texCharacterMap[character].texWalk = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.walkTex);
           m_currLevel->texCharacterMap[character].texRun = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.runTex);
           m_currLevel->texCharacterMap[character].texAttack = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.attackTex);
+          m_currLevel->texCharacterMap[character].texRunAttack = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.runAttackTex);
           m_currLevel->texCharacterMap[character].texHit = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.hitTex);
           m_currLevel->texCharacterMap[character].texDie = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.dieTex);
           m_currLevel->texCharacterMap[character].texShoot = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.shootTex);
@@ -445,12 +447,16 @@ namespace game_engine {
           m_currLevel->texCharacterMap[character].texSlideShoot = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.slideShootTex);
           m_currLevel->texCharacterMap[character].texJump = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.jumpTex);
 
-          m_currLevel->texCharacterMap[character].anims.resize(10);
+          // TODO THIS IS SIZE OF ANIMS
+          m_currLevel->texCharacterMap[character].anims.resize(11);
           auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
           m_currLevel->texCharacterMap[character].anims[ANIM_IDLE] = Animation(idleFrames, idleSeconds);
 
           auto [runFrames, runSeconds] = spriteAssets.animSettings.at(ANIM_RUN);
           m_currLevel->texCharacterMap[character].anims[ANIM_RUN] = Animation(runFrames, runSeconds);
+
+          auto [runAttackFrames, runAttackSeconds] = spriteAssets.animSettings.at(ANIM_RUN_ATTACK);
+          m_currLevel->texCharacterMap[character].anims[ANIM_RUN_ATTACK] = Animation(runAttackFrames, runAttackSeconds);
 
           auto [slideFrames, slideSeconds] = spriteAssets.animSettings.at(ANIM_SLIDE);
           m_currLevel->texCharacterMap[character].anims[ANIM_SLIDE] = Animation(slideFrames, slideSeconds);

@@ -835,96 +835,114 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     Timer &weaponTimer = obj.data.player.weaponTimer;
     weaponTimer.step(deltaTime);
     const auto handleAttacking = [this, &obj, &entityRes, &weaponTimer, &currDirection, deltaTime](
-      SDL_Texture *tex, SDL_Texture *shootTex, int animIndex, int shootAnimIndex, bool handleJump){
+      SDL_Texture *tex, SDL_Texture *attackTex, int animIndex, int attackAnimIndex, bool handleJump){
+
 
         if (m_sdlState.keys[SDL_SCANCODE_S]) {
-          obj.texture = entityRes.texAttack;
-          obj.currentAnimation = m_resources.ANIM_SWING;
+
+          // if you dont hold down S then this state isnt held.
+          // so need a timer mechanism to hold state
+          // jump works this way.
+          // obj.texture = entityRes.texAttack;
+          // obj.currentAnimation = m_resources.ANIM_SWING;
+          // if (obj.data.player.state == PlayerState::running) {
+          //   obj.texture = entityRes.texRunAttack;
+          //   obj.currentAnimation = m_resources.ANIM_RUN_ATTACK;
+          //   obj.animations[m_resources.ANIM_RUN_ATTACK].reset();
+          // } else {
+          //   obj.texture = entityRes.texAttack;
+          //   obj.currentAnimation = m_resources.ANIM_SWING;
+          //   obj.animations[m_resources.ANIM_SWING].reset();
+          // }
+          obj.texture = attackTex;
+          obj.currentAnimation = attackAnimIndex;
+          obj.animations[attackAnimIndex].reset();
+          obj.data.player.state = PlayerState::swingWeapon;
 
         } else if (m_sdlState.keys[SDL_SCANCODE_A]) {
 
-        obj.texture = shootTex;
-        obj.currentAnimation = shootAnimIndex;
+          obj.texture = attackTex;
+          obj.currentAnimation = attackAnimIndex;
 
-        if (obj.animations[shootAnimIndex].currentFrame() == 4) {
-          // obj.animations[shootAnimIndex].freezeAtFrame();
-          // obj.currentAnimation = -1;   // use spriteFrame path
-          // obj.spriteFrame      = 4;
+          if (obj.animations[attackAnimIndex].currentFrame() == 4) {
+            // obj.animations[shootAnimIndex].freezeAtFrame();
+            // obj.currentAnimation = -1;   // use spriteFrame path
+            // obj.spriteFrame      = 4;
 
-          // TODO i want it to finish the rest of the ScanCodeA is no longer pressed
-        } else {
-          obj.currentAnimation = shootAnimIndex;
-        }
+            // TODO i want it to finish the rest of the ScanCodeA is no longer pressed
+          } else {
+            obj.currentAnimation = attackAnimIndex;
+          }
 
 
-        // When you shoot (no loops, no track index needed):
-        if (m_resources.whooshCooldown.isTimedOut()) {
-          m_resources.whooshCooldown.reset();
-          MIX_PlayAudio(m_resources.mixer, m_resources.audioShoot);
-        }
-        m_resources.whooshCooldown.step(deltaTime); // whooshCooldown should have same length as bullet weaponTimer
+          // When you shoot (no loops, no track index needed):
+          if (m_resources.whooshCooldown.isTimedOut()) {
+            m_resources.whooshCooldown.reset();
+            MIX_PlayAudio(m_resources.mixer, m_resources.audioShoot);
+          }
+          m_resources.whooshCooldown.step(deltaTime); // whooshCooldown should have same length as bullet weaponTimer
 
-        if (weaponTimer.isTimedOut()) {
-          weaponTimer.reset();
-          // create bullets
-          GameObject bullet(128, 128);
-          bullet.drawScale = 2.0f;
-          bullet.colliderNorm = { .x=0.0, .y=0.40, .w=0.5, .h=0.1 };
-          bullet.applyScale();
+          if (weaponTimer.isTimedOut()) {
+            weaponTimer.reset();
+            // create bullets
+            GameObject bullet(128, 128);
+            bullet.drawScale = 2.0f;
+            bullet.colliderNorm = { .x=0.0, .y=0.40, .w=0.5, .h=0.1 };
+            bullet.applyScale();
 
-          bullet.data.bullet = BulletData();
-          bullet.objClass = ObjectClass::Bullet;
-          bullet.direction = obj.direction;
-          bullet.texture = m_resources.texBullet;
-          bullet.currentAnimation = m_resources.ANIM_BULLET_MOVING;
-          const int yJitter = 50;
-          const float yVelocity = SDL_rand(yJitter) - yJitter / 1.5f;
-          bullet.velocity = glm::vec2(
-            obj.velocity.x + 200.0f,
-            yVelocity
-          ) * obj.direction;
-          bullet.maxSpeedX = 1000.0f;
-          bullet.animations = m_resources.bulletAnims;
+            bullet.data.bullet = BulletData();
+            bullet.objClass = ObjectClass::Bullet;
+            bullet.direction = obj.direction;
+            bullet.texture = m_resources.texBullet;
+            bullet.currentAnimation = m_resources.ANIM_BULLET_MOVING;
+            const int yJitter = 50;
+            const float yVelocity = SDL_rand(yJitter) - yJitter / 1.5f;
+            bullet.velocity = glm::vec2(
+              obj.velocity.x + 200.0f,
+              yVelocity
+            ) * obj.direction;
+            bullet.maxSpeedX = 1000.0f;
+            bullet.animations = m_resources.bulletAnims;
 
-          // adjust depending on direction faced; lerp
-          const float left = -10;
-          const float right = 50;
-          const float t = (obj.direction + 1) / 2.0f; // 0 or 1 taking into account neg sign
-          const float xOffset = left + right * t;
-          bullet.position = glm::vec2(
-            obj.position.x + xOffset,
-            obj.position.y + (obj.spritePixelH/bullet.drawScale) / 3.0
-          );
+            // adjust depending on direction faced; lerp
+            const float left = -10;
+            const float right = 50;
+            const float t = (obj.direction + 1) / 2.0f; // 0 or 1 taking into account neg sign
+            const float xOffset = left + right * t;
+            bullet.position = glm::vec2(
+              obj.position.x + xOffset,
+              obj.position.y + (obj.spritePixelH/bullet.drawScale) / 3.0
+            );
 
-          bool foundInactive = false;
-          for (int i = 0; i < m_gameState.bullets.size() && !foundInactive; i++) {
-            if (m_gameState.bullets[i].data.bullet.state == BulletState::inactive) {
-              foundInactive = true;
-              m_gameState.bullets[i] = bullet;
+            bool foundInactive = false;
+            for (int i = 0; i < m_gameState.bullets.size() && !foundInactive; i++) {
+              if (m_gameState.bullets[i].data.bullet.state == BulletState::inactive) {
+                foundInactive = true;
+                m_gameState.bullets[i] = bullet;
+              }
+            }
+
+            // only add new if no inactive found
+            if (!foundInactive) {
+              this->m_gameState.bullets.push_back(bullet); // push bullets so we can draw them
             }
           }
 
-          // only add new if no inactive found
-          if (!foundInactive) {
-            this->m_gameState.bullets.push_back(bullet); // push bullets so we can draw them
+
+        } else if (handleJump) {
+          if (obj.currentAnimation != m_resources.ANIM_JUMP &&
+              obj.currentAnimation != -1) {
+              obj.currentAnimation = m_resources.ANIM_JUMP;
+              obj.animations[m_resources.ANIM_JUMP].reset();
+              obj.texture = entityRes.texJump;
           }
-        }
 
+          if (obj.currentAnimation == m_resources.ANIM_JUMP &&
+              obj.animations[m_resources.ANIM_JUMP].isDone()) {
+              obj.currentAnimation = -1;              // mark as finished so it won’t restart
+          }
 
-      } else if (handleJump) {
-        if (obj.currentAnimation != m_resources.ANIM_JUMP &&
-            obj.currentAnimation != -1) {
-            obj.currentAnimation = m_resources.ANIM_JUMP;
-            obj.animations[m_resources.ANIM_JUMP].reset();
-            obj.texture = entityRes.texJump;
-        }
-
-        if (obj.currentAnimation == m_resources.ANIM_JUMP &&
-            obj.animations[m_resources.ANIM_JUMP].isDone()) {
-            obj.currentAnimation = -1;              // mark as finished so it won’t restart
-        }
-
-      } else {
+        } else {
         obj.animations[m_resources.ANIM_SHOOT].reset();
         obj.animations[m_resources.ANIM_SLIDE_SHOOT].reset();
         // obj.animations[shootAnimIndex].unfreezeAnim();
@@ -935,6 +953,8 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
       }
     };
 
+    const bool wantSwing = m_sdlState.keys[SDL_SCANCODE_S];
+    const bool canSwing  = (obj.data.player.state != PlayerState::swingWeapon);
     // update animation state
     switch (obj.data.player.state) {
       case PlayerState::idle:
@@ -956,7 +976,13 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           }
         }
 
-        handleAttacking(entityRes.texIdle, entityRes.texShoot, m_resources.ANIM_IDLE, m_resources.ANIM_SHOOT, false);
+        // handleAttacking(entityRes.texIdle, entityRes.texShoot, m_resources.ANIM_IDLE, m_resources.ANIM_SHOOT, false);
+
+        if (wantSwing && canSwing) {
+            handleAttacking(entityRes.texRun, entityRes.texRunAttack, m_resources.ANIM_RUN, m_resources.ANIM_RUN_ATTACK, false);
+        } else {
+            handleAttacking(entityRes.texIdle, entityRes.texShoot, m_resources.ANIM_IDLE, m_resources.ANIM_SHOOT, false);
+        }
 
         break;
       }
@@ -985,11 +1011,16 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         if (currDirection == 0) {
           obj.data.player.state = PlayerState::idle;
         }
+
         // move in opposite dir of velocity, sliding
         if (obj.velocity.x * obj.direction < 0 && obj.grounded) {
           handleAttacking(entityRes.texSlide, entityRes.texSlideShoot, m_resources.ANIM_SLIDE, m_resources.ANIM_SLIDE_SHOOT, false);
         } else {
-          handleAttacking(entityRes.texRun, entityRes.texRunShoot, m_resources.ANIM_RUN, m_resources.ANIM_RUN, false);
+          if (wantSwing && canSwing) {
+            handleAttacking(entityRes.texRun, entityRes.texRunAttack, m_resources.ANIM_RUN, m_resources.ANIM_RUN_ATTACK, false);
+          } else {
+            handleAttacking(entityRes.texRun, entityRes.texRunShoot, m_resources.ANIM_RUN, m_resources.ANIM_RUN, false);
+          }
         }
 
         break;
@@ -1005,39 +1036,37 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           }
         }
 
-        handleAttacking(entityRes.texJump, entityRes.texRunShoot, m_resources.ANIM_JUMP, m_resources.ANIM_JUMP, true);
+        if (wantSwing && canSwing) {
+          handleAttacking(entityRes.texRun, entityRes.texRunAttack, m_resources.ANIM_RUN, m_resources.ANIM_RUN_ATTACK, false);
+        } else {
+          handleAttacking(entityRes.texJump, entityRes.texRunShoot, m_resources.ANIM_JUMP, m_resources.ANIM_JUMP, true);
+        }
 
         // handleShooting(m_resources.texRun, m_resources.texRunShoot, m_resources.ANIM_PLAYER_RUN, m_resources.ANIM_PLAYER_RUN);
         // obj.texture = m_resources.texJump;
         // obj.currentAnimation = m_resources.ANIM_PLAYER_JUMP;
         break;
       }
-      // case PlayerState::swingWeapon: { // handle swinging weapon like handleShooting
+      case PlayerState::swingWeapon: { // handle swinging weapon like handleShooting
+        // sets to idle immediately in next loop even when currentAnimation=10
+        if (obj.currentAnimation == m_resources.ANIM_RUN_ATTACK &&
+            obj.animations[m_resources.ANIM_RUN_ATTACK].isDone()) {
+            obj.data.player.state = PlayerState::idle;
+            obj.texture = entityRes.texIdle;
+            obj.currentAnimation = m_resources.ANIM_IDLE;
+            obj.animations[m_resources.ANIM_RUN_ATTACK].reset();
+            obj.animations[m_resources.ANIM_IDLE].reset();
+        } else if (obj.currentAnimation == m_resources.ANIM_SWING &&
+                  obj.animations[m_resources.ANIM_SWING].isDone()) {
+            obj.data.player.state = PlayerState::idle;
+            obj.texture = entityRes.texIdle;
+            obj.currentAnimation = m_resources.ANIM_IDLE;
+            obj.animations[m_resources.ANIM_SWING].reset();
+            obj.animations[m_resources.ANIM_IDLE].reset();
+        }
 
-      //   // When swinging weapon:
-      //   // take input of S (not hold down). Plays whole animation once.
-      //   // in that time you cant press S again.
-      //   if (!obj.animations[m_resources.ANIM_SWING].isDone()) {
-      //     obj.data.player.state = PlayerState::swingWeapon;
-      //     obj.texture = entityRes.texAttack;
-      //     obj.currentAnimation = m_resources.ANIM_SWING;
-      //   } else {
-      //     obj.data.player.state = PlayerState::idle;
-      //     obj.texture = entityRes.texIdle;
-      //     obj.currentAnimation = m_resources.ANIM_IDLE;
-      //   }
-      //   // if (obj.data.player.damageTimer.step(deltaTime)) {
-      //   //   obj.data.player.state = PlayerState::idle;
-      //   //   obj.texture = entityRes.texIdle;
-      //   //   obj.currentAnimation = m_resources.ANIM_IDLE;
-      //   //   obj.data.player.damageTimer.reset();
-      //   // } else {
-      //   //   obj.data.player.state = PlayerState::swingWeapon;
-      //   //   obj.texture = entityRes.texAttack;
-      //   //   obj.currentAnimation = m_resources.ANIM_SWING;
-      //   // }
-      //   break;
-      // }
+        break;
+      }
     }
   } else if (obj.objClass == ObjectClass::Bullet) {
 
