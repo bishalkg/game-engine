@@ -527,6 +527,10 @@ void game_engine::Engine::drawObject(GameObject &obj, float height, float width,
 
 void game_engine::Engine::updateAllObjects(float deltaTime) {
 
+  if (m_gameState.evaluateGameOver()) {
+    setGameOverSoundtrack();
+  }
+
   // if singleplayer let is pass through normal logic
   for (auto &layer : m_gameState.layers) {
     for (GameObject &obj : layer) { // for each obj in layer
@@ -778,51 +782,61 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
   if (obj.currentAnimation != -1) {
     obj.animations[obj.currentAnimation].step(deltaTime);
-
-    // if (obj.currentAnimation == m_resources.ANIM_JUMP &&
-    //   obj.animations[m_resources.ANIM_JUMP].isDone()){
-    //   obj.currentAnimation = -1;
-    //   obj.texture = entityRes.texRun;
-    // }
-
   }
 
   // gravity applied globally; downward y force when not grounded
   if (obj.dynamic && !obj.grounded) {
-    // if (obj.type == ObjectType::enemy) {
-    //     std::cout << "grounded" << obj.grounded << std::endl;
-    // }
     // increase downward velocity = acc*deltaTime every frame
     obj.velocity += GRAVITY * deltaTime;
   }
 
+  // const auto widenColliderForSwing = [&](GameObject& o, float currDirection) {
+  //   if (obj.objClass == ObjectClass::Player && obj.data.player.state == PlayerState::swingWeapon) {
+
+  //     // const float drawW = o.spritePixelW / o.drawScale;
+  //     // const float extra  = 0.2f * drawW;
+
+  //     // SDL_FRect c = baseFacing(o);
+  //     // c.w += extra;
+  //     // if (currDirection < 0) c.x -= extra; // extend to the left
+  //     // o.collider = c;
+
+  //     const float drawW = o.spritePixelW / o.drawScale;
+  //     const float extra  = 0.2f * drawW;           // how much to extend the sword
+  //     const auto& base   = o.baseCollider;
+
+  //     o.collider = base;
+  //     o.collider.w = base.w + extra;
+  //     if (currDirection < 0) {
+  //         // facing left: shift left so the leading edge moves outward
+  //         o.collider.x = base.x + extra;
+  //     } else {
+  //         // facing right: leave x as base; extension goes to the right
+  //         o.collider.x = base.x;
+  //     }
+  //   }
+  // };
+  const auto baseFacing = [&](const GameObject& o) {
+      SDL_FRect c = o.baseCollider;
+      if (o.direction < 0) {
+          float drawW = o.spritePixelW / o.drawScale;
+          c.x = drawW - (c.x + c.w); // mirror the base for left
+      }
+      return c;
+  };
+
+  const auto widenColliderForSwing = [&](GameObject& o) {
+      const float drawW = o.spritePixelW / o.drawScale;
+      const float extra = 0.3f * drawW;
+
+      SDL_FRect c = baseFacing(o);
+      c.w += extra;
+      if (o.direction < 0) c.x -= extra; // extend left
+      o.collider = c;
+  };
+
   float currDirection = 0;
   if (obj.objClass == ObjectClass::Player) {
-
-
-
-    if (m_gameState.evaluateGameOver()) {
-      setGameOverSoundtrack();
-    }
-
-    // this way player cant spam jump and fly; but sometimes gets stuck and is unable to jump
-    // if (state.keys[SDL_SCANCODE_DOWN]) {
-    //   handleKeyInput(obj, SDL_SCANCODE_DOWN, false);
-    // }
-    // if (state.keys[SDL_SCANCODE_UP]) {
-    //   handleKeyInput(obj, SDL_SCANCODE_UP, true);
-    // }
-    // keep previous key state somewhere (per frame)
-    // bool upPressed = state.keys[SDL_SCANCODE_UP];
-    // if (upPressed && !prevUpPressed) {
-    //     handleKeyInput(obj, SDL_SCANCODE_UP, true);  // key just went down
-    // }
-    // if (!upPressed && prevUpPressed) {
-    //     handleKeyInput(obj, SDL_SCANCODE_UP, false); // key just went up (if you care)
-    // }
-    // prevUpPressed = upPressed;
-
-    // EntityResources entityRes = m_resources.texCharacterMap[obj.spriteType];
 
     // update direction
     if (m_sdlState.keys[SDL_SCANCODE_LEFT]) {
@@ -834,30 +848,18 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
     Timer &weaponTimer = obj.data.player.weaponTimer;
     weaponTimer.step(deltaTime);
-    const auto handleAttacking = [this, &obj, &entityRes, &weaponTimer, &currDirection, deltaTime](
+
+    const auto handleAttacking = [this, &obj, &entityRes, &weaponTimer, &currDirection, deltaTime, widenColliderForSwing](
       SDL_Texture *tex, SDL_Texture *attackTex, int animIndex, int attackAnimIndex, bool handleJump){
 
 
         if (m_sdlState.keys[SDL_SCANCODE_S]) {
 
-          // if you dont hold down S then this state isnt held.
-          // so need a timer mechanism to hold state
-          // jump works this way.
-          // obj.texture = entityRes.texAttack;
-          // obj.currentAnimation = m_resources.ANIM_SWING;
-          // if (obj.data.player.state == PlayerState::running) {
-          //   obj.texture = entityRes.texRunAttack;
-          //   obj.currentAnimation = m_resources.ANIM_RUN_ATTACK;
-          //   obj.animations[m_resources.ANIM_RUN_ATTACK].reset();
-          // } else {
-          //   obj.texture = entityRes.texAttack;
-          //   obj.currentAnimation = m_resources.ANIM_SWING;
-          //   obj.animations[m_resources.ANIM_SWING].reset();
-          // }
           obj.texture = attackTex;
           obj.currentAnimation = attackAnimIndex;
           obj.animations[attackAnimIndex].reset();
           obj.data.player.state = PlayerState::swingWeapon;
+          widenColliderForSwing(obj);
 
         } else if (m_sdlState.keys[SDL_SCANCODE_A]) {
 
@@ -869,7 +871,6 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
             // obj.currentAnimation = -1;   // use spriteFrame path
             // obj.spriteFrame      = 4;
 
-            // TODO i want it to finish the rest of the ScanCodeA is no longer pressed
           } else {
             obj.currentAnimation = attackAnimIndex;
           }
@@ -959,6 +960,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     switch (obj.data.player.state) {
       case PlayerState::idle:
       {
+        obj.collider = baseFacing(obj);
         if (currDirection != 0) {
           obj.data.player.state = PlayerState::running;
           obj.texture = entityRes.texRun;
@@ -1051,6 +1053,9 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         // sets to idle immediately in next loop even when currentAnimation=10
         if (obj.currentAnimation == m_resources.ANIM_RUN_ATTACK &&
             obj.animations[m_resources.ANIM_RUN_ATTACK].isDone()) {
+
+            obj.collider = baseFacing(obj);
+
             obj.data.player.state = PlayerState::idle;
             obj.texture = entityRes.texIdle;
             obj.currentAnimation = m_resources.ANIM_IDLE;
@@ -1059,6 +1064,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         } else if (obj.currentAnimation == m_resources.ANIM_SWING &&
                   obj.animations[m_resources.ANIM_SWING].isDone()) {
             obj.data.player.state = PlayerState::idle;
+            obj.collider = baseFacing(obj);
             obj.texture = entityRes.texIdle;
             obj.currentAnimation = m_resources.ANIM_IDLE;
             obj.animations[m_resources.ANIM_SWING].reset();
@@ -1174,9 +1180,9 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     obj.position.x -= positionShift; // Keep world position constant
 
     // If this is the player, adjust camera to prevent screen jump
-    if (obj.objClass == ObjectClass::Player) {
-      m_gameState.mapViewport.x -= positionShift;
-    }
+    // if (obj.objClass == ObjectClass::Player) {
+    //   // m_gameState.mapViewport.x -= positionShift/2;
+    // }
 
     obj.direction = currDirection;
   } else if (currDirection) {
@@ -1309,6 +1315,32 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
       {
         if (objB.data.enemy.state != EnemyState::dead) {
           objA.velocity = glm::vec2(50, 0) * - objA.direction;
+
+          if (objA.data.player.state == PlayerState::swingWeapon) {
+            // when swinging weapon and colliding, reduce enemy health
+            EntityResources entityRes = m_resources.m_currLevel->texCharacterMap.at(objB.spriteType);
+            EnemyData &d = objB.data.enemy;
+
+            // function damageObject(state, damageAmount, entityRes, dieTrack, hitTrack)
+            if (d.state != EnemyState::dead) {
+              objB.direction = -1 * objA.direction;
+              objB.shouldFlash = true;
+              objB.flashTimer.reset();
+              objB.texture = entityRes.texHit;
+              objB.currentAnimation = m_resources.ANIM_HIT;
+              d.state = EnemyState::hurt;
+
+              // damage and flag dead
+              d.healthPoints -= 10;
+              if (d.healthPoints <= 0) {
+                d.state = EnemyState::dead;
+                objB.texture = entityRes.texDie;
+                objB.currentAnimation = m_resources.ANIM_DIE;
+                MIX_PlayTrack(m_resources.enemyDieTrack, 0);
+              }
+              MIX_PlayTrack(m_resources.enemyHitTrack, 0);
+            }
+          }
         }
         break;
       }
@@ -1342,6 +1374,8 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
 
             EntityResources entityRes = m_resources.m_currLevel->texCharacterMap.at(objB.spriteType);
             EnemyData &d = objB.data.enemy;
+
+            // function damageObject(state, damageAmount, entityRes, dieTrack, hitTrack)
             if (d.state != EnemyState::dead) {
               objB.direction = -1 * objA.direction;
               objB.shouldFlash = true;
@@ -1351,7 +1385,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               d.state = EnemyState::hurt;
 
               // damage and flag dead
-              d.healthPoints -= 100;
+              d.healthPoints -= 10;
               if (d.healthPoints <= 0) {
                 d.state = EnemyState::dead;
                 objB.texture = entityRes.texDie;
@@ -1400,7 +1434,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
 
               // damage and flag dead
               if (!playerData.damageTimer.isTimedOut()) {
-                playerData.healthPoints -= 50.0;
+                playerData.healthPoints -= 10.0;
               }
               if (playerData.healthPoints <= 0) {
                 playerData.state = PlayerState::dead;
@@ -1597,22 +1631,22 @@ bool game_engine::Engine::initAllTiles(GameState &newGameState) {
 
           }
         }
-      } else if (layer.name == "Sky" || layer.name == "Background_4") { // 4
+      } else if (layer.name == "Background_4") { // 4
         auto bgImg = createObject(0, 0, res.m_currLevel->map->tileSets[res.m_currLevel->bg4Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
         bgImg.scrollFactor = 0.2f;
         newLayer.push_back(bgImg);
-      } else if (layer.name == "Clouds" || layer.name == "Background_3") { // 3
+      } else if (layer.name == "Background_3") { // 3
         auto bgImg = createObject(0, 0, res.m_currLevel->map->tileSets[res.m_currLevel->bg3Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
         bgImg.scrollFactor = 0.2f;
         newLayer.push_back(bgImg);
-      } else if (layer.name == "Flora2" || layer.name == "Background_2") { // 2
+      } else if (layer.name == "Background_2") { // 2
         auto bgImg = createObject(0, 0, res.m_currLevel->map->tileSets[res.m_currLevel->bg2Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
         bgImg.scrollFactor = 0.3f;
         newLayer.push_back(bgImg);
-      } else if (layer.name == "Flora1" || layer.name == "Background_1") { // 1
+      } else if (layer.name == "Background_1") { // 1
         auto bgImg = createObject(0, 0, res.m_currLevel->map->tileSets[res.m_currLevel->bg1Idx].texture, ObjectClass::Background, 0, 0, 0, 0);
         bgImg.bgscroll = 0;
         bgImg.scrollFactor = 0.4f;
@@ -1711,7 +1745,7 @@ bool game_engine::Engine::initAllTiles(GameState &newGameState) {
           switch (spriteType) {
             case SpriteType::Player_Knight:
             {
-              player.colliderNorm = { .x=0.30f, .y=0.5f, .w=wFrac, .h=0.5f };
+              player.colliderNorm = { .x=0.1f, .y=0.5f, .w=wFrac, .h=0.5f };
               break;
             }
             case SpriteType::Player_Mage:
@@ -1728,6 +1762,9 @@ bool game_engine::Engine::initAllTiles(GameState &newGameState) {
           };
 
           player.applyScale();
+
+          // TODO need a collider for attacks that get used during the attack state.
+
           float drawW = player.spritePixelW / player.drawScale;
           float drawH = player.spritePixelH / player.drawScale;
 
@@ -1787,13 +1824,6 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
           obj.data.player.jumpWindupTimer.reset(); // 100 ms delay (set duration in ctor)
           obj.data.player.jumpImpulseApplied = false;
         }
-        // else if (key == SDL_SCANCODE_S) {
-
-        //   // todo handle swing of sword
-        //   obj.data.player.state = PlayerState::swingWeapon;
-        //   input.move = PlayerInput::Swing;
-        //   input.shouldSendMessage = true;
-        // }
         break;
       }
       case PlayerState::jumping:
@@ -1828,27 +1858,8 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
           input.move = game_engine::PlayerInput::Jump;
           input.shouldSendMessage = true;
         }
-
-        // else if (key == SDL_SCANCODE_S) {
-
-        //   // todo handle swing of sword
-        //   obj.data.player.state = PlayerState::swingWeapon;
-        //   input.move = PlayerInput::Swing;
-        //   input.shouldSendMessage = true;
-        // }
         break;
       }
-      // case PlayerState::swingWeapon:
-      // {
-      //   // set back to idle state after done swinging weapon
-
-
-      //   if (!keyDown) {
-      //     // obj.velocity.y = 0;
-      //     obj.data.player.state = PlayerState::idle;
-      //   }
-      //   break;
-      // }
     }
 
   }

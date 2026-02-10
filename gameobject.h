@@ -97,6 +97,7 @@ struct GameObject {
   float drawScale = 1.0f;
   float spritePixelW;
   float spritePixelH;
+  SDL_FRect baseCollider;
   SDL_FRect collider;
   SDL_FRect colliderNorm{0.25f, 0.25f, 0.5f, 0.5f}; // x,y,w,h as fractions of scaled sprite
 
@@ -126,6 +127,7 @@ struct GameObject {
       colliderNorm.w * drawW,
       colliderNorm.h * drawH,
     };
+    baseCollider = collider;
 
     // std::cout << "x: " << collider.x << " y: " << collider.y << " w: " << collider.w << " h: " << collider.h << std::endl;
   };
