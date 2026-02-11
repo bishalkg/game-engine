@@ -3,9 +3,10 @@
 #include <vector>
 #include "animation.h"
 #include <SDL3/SDL.h>
+#include "level_manifest.h"
 
 enum class PlayerState: std::uint32_t {
-  idle, running, jumping, swingWeapon
+  idle, running, jumping, swingWeapon, hurt, dead
 };
 
 enum class BulletState: std::uint32_t {
@@ -13,19 +14,7 @@ enum class BulletState: std::uint32_t {
 };
 
 enum class EnemyState: std::uint32_t {
-  idle, dying, dead
-};
-
-enum class SpriteType: std::uint32_t {
-  Player_Knight, Player_Mage, Minotaur_1, Skeleton_Warrior
-};
-
-static std::unordered_map<std::string, SpriteType> characterNameToSpriteType = {
-  {"Player_Knight", SpriteType::Player_Knight},
-  {"Player_Mage", SpriteType::Player_Mage},
-  {"Player_Mage", SpriteType::Player_Mage},
-  {"Minotaur_1", SpriteType::Minotaur_1},
-  {"Skeleton_Warrior", SpriteType::Skeleton_Warrior},
+  idle, hurt, dead, attack
 };
 
 struct PlayerData {
@@ -36,22 +25,30 @@ struct PlayerData {
   Timer jumpWindupTimer;
   bool jumpImpulseApplied;
 
-  PlayerData(): weaponTimer(0.35f), damageTimer(1.0f), jumpWindupTimer(0.05f) { state = PlayerState::idle; healthPoints = 100; };
+  PlayerData(): weaponTimer(0.05f), damageTimer(1.0f), jumpWindupTimer(0.05f) { state = PlayerState::idle; healthPoints = 100; };
 };
 
 struct LevelData {
   SDL_FRect     src{};
   SDL_FRect    dst{};
+  bool isHazard{false};
+};
+
+struct PortalData {
+  LevelIndex nextLevel;
+  PortalData(LevelIndex idx): nextLevel(idx) {};
 };
 
 struct EnemyData {
   EnemyState state;
   Timer damageTimer;
+  Timer attackTimer;
+  Timer idleTimer;
   int healthPoints;
   int srcH, srcW;
 
 
-  EnemyData(): state(EnemyState::idle), damageTimer(1.0f) {
+  EnemyData(): state(EnemyState::idle), damageTimer(1.0f), attackTimer(1.0), idleTimer(1.0) {
     healthPoints = 100;
   };
 };
@@ -68,6 +65,7 @@ union ObjectData {
   PlayerData player;
   LevelData level;
   EnemyData enemy;
+  PortalData portal;
   BulletData bullet;
 
   ObjectData() { new (&level) LevelData{}; }   // pick one as default
@@ -76,7 +74,7 @@ union ObjectData {
 
 enum class ObjectClass : std::uint32_t
 {
-  Player, Level, Background, Enemy, Bullet, Sword
+  Player, Level, Portal, Background, Enemy, Bullet, Sword
 };
 
 // define all objects in the game
@@ -99,6 +97,7 @@ struct GameObject {
   float drawScale = 1.0f;
   float spritePixelW;
   float spritePixelH;
+  SDL_FRect baseCollider;
   SDL_FRect collider;
   SDL_FRect colliderNorm{0.25f, 0.25f, 0.5f, 0.5f}; // x,y,w,h as fractions of scaled sprite
 
@@ -128,6 +127,7 @@ struct GameObject {
       colliderNorm.w * drawW,
       colliderNorm.h * drawH,
     };
+    baseCollider = collider;
 
     // std::cout << "x: " << collider.x << " y: " << collider.y << " w: " << collider.w << " h: " << collider.h << std::endl;
   };
