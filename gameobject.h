@@ -24,6 +24,7 @@ struct PlayerData {
   Timer weaponTimer;
   Timer jumpWindupTimer;
   bool jumpImpulseApplied;
+  bool playLandingFrame = false;
 
   PlayerData(): weaponTimer(0.05f), damageTimer(1.0f), jumpWindupTimer(0.05f) { state = PlayerState::idle; healthPoints = 100; };
 };

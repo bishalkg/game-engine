@@ -980,8 +980,6 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           }
         }
 
-        // handleAttacking(entityRes.texIdle, entityRes.texShoot, m_resources.ANIM_IDLE, m_resources.ANIM_SHOOT, false);
-
         if (wantSwing && canSwing) {
             handleAttacking(entityRes.texRun, entityRes.texRunAttack, m_resources.ANIM_RUN, m_resources.ANIM_RUN_ATTACK, false);
         } else {
@@ -1038,6 +1036,30 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
               obj.velocity.y += JUMP_FORCE;   // upward impulse
               obj.data.player.jumpImpulseApplied = true;
           }
+        } else {
+          int n = obj.animations[m_resources.ANIM_JUMP].getFrameCount(); // e.g. 6 frames -> indices 0..5
+
+          // Airborne: hold second‑to‑last frame once reached
+          if (!obj.grounded && obj.currentAnimation == m_resources.ANIM_JUMP) {
+              if (obj.animations[m_resources.ANIM_JUMP].currentFrame() >= n - 2) {
+                  obj.currentAnimation = -1;           // stop timered anim
+                  obj.spriteFrame = (n - 2) + 1;       // freeze on frame n-2 (1‑based)
+                  obj.data.player.playLandingFrame = true;
+              }
+          }
+
+          if (obj.grounded) {
+              if (obj.data.player.playLandingFrame) {
+                  obj.currentAnimation = -1;           // show landing frame once
+                  obj.spriteFrame = (n - 1) + 1;       // last frame (1‑based)
+                  obj.data.player.playLandingFrame = false;
+                  break;                               // render this frame; state stays jumping this tick
+              } else {
+                  obj.velocity.y = 0;
+                  obj.data.player.state = PlayerState::idle; // or running
+                  obj.animations[m_resources.ANIM_JUMP].reset();
+              }
+          }
         }
 
         if (wantSwing && canSwing) {
@@ -1045,10 +1067,6 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         } else {
           handleAttacking(entityRes.texJump, entityRes.texRunShoot, m_resources.ANIM_JUMP, m_resources.ANIM_JUMP, true);
         }
-
-        // handleShooting(m_resources.texRun, m_resources.texRunShoot, m_resources.ANIM_PLAYER_RUN, m_resources.ANIM_PLAYER_RUN);
-        // obj.texture = m_resources.texJump;
-        // obj.currentAnimation = m_resources.ANIM_PLAYER_JUMP;
         break;
       }
       case PlayerState::swingWeapon: { // handle swinging weapon like handleShooting
@@ -1237,15 +1255,16 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
   if (obj.grounded != foundGround) {
     // switching grounded state
     obj.grounded = foundGround;
-    if (foundGround && obj.objClass == ObjectClass::Player) {
-      obj.data.player.state = PlayerState::running;
+    if (foundGround && obj.objClass == ObjectClass::Player && !obj.data.player.playLandingFrame) {
+        obj.data.player.state = PlayerState::running;
 
-      if (obj.grounded && obj.data.player.jumpImpulseApplied) {
-        obj.data.player.state = PlayerState::idle;
-        obj.data.player.jumpImpulseApplied = false;
-        obj.data.player.jumpWindupTimer.reset();
+        if (obj.grounded && obj.data.player.jumpImpulseApplied) {
+          obj.data.player.state = PlayerState::idle;
+          obj.data.player.jumpImpulseApplied = false;
+          obj.data.player.jumpWindupTimer.reset();
+        }
       }
-    }
+
   }
 }
 
@@ -1758,7 +1777,7 @@ bool game_engine::Engine::initAllTiles(GameState &newGameState) {
             case SpriteType::Player_Marie:
             {
               player.colliderNorm = { .x=0.30f, .y=0.5f, .w=wFrac, .h=0.5f };
-              player.drawScale = 1.5f;
+              player.drawScale = 2.0f;
               break;
             }
           };
@@ -1830,22 +1849,30 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
       }
       case PlayerState::jumping:
       {
-        // if (!keyDown) { // once you stop holding down the key, set player state back to idle
-        //   obj.velocity.y = 0;
-        //   obj.data.player.state = PlayerState::idle;
-        // }
-        // if (obj.animations[m_resources.ANIM_JUMP].isDone()) {
-        //   // fix current frame to last frame
-        //   obj.currentAnimation = -1;
-        // }
+          // While airborne: play jump anim, but clamp to frame n-2 once reached
+          if (!obj.grounded && obj.currentAnimation == m_resources.ANIM_JUMP) {
+              int n   = obj.animations[m_resources.ANIM_JUMP].getFrameCount();
+              int cap = std::max(0, n - 2);
+              if (obj.spriteFrame >= cap) {
+                  obj.spriteFrame = cap;           // hold second-to-last frame
+                  obj.data.player.playLandingFrame = true;
+              }
+          }
 
-        if (obj.grounded) { // once you stop holding down the key, set player state back to idle
-          obj.velocity.y = 0;
-          obj.data.player.state = PlayerState::idle;
-
-          // obj.animations[m_resources.ANIM_JUMP].reset();
-        }
-        break;
+          if (obj.grounded) {
+              if (obj.data.player.playLandingFrame) {
+                  int n = obj.animations[m_resources.ANIM_JUMP].getFrameCount();
+                  obj.currentAnimation = m_resources.ANIM_JUMP;
+                  obj.spriteFrame = n - 1;         // show last frame on landing
+                  obj.data.player.playLandingFrame = false;
+                  break; // let this frame render the landing frame
+              } else {
+                  obj.velocity.y = 0;
+                  obj.data.player.state = PlayerState::idle; // or running
+                  obj.animations[m_resources.ANIM_JUMP].reset();
+              }
+          }
+          break;
       }
       case PlayerState::running:
       {
