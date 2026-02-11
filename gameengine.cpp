@@ -1728,9 +1728,9 @@ bool game_engine::Engine::initAllTiles(GameState &newGameState) {
         if (obj.type == "Player") {
           SpriteType spriteType = CHARACTER_NAME_TO_SPRITE_TYPE.at(obj.name);
           int texDim = 128;
-          if (spriteType == SpriteType::Player_Marie) {
-            texDim = 96;
-          }
+          // if (spriteType == SpriteType::Player_Marie) {
+          //   texDim = 96;
+          // }
 
           GameObject player = createObject(1, 1, res.m_currLevel->texCharacterMap.at(spriteType).texIdle, ObjectClass::Player, texDim, texDim, 0, 0); // NEED TO PASS DOWN CHARACTER TILE SIXES
           // Marie: 96
@@ -1756,7 +1756,7 @@ bool game_engine::Engine::initAllTiles(GameState &newGameState) {
             case SpriteType::Player_Marie:
             {
               player.colliderNorm = { .x=0.30f, .y=0.5f, .w=wFrac, .h=0.5f };
-              player.drawScale = 2.0f;
+              player.drawScale = 1.5f;
               break;
             }
           };
