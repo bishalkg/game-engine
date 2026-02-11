@@ -101,7 +101,7 @@ static std::unordered_map<SpriteType, SpriteAssets> PLAYER_CONFIG = {
         { ANIM_HIT, { 4, 0.6f } },
         { ANIM_DIE, { 8, 0.6f } },
         { ANIM_SLIDE_SHOOT, { 7, 0.5f } },
-        { ANIM_JUMP , { 6, 1.2f } },
+        { ANIM_JUMP , { 6, 0.5f } },
         { ANIM_SWING , { 6, 0.4f } },
         { ANIM_RUN_ATTACK , { 6, 0.4f } },
       },

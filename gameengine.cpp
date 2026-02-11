@@ -859,9 +859,10 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
           obj.texture = attackTex;
           obj.currentAnimation = attackAnimIndex;
-          obj.animations[attackAnimIndex].reset();
+          // obj.animations[attackAnimIndex].reset();
           obj.data.player.state = PlayerState::swingWeapon;
           widenColliderForSwing(obj);
+          MIX_PlayAudio(m_resources.mixer, m_resources.audioSword1);
 
         } else if (m_sdlState.keys[SDL_SCANCODE_A]) {
 
@@ -1324,7 +1325,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
                 objA.velocity = glm::vec2(0);
                 // m_gameState.currentView = GameView::GameOver;
               }
-              MIX_PlayTrack(m_resources.enemyHitTrack, 0);
+              MIX_PlayTrack(m_resources.enemyProjectileHitTrack, 0);
             }
 
         } else {
@@ -1357,9 +1358,12 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
                 d.state = EnemyState::dead;
                 objB.texture = entityRes.texDie;
                 objB.currentAnimation = m_resources.ANIM_DIE;
-                MIX_PlayTrack(m_resources.enemyDieTrack, 0);
+                MIX_PlayAudio(m_resources.mixer, m_resources.audioEnemyDie);
               }
-              MIX_PlayTrack(m_resources.enemyHitTrack, 0);
+              // MIX_PlayAudio(m_resources.mixer, m_resources.audioBoneImpact);
+              MIX_PlayTrack(m_resources.boneImpactHitTrack, 0);
+              // TODO wrap this in a func() so that it doesnt allow more than one sound to occur until its done.
+              // PlayTrack doesnt allow repeating while the track is already playing so might be better to use it instead actually.
             }
           }
         }
@@ -1387,6 +1391,9 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
             if (!MIX_PlayTrack(m_resources.hitTrack, 0)) {
             // SDL_Log("Play failed: %s", SDL_GetError());
             };
+            // if (!MIX_PlayAudio(m_resources.mixer, m_resources.audioShootHit)) {
+            // // SDL_Log("Play failed: %s", SDL_GetError());
+            // };
 
             break;
           }
@@ -1411,9 +1418,10 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
                 d.state = EnemyState::dead;
                 objB.texture = entityRes.texDie;
                 objB.currentAnimation = m_resources.ANIM_DIE;
-                MIX_PlayTrack(m_resources.enemyDieTrack, 0);
+                MIX_PlayAudio(m_resources.mixer, m_resources.audioEnemyDie);
               }
-              MIX_PlayTrack(m_resources.enemyHitTrack, 0);
+              // MIX_PlayAudio(m_resources.mixer, m_resources.audioProjectileEnemyHit);
+              MIX_PlayTrack(m_resources.enemyProjectileHitTrack, 0);
             } else {
               passthrough = true;
             }
@@ -1461,11 +1469,12 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
                 playerData.state = PlayerState::dead;
                 objB.texture = playerRes.texDie;
                 objB.currentAnimation = m_resources.ANIM_DIE;
-                MIX_PlayTrack(m_resources.enemyDieTrack, 0);
+                MIX_PlayAudio(m_resources.mixer, m_resources.audioEnemyDie);
                 objB.velocity = glm::vec2(0);
                 // m_gameState.currentView = GameView::GameOver;
               }
-              MIX_PlayTrack(m_resources.enemyHitTrack, 0);
+              // MIX_PlayAudio(m_resources.mixer, m_resources.audioProjectileEnemyHit);
+              MIX_PlayTrack(m_resources.enemyProjectileHitTrack, 0);
             }
         }
         // if collision if with player and enemy is swinging
@@ -1494,11 +1503,12 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
                 d.state = EnemyState::dead;
                 objA.texture = entityRes.texDie;
                 objA.currentAnimation = m_resources.ANIM_DIE;
-                MIX_PlayTrack(m_resources.enemyDieTrack, 0);
+                MIX_PlayAudio(m_resources.mixer, m_resources.audioEnemyDie);
                 objA.velocity = glm::vec2(0);
                 // m_gameState.currentView = GameView::GameOver;
               }
-              MIX_PlayTrack(m_resources.enemyHitTrack, 0);
+              // MIX_PlayAudio(m_resources.mixer, m_resources.audioProjectileEnemyHit);
+              MIX_PlayTrack(m_resources.enemyProjectileHitTrack, 0);
             }
 
         } else {

@@ -322,10 +322,10 @@ namespace game_engine {
     std::vector<SDL_Texture*> textures; // store vector of pointers so we can delete later
 
     SDL_Texture  *texBullet, *texBulletHit; // tex of bullets
-        //MIX_Audio and use the new loading/track APIs (MIX_LoadAudio, MIX_CreateTrack
-    // std::vector<MIX_Audio*> audioBuff;
-    MIX_Audio *audioShoot, *audioShootHit, *audioEnemyHit, *audioEnemyDie;
-    MIX_Track *shootTrack, *hitTrack, *enemyHitTrack, *enemyDieTrack;
+
+    // TODO track is for long running music. Audio is for one time sound effects.
+    MIX_Audio *audioShoot, *audioSword1, *audioShootHit, *audioBoneImpact, *audioProjectileEnemyHit, *audioEnemyDie;
+    MIX_Track *shootTrack, *sword1Track, *hitTrack, *boneImpactHitTrack, *enemyProjectileHitTrack, *enemyDieTrack;
 
     // std::vector<MIX_Track*> audioTracks;
     float m_masterAudioGain = 0;
@@ -345,7 +345,7 @@ namespace game_engine {
       if (!audio) return {nullptr, nullptr};
       // audioBuff.push_back(audio);
 
-      // need one for EACH sound that will be played
+      // need one for EACH sound that will be played; TODO might not need track for one time sounds?
       MIX_Track* track = MIX_CreateTrack(mixer);
       if (!track) return {nullptr, nullptr};
       // audioTracks.push_back(track);
@@ -534,8 +534,10 @@ namespace game_engine {
       float chunkAudioGain = m_masterAudioGain * 3;
 
       std::tie(audioShoot, shootTrack) = loadAudioChunk("data/audio/fireball_whoosh.mp3", chunkAudioGain);
+      std::tie(audioSword1, sword1Track) = loadAudioChunk("data/audio/sword/sword_swing_1.mp3", chunkAudioGain);
       std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
-      std::tie(audioEnemyHit, enemyHitTrack) = loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
+      std::tie(audioBoneImpact, boneImpactHitTrack) = loadAudioChunk("data/audio/impact/bone_impact.mp3", chunkAudioGain);
+      std::tie(audioProjectileEnemyHit, enemyProjectileHitTrack) = loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
       std::tie(audioEnemyDie, enemyDieTrack) = loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
 
       // load level specific assets
