@@ -76,6 +76,7 @@ namespace game_engine {
       MainMenu,
       PauseMenu,
       LevelLoading,
+      ItemMenu,
       GameOver,
       MultiPlayerOptionsMenu, // this menu will show host or client buttons
   };
@@ -178,6 +179,10 @@ namespace game_engine {
           ImGui::SameLine(0, 2.0f);
           if (ImGui::Button("Save Game", buttonSize)) {
             // TODO
+          }
+          ImGui::SameLine(0, 2.0f);
+          if (ImGui::Button("Pause Game", buttonSize)) {
+              currentView = GameView::PauseMenu;
           }
           ImGui::SameLine(0, 2.0f);
           if (ImGui::Button("Start Over (Debug)", buttonSize)) {

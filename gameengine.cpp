@@ -740,6 +740,8 @@ bool game_engine::Engine::updateImGuiMenuRenderState() {
         ImGui::Begin("Pause", nullptr, m_sdlState.ImGuiWindowFlags);
         if (ImGui::Button("Resume")) m_gameState.currentView = GameView::Playing;
         if (ImGui::Button("Quit")) m_gameRunning.store(false);
+        // Want to continue rendering the screen underneath. The Pause Menu just overlays.
+
         ImGui::End();
         break;
       }
