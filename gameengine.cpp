@@ -657,7 +657,7 @@ if (m_gameState.currentView == GameView::LevelLoading) return;
             m_sdlState.renderer,
             5,
             5,
-            std::format("State3: {}  Direction: {} B: {}, G: {}, Px: {}, Py:{}, VPx: {}", static_cast<int>(player.data.player.state), player.direction, m_gameState.bullets.size(), player.grounded, player.position.x, player.position.y, m_gameState.mapViewport.x).c_str());
+            std::format("State: {}  Direction: {} B: {}, G: {}, Px: {}, Py:{}, VPx: {}", static_cast<int>(player.data.player.state), player.direction, m_gameState.bullets.size(), player.grounded, player.position.x, player.position.y, m_gameState.mapViewport.x).c_str());
       }
     }
 
@@ -829,7 +829,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
   const auto widenColliderForSwing = [&](GameObject& o) {
       const float drawW = o.spritePixelW / o.drawScale;
-      const float extra = 0.3f * drawW;
+      const float extra = 0.5f * drawW;
 
       SDL_FRect c = baseFacing(o);
       c.w += extra;
@@ -855,11 +855,11 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
       SDL_Texture *tex, SDL_Texture *attackTex, int animIndex, int attackAnimIndex, bool handleJump){
 
 
-        if (m_sdlState.keys[SDL_SCANCODE_S]) {
+        if (m_sdlState.keys[SDL_SCANCODE_S] && obj.data.player.state != PlayerState::swingWeapon) {
 
           obj.texture = attackTex;
           obj.currentAnimation = attackAnimIndex;
-          // obj.animations[attackAnimIndex].reset();
+          obj.animations[attackAnimIndex].reset();
           obj.data.player.state = PlayerState::swingWeapon;
           widenColliderForSwing(obj);
           MIX_PlayAudio(m_resources.mixer, m_resources.audioSword1);
@@ -879,12 +879,12 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           }
 
 
+          m_resources.whooshCooldown.step(deltaTime); // whooshCooldown should have same length as bullet weaponTimer
           // When you shoot (no loops, no track index needed):
           if (m_resources.whooshCooldown.isTimedOut()) {
             m_resources.whooshCooldown.reset();
             MIX_PlayAudio(m_resources.mixer, m_resources.audioShoot);
           }
-          m_resources.whooshCooldown.step(deltaTime); // whooshCooldown should have same length as bullet weaponTimer
 
           if (weaponTimer.isTimedOut()) {
             weaponTimer.reset();
@@ -1015,6 +1015,12 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           obj.data.player.state = PlayerState::idle;
         }
 
+        m_resources.stepAudioCooldown.step(deltaTime);
+        if (m_resources.stepAudioCooldown.isTimedOut()) {
+          m_resources.stepAudioCooldown.reset();
+          MIX_PlayAudio(m_resources.mixer, m_resources.m_currLevel->audioStep);
+        }
+
         // move in opposite dir of velocity, sliding
         if (obj.velocity.x * obj.direction < 0 && obj.grounded) {
           handleAttacking(entityRes.texSlide, entityRes.texSlideShoot, m_resources.ANIM_SLIDE, m_resources.ANIM_SLIDE_SHOOT, false);
@@ -1036,6 +1042,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           if (obj.data.player.jumpWindupTimer.isTimedOut()) {
               obj.velocity.y += JUMP_FORCE;   // upward impulse
               obj.data.player.jumpImpulseApplied = true;
+              MIX_PlayAudio(m_resources.mixer, m_resources.audioJump);
           }
         } else {
           int n = obj.animations[m_resources.ANIM_JUMP].getFrameCount(); // e.g. 6 frames -> indices 0..5

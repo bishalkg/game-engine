@@ -283,6 +283,8 @@ namespace game_engine {
     MIX_Track *backgroundTrack{nullptr};
     MIX_Audio *gameOverAudio{nullptr};
     MIX_Track *gameOverAudioTrack{nullptr};
+    MIX_Audio *audioStep;
+    MIX_Track *stepTrack;
 
     Level(LevelIndex lvl): lvlIdx(lvl) {};
 
@@ -323,15 +325,26 @@ namespace game_engine {
 
     SDL_Texture  *texBullet, *texBulletHit; // tex of bullets
 
+    // ----- AudioManager
     // TODO track is for long running music. Audio is for one time sound effects.
+    // but track can be set to not replay. audio is fire and forget, no state kept.
+    // Create an AudioManager to handle all the below...
     MIX_Audio *audioShoot, *audioSword1, *audioShootHit, *audioBoneImpact, *audioProjectileEnemyHit, *audioEnemyDie;
     MIX_Track *shootTrack, *sword1Track, *hitTrack, *boneImpactHitTrack, *enemyProjectileHitTrack, *enemyDieTrack;
+
+    // MIX_Audio *audioStepGrass;
+    // MIX_Track *stepGrassTrack;
+    MIX_Audio *audioJump;
+    MIX_Track *jumpTrack;
 
     // std::vector<MIX_Track*> audioTracks;
     float m_masterAudioGain = 0;
     MIX_Mixer* mixer;
     size_t projectileTrackIdx = 0; // initialize once
     Timer whooshCooldown{0.25f};  // 100 ms. needs to be here and not on each projectile entity
+    Timer stepAudioCooldown{0.25f};  // 100 ms. needs to be here and not on each projectile entity
+
+    // ------- AudioManager
 
     std::unique_ptr<Level> m_currLevel;
     LevelIndex m_currLevelIdx;
@@ -490,11 +503,15 @@ namespace game_engine {
       auto [backgroundAudio, backgroundTrack] = loadAudioChunk(assets.backgroundAudioPath, masterAudioGain);
 
       auto [gameOverAudio, gameOverAudioTrack] = loadAudioChunk(assets.gameOverAudioPath, masterAudioGain);
-      // auto std::tie(backgroundAudio, backgroundTrack) = loadAudioChunk(assets.backgroundAudioPath, masterAudioGain);
+
+      auto [stepAudio, stepTrack] = loadAudioChunk(assets.stepAudioPath, masterAudioGain);
+
       m_currLevel->backgroundAudio = backgroundAudio;
       m_currLevel->backgroundTrack = backgroundTrack;
       m_currLevel->gameOverAudio = gameOverAudio;
       m_currLevel->gameOverAudioTrack = gameOverAudioTrack;
+      m_currLevel->stepTrack = stepTrack;
+      m_currLevel->audioStep = stepAudio;
 
       // this->lvl = std::move(lvl);
       return true;
@@ -540,8 +557,12 @@ namespace game_engine {
       std::tie(audioProjectileEnemyHit, enemyProjectileHitTrack) = loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
       std::tie(audioEnemyDie, enemyDieTrack) = loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
 
+      std::tie(audioJump, jumpTrack) = loadAudioChunk("data/audio/movement/jump.wav", chunkAudioGain);
+
+
+
       // load level specific assets
-      bool lvlLoaded = loadLevel(LevelIndex::LEVEL_1, state, gs, m_masterAudioGain, headless);
+      bool lvlLoaded = loadLevel(LevelIndex::LEVEL_2, state, gs, m_masterAudioGain, headless);
 
       if (!lvlLoaded) {
         static_assert("level failed to load");
