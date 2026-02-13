@@ -26,6 +26,7 @@ add_executable(game_engine
   main.cpp
   app.cpp
   gameengine.cpp
+  ui_manager.cpp
   game_server.cpp
   tmx.cpp
   vendor/tinyxml2/tinyxml2.cpp
@@ -33,7 +34,7 @@ add_executable(game_engine
 # target_link_libraries(game_engine PRIVATE SDL3::SDL3 SDL3_image::SDL3_image glm::glm SDL3_mixer::SDL3_mixer) # add sdl3 and sdl3_image to the compiler header link paths
 
 # ImGui: core + SDL3/SDL_Renderer3 backends
-set(IMGUI_DIR ${IMGUI_DIR})
+set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui)
 set(IMGUI_SOURCES
   ${IMGUI_DIR}/imgui.cpp
   ${IMGUI_DIR}/imgui_demo.cpp

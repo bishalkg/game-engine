@@ -347,8 +347,13 @@ namespace game_engine {
 
     // ------- AudioManager
 
+    std::unique_ptr<UIManager::UI_Manager> m_uiManager;
     std::unique_ptr<Level> m_currLevel;
     LevelIndex m_currLevelIdx;
+
+    // Resources() {
+    //   m_uiManager = std::make_unique<UIManager::UI_Manager>();
+    // };
 
     std::pair<MIX_Audio*, MIX_Track*> loadAudioChunk(const std::string& filepath, float gain = 1.0f) {
 
@@ -634,7 +639,9 @@ namespace game_engine {
 
 
     public:
-      Engine() : m_sdlState{}, m_gameState(m_sdlState), m_resources{}, m_gameType(SinglePlayer) {}
+      Engine() : m_sdlState{}, m_gameState(m_sdlState), m_resources{}, m_gameType(SinglePlayer) {
+        m_resources.m_uiManager = std::make_unique<UIManager::UI_Manager>();
+      }
       ~Engine();
 
       inline static constexpr glm::vec2 GRAVITY = glm::vec2(0, 600);
@@ -669,6 +676,7 @@ namespace game_engine {
       void updateMapViewport(GameObject& player);
       void drawAllObjects(float deltaTime);
       bool updateImGuiMenuRenderState();
+      void applyUIActions(const UIManager::UIActions& a);
       void clearRenderer();
       void renderUpdates();
 
