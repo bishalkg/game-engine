@@ -121,18 +121,20 @@ void game_engine::Engine::runGameLoop() {
   uint64_t prevTime = SDL_GetTicks();
   m_gameRunning.store(true);
 
-  // GameState &gs = getGameState();
-  // SDLState &sdl = getSDLState();
-  // Resources &res = getResources();
-
   while (m_gameRunning.load()){
     uint64_t nowTime = SDL_GetTicks();
     float deltaTime = (nowTime - prevTime) / 1000.0f; // convert to seconds; time bw frames
 
-    // TODO the type of player is enemy????? i think we're following the wrong guy
-    GameObject &player = getPlayer();  // fetch each frame in case index changes
-    // use gs.currentView directly so state changes take effect immediately
+    GameObject &player = getPlayer();
 
+
+    // runEventLoop takes in key inputs that we want the client to send to the server
+    // we read in snapshots from the server and updateGamePlayState; reconcile each GameObjects position using the m_stateLastUpdatedAt
+    game_engine::NetGameInput input; // populate this from runEventLoop
+    input.tick = nowTime;
+    runEventLoop(player, input);
+
+    // ui_manager to handle this
     if (updateImGuiMenuRenderState()) {
       ImGui::Render();
       continue;
@@ -143,12 +145,6 @@ void game_engine::Engine::runGameLoop() {
     if (!handleMultiplayerConnections()) {
       return;
     }
-
-    // runEventLoop takes in key inputs that we want the client to send to the server
-    // we read in snapshots from the server and updateGamePlayState; reconcile each GameObjects position using the m_stateLastUpdatedAt
-    game_engine::NetGameInput input; // populate this from runEventLoop
-    input.tick = nowTime;
-    runEventLoop(player, input);
 
     if (isConnectedToServer && m_gameClient) {
       m_gameClient->OnUserUpdate(deltaTime);
@@ -191,7 +187,10 @@ void game_engine::Engine::runGameLoop() {
       }
     }
 
-
+    // world.update()
+    // if (!ui.isBlockingGameSimulation()) {
+    //     world.update(dt);
+    // }
     updateGameplayState(deltaTime, player);
 
     renderUpdates();
@@ -251,7 +250,7 @@ bool game_engine::Engine::handleMultiplayerConnections() {
 }
 
 void game_engine::Engine::asyncSwitchToLevel(LevelIndex lvl) {
-  m_gameState.currentView = GameView::LevelLoading;
+  m_gameState.currentView = UIManager::GameView::LevelLoading;
   m_gameState.setLevelLoadProgress(0);
   m_levelLoadThd = std::thread(&game_engine::Engine::initNextLevel, this, lvl);
 }
@@ -264,7 +263,7 @@ void game_engine::Engine::initNextLevel(LevelIndex lvl) {
 
   // throw away old world; create new gameState that will be updated in initAllTiles
   GameState newGameState(m_sdlState);
-  newGameState.currentView = GameView::LevelLoading;
+  newGameState.currentView = UIManager::GameView::LevelLoading;
 
   // rebuild layers/objects from the newly loaded map
   initAllTiles(newGameState); // this mutates gameState
@@ -328,15 +327,29 @@ void game_engine::Engine::renderUpdates(){
   // swap backbuffer to display new state
   // Textures live in GPU memory; the renderer batches copies/draws and flushes them on present.
   // 6) Render ImGui on top of your SDL frame
+  // world.render()
   SDL_SetRenderLogicalPresentation(m_sdlState.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+
+  // ui.render()
   ImGui::Render();
   ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), m_sdlState.renderer);
   SDL_SetRenderLogicalPresentation(m_sdlState.renderer, m_sdlState.logW, m_sdlState.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+
+  // renderer.present()
   SDL_RenderPresent(m_sdlState.renderer);
 }
 
 
 void game_engine::Engine::runEventLoop(GameObject &player, game_engine::NetGameInput &net_input) {
+
+    //     // Route input: if UI is modal, don’t drive gameplay
+    // if (ui.isBlockingGameInput()) {
+    //     ui.handleInput(input);        // arrows/confirm/back handled by UI
+    // } else {
+    //     gameplay.handleInput(input);  // movement, actions, etc.
+    //     ui.handleNonBlocking(input);  // e.g., HUD hover/tooltips if you want
+    // }
+
     // event loop
     SDL_Event event{0};
     while (SDL_PollEvent(&event)) {
@@ -378,10 +391,11 @@ void game_engine::Engine::runEventLoop(GameObject &player, game_engine::NetGameI
           handleKeyInput(player, event.key.scancode, false, net_input);
           if (event.key.scancode == SDL_SCANCODE_Q) {
             m_gameState.debugMode = !m_gameState.debugMode;
-          }
-          else if (event.key.scancode == SDL_SCANCODE_F11) {
+          } else if (event.key.scancode == SDL_SCANCODE_F11) {
             m_sdlState.fullscreen = !m_sdlState.fullscreen;
             SDL_SetWindowFullscreen(m_sdlState.window, m_sdlState.fullscreen);
+          } else if (event.key.scancode == SDL_SCANCODE_TAB) {
+            m_gameState.currentView = UIManager::GameView::InventoryMenu;
           }
           break;
         }
@@ -637,10 +651,10 @@ void game_engine::Engine::drawAllObjects(float deltaTime) {
 }
 
 void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& player) {
-if (m_gameState.currentView == GameView::LevelLoading) return;
+if (m_gameState.currentView == UIManager::GameView::LevelLoading) return;
 
 
-  if (m_gameState.currentView == GameView::Playing) {
+  if (m_gameState.currentView == UIManager::GameView::Playing) {
       setBackgroundSoundtrack(); // TODO we will want to set background track per level
 
       // update & draw game world to sdl.renderer here (before ImGui::Render)
@@ -678,7 +692,7 @@ bool game_engine::Engine::updateImGuiMenuRenderState() {
     ImVec2 buttonSize = ImVec2(150, 50); // TODO put in config
 
     switch (m_gameState.currentView) {
-      case GameView::MainMenu:
+      case UIManager::GameView::MainMenu:
       {
         this->stopBackgroundSoundtrack();
         ImGui::Begin("Main Menu", nullptr, m_sdlState.ImGuiWindowFlags);
@@ -686,11 +700,11 @@ bool game_engine::Engine::updateImGuiMenuRenderState() {
         if (ImGui::Button("Single Player", buttonSize)) {
             std::cout << "start game" << std::endl;
             std::puts("Start clicked");
-            m_gameState.currentView = GameView::Playing;
+            m_gameState.currentView = UIManager::GameView::Playing;
             m_gameType = game_engine::Engine::SinglePlayer;
         }
         if (ImGui::Button("Multiplayer",buttonSize)) {
-          m_gameState.currentView = GameView::MultiPlayerOptionsMenu;
+          m_gameState.currentView = UIManager::GameView::MultiPlayerOptionsMenu;
           std::cout << "multi game" << std::endl;
         }
         if (ImGui::Button("Quit", buttonSize)) {
@@ -700,16 +714,16 @@ bool game_engine::Engine::updateImGuiMenuRenderState() {
         ImGui::End();
         break;
       }
-      case GameView::LevelLoading:
+      case UIManager::GameView::LevelLoading:
       {
         {
           std::lock_guard<std::mutex> lock(m_levelMutex);
-          uint8_t p = m_gameState.getLevelLoadProgress();  // store as 0..1 or convert
+          uint8_t p = m_gameState.getLevelLoadProgress();
           if (p >= 100) {
             if (m_levelLoadThd.joinable()) {
                 m_levelLoadThd.join();
             }
-            m_gameState.currentView = GameView::Playing;
+            m_gameState.currentView = UIManager::GameView::Playing;
             break;
           }
 
@@ -721,7 +735,7 @@ bool game_engine::Engine::updateImGuiMenuRenderState() {
         }
         break;
       }
-      case GameView::GameOver:
+      case UIManager::GameView::GameOver:
       {
         // When player
         stopBackgroundSoundtrack();
@@ -735,36 +749,46 @@ bool game_engine::Engine::updateImGuiMenuRenderState() {
         ImGui::End();
         break;
       }
-      case GameView::PauseMenu:
+      case UIManager::GameView::InventoryMenu:
       {
-        ImGui::Begin("Pause", nullptr, m_sdlState.ImGuiWindowFlags);
-        if (ImGui::Button("Resume")) m_gameState.currentView = GameView::Playing;
+        ImGui::Begin("Inventory Menu", nullptr, m_sdlState.ImGuiWindowFlags);
+        if (ImGui::Button("Resume")) m_gameState.currentView = UIManager::GameView::Playing;
         if (ImGui::Button("Quit")) m_gameRunning.store(false);
         // Want to continue rendering the screen underneath. The Pause Menu just overlays.
 
         ImGui::End();
         break;
       }
-      case GameView::MultiPlayerOptionsMenu:
+      case UIManager::GameView::PauseMenu:
+      {
+        ImGui::Begin("Pause", nullptr, m_sdlState.ImGuiWindowFlags);
+        if (ImGui::Button("Resume")) m_gameState.currentView = UIManager::GameView::Playing;
+        if (ImGui::Button("Quit")) m_gameRunning.store(false);
+        // Want to continue rendering the screen underneath. The Pause Menu just overlays.
+
+        ImGui::End();
+        break;
+      }
+      case UIManager::GameView::MultiPlayerOptionsMenu:
       {
         // drawSettings();
         ImGui::Begin("MultiPlayer Menu", nullptr, m_sdlState.ImGuiWindowFlags);
         if (ImGui::Button("Host A Game",buttonSize)) {
           m_gameType = game_engine::Engine::Host;
-          m_gameState.currentView = GameView::Playing;
+          m_gameState.currentView = UIManager::GameView::Playing;
         }
         if (ImGui::Button("Join A Game", buttonSize)) {
           m_gameType = game_engine::Engine::Client;
-          m_gameState.currentView = GameView::Playing;
+          m_gameState.currentView = UIManager::GameView::Playing;
         }
         if (ImGui::Button("Back to Menu", buttonSize)) {
           // todo; should reset game state unless saved
-          m_gameState.currentView = GameView::MainMenu;
+          m_gameState.currentView = UIManager::GameView::MainMenu;
         }
         ImGui::End();
         break;
       }
-      case GameView::Playing:
+      case UIManager::GameView::Playing:
       {
         if (m_gameState.drawMenuSettingsDuringGameplay(buttonSize)) {
            asyncSwitchToLevel(m_resources.m_currLevelIdx);
@@ -1004,7 +1028,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           obj.currentAnimation = -1; // prevent animation from looping after death
           obj.spriteFrame = 4;
 
-          m_gameState.currentView = GameView::GameOver;
+          m_gameState.currentView = UIManager::GameView::GameOver;
           setGameOverSoundtrack();
         }
         break;
@@ -1343,7 +1367,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
       case ObjectClass::Enemy:
       {
         if (objB.data.enemy.state != EnemyState::dead) {
-          objA.velocity = glm::vec2(50, 0) * - objA.direction;
+
 
           if (objA.data.player.state == PlayerState::swingWeapon) {
             // when swinging weapon and colliding, reduce enemy health
@@ -1372,6 +1396,9 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               // TODO wrap this in a func() so that it doesnt allow more than one sound to occur until its done.
               // PlayTrack doesnt allow repeating while the track is already playing so might be better to use it instead actually.
             }
+          } else {
+            // push back player
+            objA.velocity = glm::vec2(50, 0) * - objA.direction;
           }
         }
         break;

@@ -15,6 +15,7 @@
 #include "game_server.h" // needs complete type for unique_ptr destructor
 #include "game_client.h"
 #include "level_manifest.cpp"
+#include "ui_manager.h"
 
 #include "imgui.h"
 #include "backends/imgui_impl_sdl3.h"
@@ -71,15 +72,15 @@ namespace game_engine {
     SDLState() : keys(SDL_GetKeyboardState(nullptr)) {}
   };
 
-  enum class GameView {
-      Playing,
-      MainMenu,
-      PauseMenu,
-      LevelLoading,
-      ItemMenu,
-      GameOver,
-      MultiPlayerOptionsMenu, // this menu will show host or client buttons
-  };
+  // enum class GameView {
+  //     Playing,
+  //     MainMenu,
+  //     PauseMenu,
+  //     LevelLoading,
+  //     InventoryMenu,
+  //     GameOver,
+  //     MultiPlayerOptionsMenu, // this menu will show host or client buttons
+  // };
 
   struct GameState {
 
@@ -123,7 +124,7 @@ namespace game_engine {
 
       std::atomic<uint8_t> m_loadProgress = 100;
 
-      GameView currentView;
+      UIManager::GameView currentView;
 
       uint64_t m_stateLastUpdatedAt; // when the gameState was last updated, by local or by server msg
 
@@ -137,7 +138,7 @@ namespace game_engine {
       SDL_FRect mapViewport; // viewable part of map
       float bg2scroll, bg3scroll, bg4scroll;
 
-      GameState(const SDLState &state): bg2scroll(0), bg3scroll(0), bg4scroll(0), currentView(GameView::MainMenu) {
+      GameState(const SDLState &state): bg2scroll(0), bg3scroll(0), bg4scroll(0), currentView(UIManager::GameView::MainMenu) {
         playerIndex = -1;
         mapViewport = SDL_FRect{
           .x = 0, .y = 0,
@@ -158,7 +159,7 @@ namespace game_engine {
         GameObject& p = player(playerIndex);
 
         if (!p.grounded && p.position.y > 1500) {
-          currentView = GameView::GameOver;
+          currentView = UIManager::GameView::GameOver;
           return true;
         }
         return false;
@@ -174,7 +175,7 @@ namespace game_engine {
           ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
           ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
           if (ImGui::Button("Back to Menu", buttonSize)) {
-              currentView = GameView::MainMenu;
+              currentView = UIManager::GameView::MainMenu;
           }
           ImGui::SameLine(0, 2.0f);
           if (ImGui::Button("Save Game", buttonSize)) {
@@ -182,7 +183,7 @@ namespace game_engine {
           }
           ImGui::SameLine(0, 2.0f);
           if (ImGui::Button("Pause Game", buttonSize)) {
-              currentView = GameView::PauseMenu;
+              currentView = UIManager::GameView::PauseMenu;
           }
           ImGui::SameLine(0, 2.0f);
           if (ImGui::Button("Start Over (Debug)", buttonSize)) {
@@ -562,7 +563,7 @@ namespace game_engine {
 
 
       // load level specific assets
-      bool lvlLoaded = loadLevel(LevelIndex::LEVEL_2, state, gs, m_masterAudioGain, headless);
+      bool lvlLoaded = loadLevel(LevelIndex::LEVEL_1, state, gs, m_masterAudioGain, headless);
 
       if (!lvlLoaded) {
         static_assert("level failed to load");
