@@ -134,8 +134,7 @@ void game_engine::Engine::runGameLoop() {
     runEventLoop(player, input);
 
     // ui_manager to handle this
-    if (updateImGuiMenuRenderState()) {
-      ImGui::Render();
+    if (updateUI()) {
       continue;
     }
 
@@ -678,146 +677,36 @@ if (m_gameState.currentView == UIManager::GameView::LevelLoading) return;
 
 void game_engine::Engine::applyUIActions(const UIManager::UIActions& a) {
   if (a.stopBackgroundTrack) { stopBackgroundSoundtrack(); }
-  if (a.startSinglePlayer) m_gameType = SinglePlayer;
-  if (a.quitGame) m_gameRunning.store(false);
-  if (a.finishLoading) {
-    if (m_levelLoadThd.joinable()) m_levelLoadThd.join();
-  }
+  if (a.startSinglePlayer) { m_gameType = SinglePlayer; }
+  if (a.quitGame) { m_gameRunning.store(false); }
+  if (a.finishLoading) { if (m_levelLoadThd.joinable()) m_levelLoadThd.join(); }
   if (a.nextView) m_gameState.currentView = *a.nextView;
-    // if (a.startGame) { /* … */ }
-    // if (a.quit) { /* … */ }
-    // etc.
+  if (a.stopBackgroundTrack) { stopBackgroundSoundtrack(); }
+  if (a.stopGameOverSoundTrack ) { stopGameOverSoundtrack(); }
+  if (a.restartLevel) { asyncSwitchToLevel(m_resources.m_currLevelIdx); }
+  if (a.startMultiPlayerClient) { m_gameType = Client; }
+  if (a.startMultiPlayerHost) { m_gameType = Host; }
 }
 
-bool game_engine::Engine::updateImGuiMenuRenderState() {
+bool game_engine::Engine::updateUI() {
 
   UIManager::UISnapshots snaps;
-  auto actions = m_resources.m_uiManager->renderView(m_gameState.currentView, snaps, m_sdlState.ImGuiWindowFlags);
+
+  snaps.playerHP = getPlayer().data.player.healthPoints;
+
+  if (m_gameState.currentView == UIManager::GameView::LevelLoading)
+  {
+    std::lock_guard<std::mutex> lock(m_levelMutex);
+    const uint8_t p = m_gameState.getLevelLoadProgress();
+    snaps.loading.progress01 = std::clamp(p * 0.01f, 0.0f, 1.0f);
+    snaps.loading.done = (p >= 100);
+  }
+
+  UIManager::UIActions actions = m_resources.m_uiManager.renderView(m_gameState.currentView, snaps, m_sdlState.ImGuiWindowFlags);
 
   applyUIActions(actions);
 
-
-    // // 4) Start a new ImGui frame
-    // ImGui_ImplSDLRenderer3_NewFrame();
-    // ImGui_ImplSDL3_NewFrame();
-    // ImGui::NewFrame();
-
-    // // 5) Build your ImGui UI for THIS frame
-    // // (menus, pause, debug overlay, etc.)
-    // ImGuiIO& io = ImGui::GetIO();
-    // ImGui::SetNextWindowPos(ImVec2(0, 0));
-    // ImGui::SetNextWindowSize(io.DisplaySize);
-
-    // ImVec2 buttonSize = ImVec2(150, 50); // TODO put in config
-
-    // switch (m_gameState.currentView) {
-    //   case UIManager::GameView::MainMenu:
-    //   {
-    //     this->stopBackgroundSoundtrack();
-    //     ImGui::Begin("Main Menu", nullptr, m_sdlState.ImGuiWindowFlags);
-    //     ImGui::Text("Hello from ImGui in SDL3!");
-    //     if (ImGui::Button("Single Player", buttonSize)) {
-    //         std::cout << "start game" << std::endl;
-    //         std::puts("Start clicked");
-    //         m_gameState.currentView = UIManager::GameView::Playing;
-    //         m_gameType = game_engine::Engine::SinglePlayer;
-    //     }
-    //     if (ImGui::Button("Multiplayer",buttonSize)) {
-    //       m_gameState.currentView = UIManager::GameView::MultiPlayerOptionsMenu;
-    //       std::cout << "multi game" << std::endl;
-    //     }
-    //     if (ImGui::Button("Quit", buttonSize)) {
-    //         std::cout << "quit game" << std::endl;
-    //         m_gameRunning.store(false);
-    //     }
-    //     ImGui::End();
-    //     break;
-    //   }
-    //   case UIManager::GameView::LevelLoading:
-    //   {
-    //     {
-    //       std::lock_guard<std::mutex> lock(m_levelMutex);
-    //       uint8_t p = m_gameState.getLevelLoadProgress();
-    //       if (p >= 100) {
-    //         if (m_levelLoadThd.joinable()) {
-    //             m_levelLoadThd.join();
-    //         }
-    //         m_gameState.currentView = UIManager::GameView::Playing;
-    //         break;
-    //       }
-
-    //       ImGui::Begin("Loading", nullptr, m_sdlState.ImGuiWindowFlags);
-    //       ImGui::Text("Loading level...");
-    //       ImGui::ProgressBar(p <= 1.0f ? p : p * 0.01f, ImVec2(200, 0));
-    //       ImGui::End();
-    //       return true;
-    //     }
-    //     break;
-    //   }
-    //   case UIManager::GameView::GameOver:
-    //   {
-    //     // When player
-    //     stopBackgroundSoundtrack();
-    //     // setGameOverSoundtrack();
-    //     ImGui::Begin("GameOver", nullptr, m_sdlState.ImGuiWindowFlags);
-    //     ImGui::Text("GAME OVER");
-    //     if (ImGui::Button("Try Again")) {
-    //       asyncSwitchToLevel(m_resources.m_currLevelIdx);
-    //       stopGameOverSoundtrack();
-    //     }
-    //     ImGui::End();
-    //     break;
-    //   }
-    //   case UIManager::GameView::InventoryMenu:
-    //   {
-    //     ImGui::Begin("Inventory Menu", nullptr, m_sdlState.ImGuiWindowFlags);
-    //     if (ImGui::Button("Resume")) m_gameState.currentView = UIManager::GameView::Playing;
-    //     if (ImGui::Button("Quit")) m_gameRunning.store(false);
-    //     // Want to continue rendering the screen underneath. The Pause Menu just overlays.
-
-    //     ImGui::End();
-    //     break;
-    //   }
-    //   case UIManager::GameView::PauseMenu:
-    //   {
-    //     ImGui::Begin("Pause", nullptr, m_sdlState.ImGuiWindowFlags);
-    //     if (ImGui::Button("Resume")) m_gameState.currentView = UIManager::GameView::Playing;
-    //     if (ImGui::Button("Quit")) m_gameRunning.store(false);
-    //     // Want to continue rendering the screen underneath. The Pause Menu just overlays.
-
-    //     ImGui::End();
-    //     break;
-    //   }
-    //   case UIManager::GameView::MultiPlayerOptionsMenu:
-    //   {
-    //     // drawSettings();
-    //     ImGui::Begin("MultiPlayer Menu", nullptr, m_sdlState.ImGuiWindowFlags);
-    //     if (ImGui::Button("Host A Game",buttonSize)) {
-    //       m_gameType = game_engine::Engine::Host;
-    //       m_gameState.currentView = UIManager::GameView::Playing;
-    //     }
-    //     if (ImGui::Button("Join A Game", buttonSize)) {
-    //       m_gameType = game_engine::Engine::Client;
-    //       m_gameState.currentView = UIManager::GameView::Playing;
-    //     }
-    //     if (ImGui::Button("Back to Menu", buttonSize)) {
-    //       // todo; should reset game state unless saved
-    //       m_gameState.currentView = UIManager::GameView::MainMenu;
-    //     }
-    //     ImGui::End();
-    //     break;
-    //   }
-    //   case UIManager::GameView::Playing:
-    //   {
-    //     if (m_gameState.drawMenuSettingsDuringGameplay(buttonSize)) {
-    //        asyncSwitchToLevel(m_resources.m_currLevelIdx);
-    //     }
-    //     m_gameState.drawPlayerHealthBar();
-    //     break;
-    //   }
-    // }
-
-    return false;
+  return actions.blockGameLoopUpdates;
 }
 
 // update updates the state of the passed in game object every render loop

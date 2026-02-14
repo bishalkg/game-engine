@@ -6,32 +6,28 @@
 
 namespace UIManager {
 
-namespace {
 // Local helper for the main menu (not a member).
-UIActions drawMainMenu(const LoadingSnapshot& /*unused*/, ImGuiWindowFlags flags) {
-    ImVec2 buttonSize = ImVec2(150, 50); // TODO put in config
+UIActions UI_Manager::drawMainMenu(const LoadingSnapshot& /*unused*/, ImGuiWindowFlags flags) {
 
     UIActions act;
     act.stopBackgroundTrack = true;
     ImGui::Begin("Main Menu", nullptr, flags);
-    if (ImGui::Button("Single Player", buttonSize)) {
+    if (ImGui::Button("Single Player", defaultButtonSize)) {
         std::cout << "start game" << std::endl;
         act.nextView = GameView::Playing;
         act.startSinglePlayer = true;
     }
-    if (ImGui::Button("Multiplayer", buttonSize)) {
+    if (ImGui::Button("Multiplayer", defaultButtonSize)) {
         act.nextView = GameView::MultiPlayerOptionsMenu;
         std::cout << "multi game" << std::endl;
     }
-    if (ImGui::Button("Quit", buttonSize)) {
+    if (ImGui::Button("Quit", defaultButtonSize)) {
         std::cout << "quit game" << std::endl;
-        act.quitGame = false;
+        act.quitGame = true;
     }
     ImGui::End();
     return act;
 }
-
-} // namespace
 
 UIActions UI_Manager::drawLoading(const LoadingSnapshot& ls, ImGuiWindowFlags flags) {
     UIActions act;
@@ -39,8 +35,107 @@ UIActions UI_Manager::drawLoading(const LoadingSnapshot& ls, ImGuiWindowFlags fl
     ImGui::Text("Loading level...");
     ImGui::ProgressBar(ls.progress01, ImVec2(200, 0));
     ImGui::End();
-    if (ls.done) act.finishLoading = true;
+    if (ls.done) {
+      act.finishLoading = true;
+      act.nextView = GameView::Playing;
+    } else {
+      act.blockGameLoopUpdates = true; // block updating gameState while next level is loading
+      ImGui::Render(); // must force render
+    }
     return act;
+}
+
+UIActions UI_Manager::drawInventoryMenu(const UISnapshots& snaps, ImGuiWindowFlags flags) {
+    UIActions act;
+    ImGui::Begin("Inventory Menu", nullptr, flags);
+    if (ImGui::Button("Resume")) act.nextView = UIManager::GameView::Playing;
+    if (ImGui::Button("Quit")) act.quitGame = true;
+    // Want to continue rendering the screen underneath. The Pause Menu just overlays.
+    ImGui::End();
+    return act;
+}
+
+UIActions UI_Manager::drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags) {
+    UIActions act;
+    ImGui::Begin("MultiPlayer Menu", nullptr, flags);
+    if (ImGui::Button("Host A Game", defaultButtonSize)) {
+      act.startMultiPlayerHost = true;
+      act.nextView = UIManager::GameView::Playing;
+    }
+    if (ImGui::Button("Join A Game", defaultButtonSize)) {
+      act.startMultiPlayerClient = true;
+      act.nextView = UIManager::GameView::Playing;
+    }
+    if (ImGui::Button("Back to Menu", defaultButtonSize)) {
+      act.nextView = UIManager::GameView::MainMenu;
+    }
+    ImGui::End();
+    return act;
+}
+
+
+UIActions UI_Manager::drawGameOver(const LoadingSnapshot&, ImGuiWindowFlags flags) {
+    UIActions act;
+    act.stopBackgroundTrack = true;
+    ImGui::Begin("GameOver", nullptr, flags);
+    ImGui::Text("GAME OVER");
+    if (ImGui::Button("Try Again")) {
+      act.restartLevel = true;
+      act.stopGameOverSoundTrack = true;
+      act.nextView = GameView::Playing;
+    }
+    ImGui::End();
+    return act;
+}
+
+UIActions UI_Manager::drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags) {
+    UIActions act;
+    ImGuiWindowFlags windowFlags = flags | ImGuiWindowFlags_NoBackground;
+    ImGui::Begin("HUD", nullptr, windowFlags);
+    // Optional: remove padding so the button hugs the corner
+    ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+    if (ImGui::Button("Back to Menu", defaultButtonSize)) {
+        act.nextView = UIManager::GameView::MainMenu;
+        // currentView = UIManager::GameView::MainMenu;
+    }
+    ImGui::SameLine(0, 2.0f);
+    if (ImGui::Button("Save Game", defaultButtonSize)) {
+      // TODO
+    }
+    ImGui::SameLine(0, 2.0f);
+    if (ImGui::Button("Pause Game", defaultButtonSize)) {
+      act.nextView = UIManager::GameView::PauseMenu;
+        // currentView = UIManager::GameView::PauseMenu;
+    }
+    ImGui::SameLine(0, 2.0f);
+    if (ImGui::Button("Start Over (Debug)", defaultButtonSize)) {
+      act.restartLevel = true;
+      act.stopGameOverSoundTrack = true;
+    }
+
+    ImGui::PopItemFlag();
+    ImGui::PopStyleVar();
+    ImGui::End();
+
+    drawPlayerHealthbar(snaps.playerHP, flags);
+
+
+    return act;
+}
+
+
+void UI_Manager::drawPlayerHealthbar(const int playerHP, ImGuiWindowFlags flags) {
+    ImGui::SetNextWindowPos(ImVec2(10, 10));
+    ImGui::Begin("HUD", nullptr, ImGuiWindowFlags_NoTitleBar |
+                                ImGuiWindowFlags_NoBackground |
+                                ImGuiWindowFlags_NoResize |
+                                ImGuiWindowFlags_NoMove);
+    float hpFrac = static_cast<float>(playerHP) / 100.0; // 0..1
+    ImGui::Text("HP");
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(0, 200, 0, 255)); // green
+    ImGui::ProgressBar(hpFrac, ImVec2(150, 24));ImGui::PopStyleColor();
+    ImGui::End();
 }
 
 UIActions UI_Manager::renderView(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags) {
@@ -55,136 +150,14 @@ UIActions UI_Manager::renderView(GameView view, const UISnapshots& snaps, ImGuiW
     switch (view) {
       case GameView::MainMenu:     return drawMainMenu(snaps.loading, flags);
       case GameView::LevelLoading: return drawLoading(snaps.loading, flags);
+      case GameView::GameOver: return drawGameOver(snaps.loading, flags);
+      case GameView::Playing: return drawGameplay(snaps, flags);
+      case GameView::InventoryMenu: return drawInventoryMenu(snaps, flags);
+      case GameView::PauseMenu: return drawInventoryMenu(snaps, flags); // same as inventory menu because pauses game
+      case GameView::MultiPlayerOptionsMenu: return drawMultiplayerOptionsMenu(snaps, flags);
       default:                     return {};
     }
 }
-
-
-
-// bool updateImGuiMenuRenderState() {
-//     // 4) Start a new ImGui frame
-//     ImGui_ImplSDLRenderer3_NewFrame();
-//     ImGui_ImplSDL3_NewFrame();
-//     ImGui::NewFrame();
-
-//     // 5) Build your ImGui UI for THIS frame
-//     // (menus, pause, debug overlay, etc.)
-//     ImGuiIO& io = ImGui::GetIO();
-//     ImGui::SetNextWindowPos(ImVec2(0, 0));
-//     ImGui::SetNextWindowSize(io.DisplaySize);
-
-//     ImVec2 buttonSize = ImVec2(150, 50); // TODO put in config
-
-//     switch (m_gameState.currentView) {
-//       case UIManager::GameView::MainMenu:
-//       {
-//         this->stopBackgroundSoundtrack();
-//         ImGui::Begin("Main Menu", nullptr, m_sdlState.ImGuiWindowFlags);
-//         ImGui::Text("Hello from ImGui in SDL3!");
-//         if (ImGui::Button("Single Player", buttonSize)) {
-//             std::cout << "start game" << std::endl;
-//             std::puts("Start clicked");
-//             m_gameState.currentView = UIManager::GameView::Playing;
-//             m_gameType = game_engine::Engine::SinglePlayer;
-//         }
-//         if (ImGui::Button("Multiplayer",buttonSize)) {
-//           m_gameState.currentView = UIManager::GameView::MultiPlayerOptionsMenu;
-//           std::cout << "multi game" << std::endl;
-//         }
-//         if (ImGui::Button("Quit", buttonSize)) {
-//             std::cout << "quit game" << std::endl;
-//             m_gameRunning.store(false);
-//         }
-//         ImGui::End();
-//         break;
-//       }
-//       case UIManager::GameView::LevelLoading:
-//       {
-//         {
-//           std::lock_guard<std::mutex> lock(m_levelMutex);
-//           uint8_t p = m_gameState.getLevelLoadProgress();
-//           if (p >= 100) {
-//             if (m_levelLoadThd.joinable()) {
-//                 m_levelLoadThd.join();
-//             }
-//             m_gameState.currentView = UIManager::GameView::Playing;
-//             break;
-//           }
-
-//           ImGui::Begin("Loading", nullptr, m_sdlState.ImGuiWindowFlags);
-//           ImGui::Text("Loading level...");
-//           ImGui::ProgressBar(p <= 1.0f ? p : p * 0.01f, ImVec2(200, 0));
-//           ImGui::End();
-//           return true;
-//         }
-//         break;
-//       }
-//       case UIManager::GameView::GameOver:
-//       {
-//         // When player
-//         stopBackgroundSoundtrack();
-//         // setGameOverSoundtrack();
-//         ImGui::Begin("GameOver", nullptr, m_sdlState.ImGuiWindowFlags);
-//         ImGui::Text("GAME OVER");
-//         if (ImGui::Button("Try Again")) {
-//           asyncSwitchToLevel(m_resources.m_currLevelIdx);
-//           stopGameOverSoundtrack();
-//         }
-//         ImGui::End();
-//         break;
-//       }
-//       case UIManager::GameView::InventoryMenu:
-//       {
-//         ImGui::Begin("Inventory Menu", nullptr, m_sdlState.ImGuiWindowFlags);
-//         if (ImGui::Button("Resume")) m_gameState.currentView = UIManager::GameView::Playing;
-//         if (ImGui::Button("Quit")) m_gameRunning.store(false);
-//         // Want to continue rendering the screen underneath. The Pause Menu just overlays.
-
-//         ImGui::End();
-//         break;
-//       }
-//       case UIManager::GameView::PauseMenu:
-//       {
-//         ImGui::Begin("Pause", nullptr, m_sdlState.ImGuiWindowFlags);
-//         if (ImGui::Button("Resume")) m_gameState.currentView = UIManager::GameView::Playing;
-//         if (ImGui::Button("Quit")) m_gameRunning.store(false);
-//         // Want to continue rendering the screen underneath. The Pause Menu just overlays.
-
-//         ImGui::End();
-//         break;
-//       }
-//       case UIManager::GameView::MultiPlayerOptionsMenu:
-//       {
-//         // drawSettings();
-//         ImGui::Begin("MultiPlayer Menu", nullptr, m_sdlState.ImGuiWindowFlags);
-//         if (ImGui::Button("Host A Game",buttonSize)) {
-//           m_gameType = game_engine::Engine::Host;
-//           m_gameState.currentView = UIManager::GameView::Playing;
-//         }
-//         if (ImGui::Button("Join A Game", buttonSize)) {
-//           m_gameType = game_engine::Engine::Client;
-//           m_gameState.currentView = UIManager::GameView::Playing;
-//         }
-//         if (ImGui::Button("Back to Menu", buttonSize)) {
-//           // todo; should reset game state unless saved
-//           m_gameState.currentView = UIManager::GameView::MainMenu;
-//         }
-//         ImGui::End();
-//         break;
-//       }
-//       case UIManager::GameView::Playing:
-//       {
-//         if (m_gameState.drawMenuSettingsDuringGameplay(buttonSize)) {
-//            asyncSwitchToLevel(m_resources.m_currLevelIdx);
-//         }
-//         m_gameState.drawPlayerHealthBar();
-//         break;
-//       }
-//     }
-
-//     return false;
-// }
-
 
 
 }

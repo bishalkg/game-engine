@@ -166,50 +166,6 @@ namespace game_engine {
 
       };
 
-      bool drawMenuSettingsDuringGameplay(ImVec2 buttonSize) {
-        ImGuiWindowFlags ImGuiWindowFlags =
-          ImGuiWindowFlags | ImGuiWindowFlags_NoBackground;
-          // ImGuiWindowFlags_NoSavedSettings;
-          ImGui::Begin("HUD", nullptr, ImGuiWindowFlags);
-          // Optional: remove padding so the button hugs the corner
-          ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
-          ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-          if (ImGui::Button("Back to Menu", buttonSize)) {
-              currentView = UIManager::GameView::MainMenu;
-          }
-          ImGui::SameLine(0, 2.0f);
-          if (ImGui::Button("Save Game", buttonSize)) {
-            // TODO
-          }
-          ImGui::SameLine(0, 2.0f);
-          if (ImGui::Button("Pause Game", buttonSize)) {
-              currentView = UIManager::GameView::PauseMenu;
-          }
-          ImGui::SameLine(0, 2.0f);
-          if (ImGui::Button("Start Over (Debug)", buttonSize)) {
-            return true;
-          }
-          return false;
-      };
-
-      void drawPlayerHealthBar() {
-          // health bar
-          ImGui::PopItemFlag();
-          ImGui::PopStyleVar();
-          ImGui::End();
-          ImGui::SetNextWindowPos(ImVec2(10, 10));
-          ImGui::Begin("HUD", nullptr, ImGuiWindowFlags_NoTitleBar |
-                                      ImGuiWindowFlags_NoBackground |
-                                      ImGuiWindowFlags_NoResize |
-                                      ImGuiWindowFlags_NoMove);
-          int playerHP = player(playerIndex).data.player.healthPoints;
-          float hpFrac = static_cast<float>(playerHP) / 100.0; // 0..1
-          ImGui::Text("HP");
-          ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(0, 200, 0, 255)); // green
-          ImGui::ProgressBar(hpFrac, ImVec2(150, 24));ImGui::PopStyleColor();
-          ImGui::End();
-      };
-
       game_engine::NetGameStateSnapshot extractNetSnapshot() const {
         NetGameStateSnapshot snapshot;
         snapshot.m_stateLastUpdatedAt = m_stateLastUpdatedAt;
@@ -347,7 +303,8 @@ namespace game_engine {
 
     // ------- AudioManager
 
-    std::unique_ptr<UIManager::UI_Manager> m_uiManager;
+    // std::unique_ptr<UIManager::UI_Manager> m_uiManager;
+    UIManager::UI_Manager m_uiManager;
     std::unique_ptr<Level> m_currLevel;
     LevelIndex m_currLevelIdx;
 
@@ -640,7 +597,7 @@ namespace game_engine {
 
     public:
       Engine() : m_sdlState{}, m_gameState(m_sdlState), m_resources{}, m_gameType(SinglePlayer) {
-        m_resources.m_uiManager = std::make_unique<UIManager::UI_Manager>();
+        // m_resources.m_uiManager = std::make_unique<UIManager::UI_Manager>();
       }
       ~Engine();
 
@@ -675,7 +632,7 @@ namespace game_engine {
       void updateAllObjects(float deltaTime);
       void updateMapViewport(GameObject& player);
       void drawAllObjects(float deltaTime);
-      bool updateImGuiMenuRenderState();
+      bool updateUI();
       void applyUIActions(const UIManager::UIActions& a);
       void clearRenderer();
       void renderUpdates();
