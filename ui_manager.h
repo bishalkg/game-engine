@@ -4,6 +4,8 @@
 #include <optional>
 
 
+namespace game_engine { struct SDLState; }
+
 namespace UIManager {
 
   class GameState; // need foreward declare
@@ -34,6 +36,7 @@ namespace UIManager {
   struct UISnapshots {
     LoadingSnapshot loading; /* add title/pause data */
     int playerHP;
+    ImVec2 winDims;
   };
 
   class UI_Manager {
@@ -41,12 +44,16 @@ namespace UIManager {
       UI_Manager() = default;
       ~UI_Manager() = default;
 
-      UIActions renderView(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags);
+      UIActions renderView(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState);
+
+      void renderPresent(const game_engine::SDLState& sdlState);
+      void clearRenderer(const game_engine::SDLState& sdlState);
+
 
     private:
       UIActions drawLoading(const LoadingSnapshot&, ImGuiWindowFlags);
       UIActions drawGameOver(const LoadingSnapshot& /*unused*/ , ImGuiWindowFlags flags);
-      UIActions drawMainMenu(const LoadingSnapshot& /*unused*/, ImGuiWindowFlags flags);
+      UIActions drawMainMenu(const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState);
       UIActions drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawInventoryMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);

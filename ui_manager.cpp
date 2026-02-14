@@ -1,17 +1,51 @@
 #include "ui_manager.h"
+#include "gameengine.h"
 #include "imgui.h"
 #include "imgui_impl_sdlrenderer3.h"
 #include "imgui_impl_sdl3.h"
+
 #include <iostream>
 
 namespace UIManager {
 
+  void UI_Manager::renderPresent(const game_engine::SDLState& sdlState) {
+    SDL_SetRenderLogicalPresentation(sdlState.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+
+    // ui.render()
+    ImGui::Render();
+    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), sdlState.renderer);
+    SDL_SetRenderLogicalPresentation(sdlState.renderer, sdlState.logW, sdlState.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+
+    // renderer.present()
+    SDL_RenderPresent(sdlState.renderer);
+  }
+
+  void UI_Manager::clearRenderer(const game_engine::SDLState& sdlState){
+    // clear the backbuffer before drawing onto it with black from draw color above
+    SDL_SetRenderDrawColor(sdlState.renderer, 20, 10, 30, 255);
+    SDL_RenderClear(sdlState.renderer);
+  }
+
 // Local helper for the main menu (not a member).
-UIActions UI_Manager::drawMainMenu(const LoadingSnapshot& /*unused*/, ImGuiWindowFlags flags) {
+UIActions UI_Manager::drawMainMenu(const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState) {
+
+  // compute tile layout
+
+  // collect imgui interaction state
+
+  //render with sdl and renderer; give renderer ref, and sdl_state ref to UI_Manager
+
+  ImGui::SetNextWindowPos(ImVec2(0,0));
+  ImGui::SetNextWindowSize(snaps.winDims);
+  ImGui::Begin("##title_hitboxes", nullptr,
+      ImGuiWindowFlags_NoDecoration |
+      ImGuiWindowFlags_NoBackground |
+      ImGuiWindowFlags_NoMove |
+      ImGuiWindowFlags_NoSavedSettings);
 
     UIActions act;
     act.stopBackgroundTrack = true;
-    ImGui::Begin("Main Menu", nullptr, flags);
+    // ImGui::Begin("Main Menu", nullptr, flags);
     if (ImGui::Button("Single Player", defaultButtonSize)) {
         std::cout << "start game" << std::endl;
         act.nextView = GameView::Playing;
@@ -138,7 +172,7 @@ void UI_Manager::drawPlayerHealthbar(const int playerHP, ImGuiWindowFlags flags)
     ImGui::End();
 }
 
-UIActions UI_Manager::renderView(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags) {
+UIActions UI_Manager::renderView(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState) {
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
@@ -148,7 +182,7 @@ UIActions UI_Manager::renderView(GameView view, const UISnapshots& snaps, ImGuiW
     ImGui::SetNextWindowSize(io.DisplaySize);
 
     switch (view) {
-      case GameView::MainMenu:     return drawMainMenu(snaps.loading, flags);
+      case GameView::MainMenu:     return drawMainMenu(snaps, flags, sdlState);
       case GameView::LevelLoading: return drawLoading(snaps.loading, flags);
       case GameView::GameOver: return drawGameOver(snaps.loading, flags);
       case GameView::Playing: return drawGameplay(snaps, flags);

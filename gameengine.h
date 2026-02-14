@@ -632,10 +632,10 @@ namespace game_engine {
       void updateAllObjects(float deltaTime);
       void updateMapViewport(GameObject& player);
       void drawAllObjects(float deltaTime);
-      bool updateUI();
+      bool updateUI(UIManager::UI_Manager& uiManager);
       void applyUIActions(const UIManager::UIActions& a);
-      void clearRenderer();
-      void renderUpdates();
+      // void clearRenderer();
+      // void renderUpdates();
 
       void buildAuthoritativeStateForServer();
       bool handleMultiplayerConnections();

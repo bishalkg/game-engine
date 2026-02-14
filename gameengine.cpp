@@ -118,6 +118,7 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
 void game_engine::Engine::runGameLoop() {
     // start the game loop
   uint64_t prevTime = SDL_GetTicks();
+  UIManager::UI_Manager uiManager = m_resources.m_uiManager;
   m_gameRunning.store(true);
 
   while (m_gameRunning.load()){
@@ -134,11 +135,11 @@ void game_engine::Engine::runGameLoop() {
     runEventLoop(player, input);
 
     // ui_manager to handle this
-    if (updateUI()) {
+    if (updateUI(uiManager)) {
       continue;
     }
 
-    clearRenderer();
+    uiManager.clearRenderer(m_sdlState);
 
     if (!handleMultiplayerConnections()) {
       return;
@@ -191,7 +192,8 @@ void game_engine::Engine::runGameLoop() {
     // }
     updateGameplayState(deltaTime, player);
 
-    renderUpdates();
+
+    uiManager.renderPresent(m_sdlState);
 
     prevTime = nowTime;
   };
@@ -315,27 +317,28 @@ void game_engine::Engine::runGameServerLoopThread() {
   }
 }
 
-void game_engine::Engine::clearRenderer(){
-    // clear the backbuffer before drawing onto it with black from draw color above
-    SDL_SetRenderDrawColor(m_sdlState.renderer, 20, 10, 30, 255);
-    SDL_RenderClear(m_sdlState.renderer);
-}
+// void game_engine::Engine::clearRenderer(){
+//     // clear the backbuffer before drawing onto it with black from draw color above
+//     SDL_SetRenderDrawColor(m_sdlState.renderer, 20, 10, 30, 255);
+//     SDL_RenderClear(m_sdlState.renderer);
+// }
 
-void game_engine::Engine::renderUpdates(){
-  // swap backbuffer to display new state
-  // Textures live in GPU memory; the renderer batches copies/draws and flushes them on present.
-  // 6) Render ImGui on top of your SDL frame
-  // world.render()
-  SDL_SetRenderLogicalPresentation(m_sdlState.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+// void game_engine::Engine::renderUpdates(){
+//   // swap backbuffer to display new state
+//   // Textures live in GPU memory; the renderer batches copies/draws and flushes them on present.
+//   // 6) Render ImGui on top of your SDL frame
+//   // world.render()
+//   m_resources.m_uiManager.renderPresent(m_sdlState);
+//   // SDL_SetRenderLogicalPresentation(m_sdlState.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
 
-  // ui.render()
-  ImGui::Render();
-  ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), m_sdlState.renderer);
-  SDL_SetRenderLogicalPresentation(m_sdlState.renderer, m_sdlState.logW, m_sdlState.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+//   // // ui.render()
+//   // ImGui::Render();
+//   // ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), m_sdlState.renderer);
+//   // SDL_SetRenderLogicalPresentation(m_sdlState.renderer, m_sdlState.logW, m_sdlState.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
-  // renderer.present()
-  SDL_RenderPresent(m_sdlState.renderer);
-}
+//   // // renderer.present()
+//   // SDL_RenderPresent(m_sdlState.renderer);
+// }
 
 
 void game_engine::Engine::runEventLoop(GameObject &player, game_engine::NetGameInput &net_input) {
@@ -688,11 +691,12 @@ void game_engine::Engine::applyUIActions(const UIManager::UIActions& a) {
   if (a.startMultiPlayerHost) { m_gameType = Host; }
 }
 
-bool game_engine::Engine::updateUI() {
+bool game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager) {
 
   UIManager::UISnapshots snaps;
 
   snaps.playerHP = getPlayer().data.player.healthPoints;
+  snaps.winDims = ImVec2(m_sdlState.logW, m_sdlState.logH);
 
   if (m_gameState.currentView == UIManager::GameView::LevelLoading)
   {
@@ -702,7 +706,7 @@ bool game_engine::Engine::updateUI() {
     snaps.loading.done = (p >= 100);
   }
 
-  UIManager::UIActions actions = m_resources.m_uiManager.renderView(m_gameState.currentView, snaps, m_sdlState.ImGuiWindowFlags);
+  UIManager::UIActions actions = uiManager.renderView(m_gameState.currentView, snaps, m_sdlState.ImGuiWindowFlags, m_sdlState);
 
   applyUIActions(actions);
 
