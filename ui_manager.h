@@ -4,6 +4,7 @@
 #include "animation.h"
 #include <SDL3/SDL_render.h>
 #include <optional>
+#include <vector>
 
 
 namespace game_engine { struct SDLState; }
@@ -16,6 +17,7 @@ namespace UIManager {
       Playing,
       MainMenu,
       PauseMenu,
+      CutScene,
       LevelLoading,
       InventoryMenu,
       GameOver,
@@ -35,13 +37,43 @@ namespace UIManager {
     std::optional<GameView> nextView;
     bool quitGame = false;
   };
+
+  struct Scene {
+    SDL_Texture* tex;
+    Animation* anim;
+    // other things needed for scene
+  };
+
   struct UISnapshots {
     LoadingSnapshot loading; /* add title/pause data */
     int playerHP;
     ImVec2 winDims;
     float deltaTime;
+
     Animation* mainMenuAnim{nullptr};
     SDL_Texture* mainMenuTex{nullptr};
+
+    bool advanceToNextScene = false;
+    const std::vector<Scene>* cutscene{nullptr};
+    int cutSceneID = -1; // test with main menu?
+  };
+
+  // cutscene manager gets set once when we enter GameView::CutScene
+
+  struct CutSceneManager {
+    int cutSceneID = -1; // if ID changes, init new CutScene
+    const std::vector<Scene>* scenes = nullptr; // pointed to vector is ready only
+    size_t index = 0;
+    bool blocking = false;
+
+    void start(int sceneID, const std::vector<Scene>* newScenes);
+
+    void update(float deltaTime, const UISnapshots& snaps);
+
+    void render(const game_engine::SDLState& sdlState);
+
+    bool isFinished();
+
   };
 
   class UI_Manager {
@@ -59,7 +91,7 @@ namespace UIManager {
 
 
     private:
-      UIActions drawLoading(const LoadingSnapshot&, ImGuiWindowFlags);
+      UIActions drawLoading(const UISnapshots& snaps, ImGuiWindowFlags);
       UIActions drawGameOver(const LoadingSnapshot& /*unused*/ , ImGuiWindowFlags flags);
       UIActions drawMainMenu(const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState);
       UIActions drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags);
@@ -72,6 +104,7 @@ namespace UIManager {
 
     private:
       ImVec2 defaultButtonSize = ImVec2(150, 50);
+      CutSceneManager cutsceneMgr;
 
   };
 

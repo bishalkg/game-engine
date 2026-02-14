@@ -133,15 +133,23 @@ namespace UIManager {
     return act;
   }
 
-  UIActions UI_Manager::drawLoading(const LoadingSnapshot& ls, ImGuiWindowFlags flags) {
+  UIActions UI_Manager::drawLoading(const UISnapshots& snaps, ImGuiWindowFlags flags) {
       UIActions act;
       ImGui::Begin("Loading", nullptr, flags);
       ImGui::Text("Loading level...");
-      ImGui::ProgressBar(ls.progress01, ImVec2(200, 0));
+      ImGui::ProgressBar(snaps.loading.progress01, ImVec2(200, 0));
       ImGui::End();
-      if (ls.done) {
+      if (snaps.loading.done) {
         act.finishLoading = true;
-        act.nextView = GameView::Playing;
+
+        if (snaps.cutscene != nullptr && snaps.cutSceneID >= 0) {
+          cutsceneMgr.start(snaps.cutSceneID, snaps.cutscene);
+          act.nextView = GameView::CutScene;
+          act.blockGameLoopUpdates = true;
+        } else {
+          act.nextView = GameView::Playing;
+        }
+
       } else {
         act.blockGameLoopUpdates = true; // block updating gameState while next level is loading
         ImGui::Render(); // must force render
@@ -223,7 +231,7 @@ namespace UIManager {
       ImGui::End();
 
       drawPlayerHealthbar(snaps.playerHP, flags);
-
+      // drawPlayerHealthbar(snaps.playerHP, flags); // mana bar
 
       return act;
   }
@@ -253,15 +261,58 @@ namespace UIManager {
 
       switch (view) {
         case GameView::MainMenu:     return drawMainMenu(snaps, flags, sdlState);
-        case GameView::LevelLoading: return drawLoading(snaps.loading, flags);
+        case GameView::LevelLoading: return drawLoading(snaps, flags);
         case GameView::GameOver: return drawGameOver(snaps.loading, flags);
         case GameView::Playing: return drawGameplay(snaps, flags);
         case GameView::InventoryMenu: return drawInventoryMenu(snaps, flags);
         case GameView::PauseMenu: return drawInventoryMenu(snaps, flags); // same as inventory menu because pauses game
         case GameView::MultiPlayerOptionsMenu: return drawMultiplayerOptionsMenu(snaps, flags);
+        case GameView::CutScene:
+        {
+
+          // After LevelLoading completes, if currLevel has a cutscene
+          // call cutsceneManager.start(data) and set currView = CutScene and blockGameLoopUpdates = true;
+          // advanceToNextScene = true means go to next idx in vector.
+          // cutsceneID->vector of {Animation, Texture}. pass all animations and textures stored on the currLevel for this particular cutscene. UI Manager just sees this vector and inputs from snap.
+          // as long as the view is cutscene, invoke the cutSceneManagers update/render method.
+          // blockGameLoopUpdates is true while we are not at the end of the vector.
+          // we pass in user inputs also to skip to next cutscene animation. When user hits enter,
+          // the cutsceneManager.update will step the vector of animations to the next index, and start
+          // playing the next animation.
+          // once we reach the last animation, after the use hit enter, we set GameView::Playing, and blockGameLoopUpdates = false;
+          // should this happen after LevelLoading? or During LevelLoading?
+
+
+        }
         default:                     return {};
       }
   }
+
+
+  void CutSceneManager::start(int sceneID, const std::vector<Scene>* newScenes) {
+      cutSceneID = sceneID;
+      scenes = newScenes;
+      index = 0;
+      blocking = true;
+  }
+
+
+  void CutSceneManager::update(float deltaTime, const UISnapshots& snaps) {
+
+  };
+
+  void CutSceneManager::render(const game_engine::SDLState& sdlState) {
+
+  };
+
+
+
+  bool CutSceneManager::isFinished(){
+    if (!scenes) {
+      return true;
+    }
+    return index >= scenes->size();
+  };
 
 
 }
