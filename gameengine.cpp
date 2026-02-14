@@ -135,7 +135,7 @@ void game_engine::Engine::runGameLoop() {
     runEventLoop(player, input);
 
     // ui_manager to handle this
-    if (updateUI(uiManager)) {
+    if (updateUI(uiManager, deltaTime)) {
       continue;
     }
 
@@ -192,6 +192,42 @@ void game_engine::Engine::runGameLoop() {
     // }
     updateGameplayState(deltaTime, player);
 
+
+
+    if (m_gameState.currentView == UIManager::GameView::MainMenu) {
+      uiManager.clearRenderer(m_sdlState);
+          // 800w, 540h
+      float frameW = 800;
+      float frameH = 540;
+      m_resources.mainMenuAnim.step(deltaTime);
+
+        // select frame from sprite sheet
+      // float srcX = m_resources.mainMenuAnim.currentFrame() * frameW;
+
+      int cols = 10; // frames per row in your new sheet
+      int frame = m_resources.mainMenuAnim.currentFrame();
+      int col = frame % cols;
+      int row = frame / cols;
+      float srcX = col * frameW;
+      float srcY = row * frameH;
+      SDL_FRect src{srcX, srcY, frameW, frameH};
+
+      // SDL_FRect src{srcX, 0, frameW, frameH};
+
+      // // scale sprites up or down
+      // float drawW = frameW / obj.drawScale;
+      float drawW = frameW / 1.5;
+      float drawH = frameH / 1.5;
+
+      SDL_FRect dst{
+        50,
+        0,
+        drawW,
+        drawH
+      };
+
+      SDL_RenderTexture(m_sdlState.renderer, m_resources.texMainMenu, &src, &dst);
+    }
 
     uiManager.renderPresent(m_sdlState);
 
@@ -691,7 +727,7 @@ void game_engine::Engine::applyUIActions(const UIManager::UIActions& a) {
   if (a.startMultiPlayerHost) { m_gameType = Host; }
 }
 
-bool game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager) {
+bool game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager, float deltaTime) {
 
   UIManager::UISnapshots snaps;
 
@@ -706,9 +742,41 @@ bool game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager) {
     snaps.loading.done = (p >= 100);
   }
 
+  if (m_gameState.currentView == UIManager::GameView::MainMenu) {
+    snaps.deltaTime = deltaTime;
+    // snaps.mainMenuAnim = &m_resources.mainMenuAnim;
+    // snaps.mainMenuTex = m_resources.texMainMenu;
+  }
+
   UIManager::UIActions actions = uiManager.renderView(m_gameState.currentView, snaps, m_sdlState.ImGuiWindowFlags, m_sdlState);
 
   applyUIActions(actions);
+
+  // if (m_gameState.currentView == UIManager::GameView::MainMenu) {
+  //       // 800w, 540h
+  //   float frameW = 800;
+  //   float frameH = 540;
+  //   m_resources.mainMenuAnim.step(deltaTime);
+
+  //     // select frame from sprite sheet
+  //   float srcX = m_resources.mainMenuAnim.currentFrame() * frameW;
+
+  //   SDL_FRect src{srcX, 0, frameW, frameH};
+
+  //   // scale sprites up or down
+  //   // float drawW = frameW / obj.drawScale;
+  //   float drawW = frameW / 1.5;
+  //   float drawH = frameH / 1.5;
+
+  //   SDL_FRect dst{
+  //     0,
+  //     0,
+  //     drawW,
+  //     drawH
+  //   };
+
+  //   SDL_RenderTexture(m_sdlState.renderer, m_resources.texMainMenu, &src, &dst);
+  // }
 
   return actions.blockGameLoopUpdates;
 }

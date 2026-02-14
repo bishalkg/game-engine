@@ -1,6 +1,7 @@
 #pragma once
 
 #include "imgui.h"
+#include "animation.h"
 #include <optional>
 
 
@@ -37,6 +38,9 @@ namespace UIManager {
     LoadingSnapshot loading; /* add title/pause data */
     int playerHP;
     ImVec2 winDims;
+    float deltaTime;
+    // Animation* mainMenuAnim{nullptr};
+    // SDL_Texture* mainMenuTex{nullptr};
   };
 
   class UI_Manager {

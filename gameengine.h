@@ -247,6 +247,10 @@ namespace game_engine {
 
     SDL_Texture *loadTexture(SDL_Renderer *renderer, const std::string &filepath){
       SDL_Texture *tex = IMG_LoadTexture(renderer, filepath.c_str()); // textures on gpu, surface in cpu memory (we can access)
+      if (!tex) {
+        SDL_Log("loadTexture failed for '%s': %s", filepath.c_str(), SDL_GetError());
+        return nullptr;
+    }
       SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST); // scale so pixels aren't blended;
       textures.push_back(tex);
       return tex;
@@ -274,6 +278,8 @@ namespace game_engine {
     const int ANIM_DIE = 9;
     const int ANIM_RUN_ATTACK = 10;
 
+    const int ANIM_MAIN_MENU = 0;
+
     const int ANIM_BULLET_MOVING = 0;
     const int ANIM_BULLET_HIT = 1;
     std::vector<Animation> bulletAnims;
@@ -281,6 +287,9 @@ namespace game_engine {
     std::vector<SDL_Texture*> textures; // store vector of pointers so we can delete later
 
     SDL_Texture  *texBullet, *texBulletHit; // tex of bullets
+
+    SDL_Texture *texMainMenu;
+    Animation mainMenuAnim;
 
     // ----- AudioManager
     // TODO track is for long running music. Audio is for one time sound effects.
@@ -519,7 +528,6 @@ namespace game_engine {
       std::tie(audioBoneImpact, boneImpactHitTrack) = loadAudioChunk("data/audio/impact/bone_impact.mp3", chunkAudioGain);
       std::tie(audioProjectileEnemyHit, enemyProjectileHitTrack) = loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
       std::tie(audioEnemyDie, enemyDieTrack) = loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
-
       std::tie(audioJump, jumpTrack) = loadAudioChunk("data/audio/movement/jump.wav", chunkAudioGain);
 
 
@@ -541,7 +549,11 @@ namespace game_engine {
         // texBulletHit = loadTexture(state.renderer, "data/bullet_hit.png");
         texBulletHit = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
         texBullet = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
+        texMainMenu = m_currLevel->loadTexture(state.renderer, "data/maps/title_screen/title_screen_sized.png");
+        mainMenuAnim = Animation(58, 10.0f);
       }
+
+
 
     }
 
@@ -619,10 +631,12 @@ namespace game_engine {
       void updateGameObject(GameObject &obj, float deltaTime);
       bool initAllTiles(GameState &gameState);
       // const tmx::TileSet* pickTileset(uint32_t gid);
+
       void handleCollision(GameObject &a, GameObject &b, float deltaTime);
       void collisionResponse(const SDL_FRect &rectA, const SDL_FRect &rectB, const SDL_FRect &rectC, GameObject &objA, GameObject &objB, float deltaTime);
+
       void handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown, game_engine::NetGameInput &input);
-      void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime, float y);
+
       void setBackgroundSoundtrack();
       void stopBackgroundSoundtrack();
       void setGameOverSoundtrack();
@@ -632,7 +646,8 @@ namespace game_engine {
       void updateAllObjects(float deltaTime);
       void updateMapViewport(GameObject& player);
       void drawAllObjects(float deltaTime);
-      bool updateUI(UIManager::UI_Manager& uiManager);
+      void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime, float y);
+      bool updateUI(UIManager::UI_Manager& uiManager, float deltaTime);
       void applyUIActions(const UIManager::UIActions& a);
       // void clearRenderer();
       // void renderUpdates();
