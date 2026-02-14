@@ -290,6 +290,7 @@ namespace game_engine {
 
     SDL_Texture *texMainMenu;
     Animation mainMenuAnim;
+    MIX_Track *mainMenuTrack;
 
     // ----- AudioManager
     // TODO track is for long running music. Audio is for one time sound effects.
@@ -551,6 +552,8 @@ namespace game_engine {
         texBullet = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
         texMainMenu = m_currLevel->loadTexture(state.renderer, "data/maps/title_screen/title_screen_sized.png");
         mainMenuAnim = Animation(58, 10.0f);
+        auto [mainMenuAudio, mainMenuTrack] = loadAudioChunk("data/audio/22. Banners in the Wind.wav", chunkAudioGain);
+        this->mainMenuTrack = mainMenuTrack;
       }
 
 
@@ -641,6 +644,8 @@ namespace game_engine {
       void stopBackgroundSoundtrack();
       void setGameOverSoundtrack();
       void stopGameOverSoundtrack();
+      void setAudioSoundtrack(MIX_Track* track); // generics
+      void stopAudioSoundtrack(MIX_Track* track);
 
       void updateGameplayState(float deltaTime, GameObject& player);
       void updateAllObjects(float deltaTime);

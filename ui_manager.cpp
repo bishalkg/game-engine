@@ -29,75 +29,108 @@ namespace UIManager {
   }
 
 
-  // void UI_Manager::renderMainMenu(const game_engine::SDLState& sdlState, float deltaTime, const Animation* anim, SDL_Texture* tex) {
+  void UI_Manager::renderMainMenu(const game_engine::SDLState& sdlState, float deltaTime, Animation* anim, SDL_Texture* tex) {
 
-  //   if (!anim || !tex) {
-  //     return;
-  //   }
+    if (!anim || !tex) {
+      return;
+    }
 
-  //   // 800w, 540h
-  //   float frameW = 800;
-  //   float frameH = 540;
+    clearRenderer(sdlState);
 
-  //     // select frame from sprite sheet
-  //   float srcX = anim->currentFrame() * frameW;
+        // 800w, 540h
+    float frameW = 800;
+    float frameH = 540;
+    anim->step(deltaTime);
 
-  //   SDL_FRect src{srcX, 0, frameW, frameH};
+      // select frame from sprite sheet
+    // float srcX = m_resources.mainMenuAnim.currentFrame() * frameW;
 
-  //   // scale sprites up or down
-  //   // float drawW = frameW / obj.drawScale;
-  //   float drawW = frameW / 1.5;
-  //   float drawH = frameH / 1.5;
+    int cols = 10; // frames per row in your new sheet
+    int frame = anim->currentFrame();
+    int col = frame % cols;
+    int row = frame / cols;
+    float srcX = col * frameW;
+    float srcY = row * frameH;
+    SDL_FRect src{srcX, srcY, frameW, frameH};
 
-  //   SDL_FRect dst{
-  //     0,
-  //     0,
-  //     drawW,
-  //     drawH
-  //   };
+    // SDL_FRect src{srcX, 0, frameW, frameH};
 
-  //   SDL_RenderTexture(sdlState.renderer, tex, nullptr, &dst);
+    // // scale sprites up or down
+    // float drawW = frameW / obj.drawScale;
+    float drawW = frameW / 1.2;
+    float drawH = frameH / 1.2;
 
-  // }
+    SDL_FRect dst{
+      0,
+      -50,
+      drawW,
+      drawH
+    };
+
+    SDL_RenderTexture(sdlState.renderer, tex, &src, &dst);
+
+    renderPresent(sdlState);
+
+  }
 
   // Local helper for the main menu (not a member).
   UIActions UI_Manager::drawMainMenu(const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState) {
 
-  // renderMainMenu(sdlState, snaps.deltaTime, &snaps.mainMenuAnim, snaps.mainMenuTex);
+        // renderer output and logical ref
+    int outW, outH; SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
+    const float refW = 1600.0f, refH = 900.0f;
+    // letterbox scale/offset
+    float scalePos = std::min(outW / refW, outH / refH);
+    float offX = (outW - refW * scalePos) * 0.5f;
+    float offY = (outH - refH * scalePos) * 0.5f;
 
-    // , float deltaTime, Animation& anim, SDL_Texture* tex
-    // compute tile layout
+    // anchor in reference pixels (where the art is)
+    ImVec2 anchor = ImVec2(offX + 880.0f * scalePos,
+                          offY + 140.0f * scalePos);
 
-    // collect imgui interaction state
-
-    //render with sdl and renderer; give renderer ref, and sdl_state ref to UI_Manager
+    // Only downscale size (don’t upscale)
+    float scaleSize = std::min(scalePos, 1.0f);
+    float btnW = 500.0f * scaleSize;
+    float btnH = 125.0f * scaleSize;
+    float spacing = 5.0f * scaleSize;
 
     ImGui::SetNextWindowPos(ImVec2(0,0));
-    ImGui::SetNextWindowSize(snaps.winDims);
-    ImGui::Begin("##title_hitboxes", nullptr,
-        ImGuiWindowFlags_NoDecoration |
-        ImGuiWindowFlags_NoBackground |
-        ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoSavedSettings);
+    ImGui::SetNextWindowSize(ImVec2((float)outW, (float)outH));
+    ImGui::Begin("##menu_hitboxes", nullptr, ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
+                                        ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
+                                        ImGuiWindowFlags_NoScrollbar);
 
-      UIActions act;
-      act.stopBackgroundTrack = true;
-      // ImGui::Begin("Main Menu", nullptr, flags);
-      if (ImGui::Button("Single Player", defaultButtonSize)) {
-          std::cout << "start game" << std::endl;
-          act.nextView = GameView::Playing;
-          act.startSinglePlayer = true;
-      }
-      if (ImGui::Button("Multiplayer", defaultButtonSize)) {
-          act.nextView = GameView::MultiPlayerOptionsMenu;
-          std::cout << "multi game" << std::endl;
-      }
-      if (ImGui::Button("Quit", defaultButtonSize)) {
-          std::cout << "quit game" << std::endl;
-          act.quitGame = true;
-      }
-      ImGui::End();
-      return act;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1,1,1,0.2f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1,1,1,0.3f));
+
+    // draw buttons at anchor + vertical spacing
+    ImVec2 pos = anchor;
+    auto place = [&](const char* id, auto onClick) {
+        ImGui::SetCursorScreenPos(pos);
+        if (ImGui::Button(id, ImVec2(btnW, btnH))) onClick();
+        if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        pos.y += btnH + spacing;
+    };
+
+    UIActions act;
+    act.stopBackgroundTrack = true;
+    place("##single", [&]{ act.nextView = GameView::Playing; act.startSinglePlayer = true; });
+    place("##multi",  [&]{ act.nextView = GameView::MultiPlayerOptionsMenu; });
+    place("##quit",   [&]{ act.quitGame = true; });
+
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(3);
+    ImGui::End();
+
+
+    renderMainMenu(sdlState, snaps.deltaTime, snaps.mainMenuAnim, snaps.mainMenuTex);
+    act.blockGameLoopUpdates = true;
+
+    return act;
   }
 
   UIActions UI_Manager::drawLoading(const LoadingSnapshot& ls, ImGuiWindowFlags flags) {

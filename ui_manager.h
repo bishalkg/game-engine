@@ -2,6 +2,7 @@
 
 #include "imgui.h"
 #include "animation.h"
+#include <SDL3/SDL_render.h>
 #include <optional>
 
 
@@ -39,8 +40,8 @@ namespace UIManager {
     int playerHP;
     ImVec2 winDims;
     float deltaTime;
-    // Animation* mainMenuAnim{nullptr};
-    // SDL_Texture* mainMenuTex{nullptr};
+    Animation* mainMenuAnim{nullptr};
+    SDL_Texture* mainMenuTex{nullptr};
   };
 
   class UI_Manager {
@@ -52,6 +53,9 @@ namespace UIManager {
 
       void renderPresent(const game_engine::SDLState& sdlState);
       void clearRenderer(const game_engine::SDLState& sdlState);
+
+      // move to cutscene manager.
+      void renderMainMenu(const game_engine::SDLState& sdlState, float deltaTime, Animation* anim, SDL_Texture* tex);
 
 
     private:

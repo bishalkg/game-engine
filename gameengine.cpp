@@ -39,6 +39,25 @@ void game_engine::Engine::setBackgroundSoundtrack() {
   }
 };
 
+void game_engine::Engine::setAudioSoundtrack(MIX_Track* track) {
+  if (!MIX_TrackPlaying(track)) {
+    SDL_PropertiesID opts = SDL_CreateProperties();
+    SDL_SetNumberProperty(opts, MIX_PROP_PLAY_LOOPS_NUMBER, -1); // loop forever
+    if (!MIX_PlayTrack(track, opts)) {
+        SDL_Log("Music Play failed: %s", SDL_GetError());
+    }
+    SDL_DestroyProperties(opts); // destory internal resources
+  }
+};
+
+void game_engine::Engine::stopAudioSoundtrack(MIX_Track* track) {
+  if (MIX_TrackPlaying(track)) {
+    if (!MIX_StopTrack(track, 10)) {
+        SDL_Log("stopping Background Music Play failed: %s", SDL_GetError());
+    }
+  }
+};
+
 void game_engine::Engine::stopBackgroundSoundtrack() {
   if (MIX_TrackPlaying(m_resources.m_currLevel->backgroundTrack)) {
     if (!MIX_StopTrack(m_resources.m_currLevel->backgroundTrack, 10)) {
@@ -122,8 +141,10 @@ void game_engine::Engine::runGameLoop() {
   m_gameRunning.store(true);
 
   while (m_gameRunning.load()){
+
     uint64_t nowTime = SDL_GetTicks();
     float deltaTime = (nowTime - prevTime) / 1000.0f; // convert to seconds; time bw frames
+    prevTime = nowTime;
 
     GameObject &player = getPlayer();
 
@@ -142,7 +163,7 @@ void game_engine::Engine::runGameLoop() {
     uiManager.clearRenderer(m_sdlState);
 
     if (!handleMultiplayerConnections()) {
-      return;
+      return; // if we dont update gamePlayState will it render previous state? uiManager.renderPresent inside uiManager in cutscenes
     }
 
     if (isConnectedToServer && m_gameClient) {
@@ -192,46 +213,9 @@ void game_engine::Engine::runGameLoop() {
     // }
     updateGameplayState(deltaTime, player);
 
-
-
-    if (m_gameState.currentView == UIManager::GameView::MainMenu) {
-      uiManager.clearRenderer(m_sdlState);
-          // 800w, 540h
-      float frameW = 800;
-      float frameH = 540;
-      m_resources.mainMenuAnim.step(deltaTime);
-
-        // select frame from sprite sheet
-      // float srcX = m_resources.mainMenuAnim.currentFrame() * frameW;
-
-      int cols = 10; // frames per row in your new sheet
-      int frame = m_resources.mainMenuAnim.currentFrame();
-      int col = frame % cols;
-      int row = frame / cols;
-      float srcX = col * frameW;
-      float srcY = row * frameH;
-      SDL_FRect src{srcX, srcY, frameW, frameH};
-
-      // SDL_FRect src{srcX, 0, frameW, frameH};
-
-      // // scale sprites up or down
-      // float drawW = frameW / obj.drawScale;
-      float drawW = frameW / 1.5;
-      float drawH = frameH / 1.5;
-
-      SDL_FRect dst{
-        50,
-        0,
-        drawW,
-        drawH
-      };
-
-      SDL_RenderTexture(m_sdlState.renderer, m_resources.texMainMenu, &src, &dst);
-    }
-
     uiManager.renderPresent(m_sdlState);
 
-    prevTime = nowTime;
+    // prevTime = nowTime;
   };
 
   if (m_gameServer) {
@@ -744,8 +728,11 @@ bool game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager, float delta
 
   if (m_gameState.currentView == UIManager::GameView::MainMenu) {
     snaps.deltaTime = deltaTime;
-    // snaps.mainMenuAnim = &m_resources.mainMenuAnim;
-    // snaps.mainMenuTex = m_resources.texMainMenu;
+    setAudioSoundtrack(m_resources.mainMenuTrack);
+    snaps.mainMenuAnim = &m_resources.mainMenuAnim;
+    snaps.mainMenuTex = m_resources.texMainMenu;
+  } else {
+    stopAudioSoundtrack(m_resources.mainMenuTrack);
   }
 
   UIManager::UIActions actions = uiManager.renderView(m_gameState.currentView, snaps, m_sdlState.ImGuiWindowFlags, m_sdlState);
