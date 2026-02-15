@@ -28,46 +28,45 @@ namespace UIManager {
     SDL_RenderClear(sdlState.renderer);
   }
 
+  void UI_Manager::render(const game_engine::SDLState& sdlState, float deltaTime, const Scene& scene) {
 
-  void UI_Manager::renderMainMenu(const game_engine::SDLState& sdlState, float deltaTime, Animation* anim, SDL_Texture* tex) {
-
-    if (!anim || !tex) {
+    if (!scene.anim || !scene.tex) {
       return;
     }
 
     clearRenderer(sdlState);
 
         // 800w, 540h
-    float frameW = 800;
-    float frameH = 540;
-    anim->step(deltaTime);
+    // float frameW = frameW;
+    // float frameH = frameH;
+    // scene.anim->step(deltaTime); // TODO this would step twice currently
 
       // select frame from sprite sheet
     // float srcX = m_resources.mainMenuAnim.currentFrame() * frameW;
 
-    int cols = 10; // frames per row in your new sheet
-    int frame = anim->currentFrame();
+    int cols = scene.numFrameColumns; // frames per row in your new sheet
+    int frame = scene.anim->currentFrame();
     int col = frame % cols;
     int row = frame / cols;
-    float srcX = col * frameW;
-    float srcY = row * frameH;
-    SDL_FRect src{srcX, srcY, frameW, frameH};
+    float srcX = col * scene.frameW;
+    float srcY = row * scene.frameH;
+    SDL_FRect src{srcX, srcY, scene.frameW, scene.frameH};
 
     // SDL_FRect src{srcX, 0, frameW, frameH};
 
     // // scale sprites up or down
     // float drawW = frameW / obj.drawScale;
-    float drawW = frameW / 1.2;
-    float drawH = frameH / 1.2;
+    float drawW = scene.frameW / scene.scale; // 1.2
+    float drawH = scene.frameH / scene.scale;
 
     SDL_FRect dst{
-      0,
-      -50,
+      scene.xOffset, // 0
+      scene.yOffset, // -50
       drawW,
       drawH
     };
 
-    SDL_RenderTexture(sdlState.renderer, tex, &src, &dst);
+    SDL_RenderTexture(sdlState.renderer, scene.tex, &src, &dst);
 
     renderPresent(sdlState);
 
@@ -126,8 +125,19 @@ namespace UIManager {
     ImGui::PopStyleColor(3);
     ImGui::End();
 
-
-    renderMainMenu(sdlState, snaps.deltaTime, snaps.mainMenuAnim, snaps.mainMenuTex);
+    // animated backdrop: stepped in renderView before this call
+    if (cutsceneMgr.scenes) {
+      render(sdlState, snaps.deltaTime, cutsceneMgr.currScene());
+    }
+    // render(sdlState, snaps.deltaTime, Scene{
+    //   .tex = snaps.mainMenuTex,
+    //   .anim = snaps.mainMenuAnim,
+    //   .scale = 1.2,
+    //   .numFrameColumns = 10,
+    //   .frameH = 540.0f,
+    //   .frameW = 800.0f,
+    //   .yOffset = -50
+    // });
     act.blockGameLoopUpdates = true;
 
     return act;
@@ -260,7 +270,14 @@ namespace UIManager {
       ImGui::SetNextWindowSize(io.DisplaySize);
 
       switch (view) {
-        case GameView::MainMenu:     return drawMainMenu(snaps, flags, sdlState);
+        case GameView::MainMenu:
+        {
+          if (cutsceneMgr.scenes == nullptr && snaps.cutscene) {
+            cutsceneMgr.start(snaps.cutSceneID, snaps.cutscene);
+          }
+          cutsceneMgr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
+          return drawMainMenu(snaps, flags, sdlState);
+        }
         case GameView::LevelLoading: return drawLoading(snaps, flags);
         case GameView::GameOver: return drawGameOver(snaps.loading, flags);
         case GameView::Playing: return drawGameplay(snaps, flags);
@@ -269,6 +286,10 @@ namespace UIManager {
         case GameView::MultiPlayerOptionsMenu: return drawMultiplayerOptionsMenu(snaps, flags);
         case GameView::CutScene:
         {
+          bool playNextScene = snaps.advanceToNextScene;
+
+          cutsceneMgr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
+          render(sdlState, snaps.deltaTime, cutsceneMgr.currScene());
 
           // After LevelLoading completes, if currLevel has a cutscene
           // call cutsceneManager.start(data) and set currView = CutScene and blockGameLoopUpdates = true;
@@ -292,26 +313,60 @@ namespace UIManager {
   void CutSceneManager::start(int sceneID, const std::vector<Scene>* newScenes) {
       cutSceneID = sceneID;
       scenes = newScenes;
-      index = 0;
-      blocking = true;
+      sceneIndex = 0;
+      doneWithScene = false;
+  }
+
+  const Scene& CutSceneManager::currScene() {
+    return scenes->at(sceneIndex);
   }
 
 
-  void CutSceneManager::update(float deltaTime, const UISnapshots& snaps) {
+void CutSceneManager::update(bool playNextScene, float deltaTime, const UISnapshots& snaps) {
+    if (!scenes || sceneIndex >= scenes->size() || doneWithScene) return;
 
+    const Scene& scene = currScene();
+    if (scene.anim) scene.anim->step(deltaTime);
+
+    if (isCurrentSceneComplete()) {
+      std::cout << "done scene" << std::endl;
+      doneWithScene = true;
+      // indicate that the scene is complete and stop stepping...will freeze on the last frame!
+    }
+
+    // is currentAnimation finished?
+    // is cutSceneFinished?
+    // do we want to advance automatically with isFinished?
+    // do we need to let the final frame play out first
+    if (playNextScene) { // || isCurrentSceneComplete()
+      if (scene.anim) scene.anim->reset();
+      if (sceneIndex + 1 < scenes->size()) {
+        sceneIndex++;
+        if (scenes->at(sceneIndex).anim) scenes->at(sceneIndex).anim->reset();
+      }
+    }
+
+    // scenes[index].data()->anim->step(deltaTime);
+
+    // run animation delta on current animation index
+    // if playNextScene increment index
   };
 
-  void CutSceneManager::render(const game_engine::SDLState& sdlState) {
-
-  };
 
 
-
-  bool CutSceneManager::isFinished(){
+  bool CutSceneManager::isCutsceneComplete(){
     if (!scenes) {
       return true;
     }
-    return index >= scenes->size();
+    return sceneIndex >= scenes->size();
+  };
+
+  bool CutSceneManager::isCurrentSceneComplete(){
+    if (!scenes) {
+      return true;
+    }
+
+    return scenes->at(sceneIndex).anim->isDone();
   };
 
 

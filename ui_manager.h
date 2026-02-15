@@ -41,6 +41,12 @@ namespace UIManager {
   struct Scene {
     SDL_Texture* tex;
     Animation* anim;
+    int numFrameColumns;
+    float frameW;
+    float frameH;
+    float yOffset = 0;
+    float xOffset = 0;
+    float scale = 1.0;
     // other things needed for scene
   };
 
@@ -63,16 +69,17 @@ namespace UIManager {
   struct CutSceneManager {
     int cutSceneID = -1; // if ID changes, init new CutScene
     const std::vector<Scene>* scenes = nullptr; // pointed to vector is ready only
-    size_t index = 0;
-    bool blocking = false;
+    size_t sceneIndex = 0;
+    bool doneWithScene = false;
 
     void start(int sceneID, const std::vector<Scene>* newScenes);
 
-    void update(float deltaTime, const UISnapshots& snaps);
+    void update(bool playNextScene, float deltaTime, const UISnapshots& snaps);
 
-    void render(const game_engine::SDLState& sdlState);
+    bool isCutsceneComplete();
+    bool isCurrentSceneComplete();
 
-    bool isFinished();
+    const Scene& currScene();
 
   };
 
@@ -86,8 +93,7 @@ namespace UIManager {
       void renderPresent(const game_engine::SDLState& sdlState);
       void clearRenderer(const game_engine::SDLState& sdlState);
 
-      // move to cutscene manager.
-      void renderMainMenu(const game_engine::SDLState& sdlState, float deltaTime, Animation* anim, SDL_Texture* tex);
+      void render(const game_engine::SDLState& sdlState, float deltaTime, const Scene& scene);
 
 
     private:

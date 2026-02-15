@@ -311,11 +311,12 @@ namespace game_engine {
     Timer whooshCooldown{0.25f};  // 100 ms. needs to be here and not on each projectile entity
     Timer stepAudioCooldown{0.25f};  // 100 ms. needs to be here and not on each projectile entity
 
-    // ------- AudioManager
+    // ------- AudioManager^
 
-    // std::unique_ptr<UIManager::UI_Manager> m_uiManager;
+
     UIManager::UI_Manager m_uiManager;
     std::unique_ptr<Level> m_currLevel;
+    std::vector<UIManager::Scene> mainMenuCutscene;
     LevelIndex m_currLevelIdx;
 
     // Resources() {
@@ -554,6 +555,18 @@ namespace game_engine {
         mainMenuAnim = Animation(58, 10.0f);
         auto [mainMenuAudio, mainMenuTrack] = loadAudioChunk("data/audio/22. Banners in the Wind.wav", chunkAudioGain);
         this->mainMenuTrack = mainMenuTrack;
+        // TODO make scene from level manifest
+        mainMenuCutscene = {
+          UIManager::Scene{
+          .tex = texMainMenu,
+          .anim = &mainMenuAnim,
+          .scale = 1.2,
+          .numFrameColumns = 10,
+          .frameH = 540.0f,
+          .frameW = 800.0f,
+          .yOffset = -50
+          }
+        };
       }
 
 

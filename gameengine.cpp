@@ -729,8 +729,10 @@ bool game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager, float delta
   if (m_gameState.currentView == UIManager::GameView::MainMenu) {
     snaps.deltaTime = deltaTime;
     setAudioSoundtrack(m_resources.mainMenuTrack);
-    snaps.mainMenuAnim = &m_resources.mainMenuAnim;
-    snaps.mainMenuTex = m_resources.texMainMenu;
+    snaps.cutscene = &m_resources.mainMenuCutscene;
+    snaps.cutSceneID = 0;
+    // snaps.mainMenuAnim = &m_resources.mainMenuAnim;
+    // snaps.mainMenuTex = m_resources.texMainMenu;
   } else {
     stopAudioSoundtrack(m_resources.mainMenuTrack);
   }
