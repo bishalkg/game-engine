@@ -860,7 +860,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
   const auto widenColliderForSwing = [&](GameObject& o) {
       const float drawW = o.spritePixelW / o.drawScale;
-      const float extra = 0.5f * drawW;
+      const float extra = 0.2f * drawW;
 
       SDL_FRect c = baseFacing(o);
       c.w += extra;
@@ -932,21 +932,23 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
             bullet.currentAnimation = m_resources.ANIM_BULLET_MOVING;
             const int yJitter = 50;
             const float yVelocity = SDL_rand(yJitter) - yJitter / 1.5f;
-            bullet.velocity = glm::vec2(
-              obj.velocity.x + 200.0f,
-              yVelocity
-            ) * obj.direction;
+
+            const float baseSpeed = 200.0f;
+            const float inherit   = obj.velocity.x * 0.2f; // optional
+            bullet.velocity.x = baseSpeed * obj.direction + inherit;
+            bullet.velocity.y = yVelocity;
+
             bullet.maxSpeedX = 1000.0f;
             bullet.animations = m_resources.bulletAnims;
 
             // adjust depending on direction faced; lerp
-            const float left = -10;
-            const float right = 50;
-            const float t = (obj.direction + 1) / 2.0f; // 0 or 1 taking into account neg sign
+            const float left = -20;
+            const float right = 20;
+            const float t = (obj.direction + 1) / 1.0f; // 0 or 1 taking into account neg sign
             const float xOffset = left + right * t;
             bullet.position = glm::vec2(
               obj.position.x + xOffset,
-              obj.position.y + (obj.spritePixelH/bullet.drawScale) / 3.0
+              obj.position.y + (obj.spritePixelH/bullet.drawScale) / 8.0
             );
 
             bool foundInactive = false;

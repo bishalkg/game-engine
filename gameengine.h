@@ -469,10 +469,10 @@ namespace game_engine {
           m_currLevel->texCharacterMap[character].anims[ANIM_SLIDE] = Animation(slideFrames, slideSeconds);
 
           auto [shootFrames, shootSeconds] = spriteAssets.animSettings.at(ANIM_SHOOT);
-          m_currLevel->texCharacterMap[character].anims[ANIM_SHOOT] = Animation(shootFrames, shootSeconds);
+          m_currLevel->texCharacterMap[character].anims[ANIM_SHOOT] = Animation(shootFrames, shootSeconds, 0, true);
 
           auto [slideShootFrames, slideShootSeconds] = spriteAssets.animSettings.at(ANIM_SLIDE_SHOOT);
-          m_currLevel->texCharacterMap[character].anims[ANIM_SLIDE_SHOOT] = Animation(slideShootFrames, slideShootSeconds);
+          m_currLevel->texCharacterMap[character].anims[ANIM_SLIDE_SHOOT] = Animation(slideShootFrames, slideShootSeconds, 0, true);
 
           auto [hitFrames, hitSeconds] = spriteAssets.animSettings.at(ANIM_HIT);
           m_currLevel->texCharacterMap[character].anims[ANIM_HIT] = Animation(hitFrames, hitSeconds);
