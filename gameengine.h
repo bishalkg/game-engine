@@ -660,7 +660,7 @@ namespace game_engine {
 
       bool init(int width, int height, int logW, int logH);
       void runGameLoop();
-      void runEventLoop(GameObject &player, game_engine::NetGameInput &input);
+      void runEventLoop(GameObject &player, game_engine::NetGameInput &input, UIManager::UISnapshots &snaps);
 
       bool initWindowAndRenderer(int width, int height, int logW, int logH);
       void cleanupTextures();
@@ -687,7 +687,7 @@ namespace game_engine {
       void updateMapViewport(GameObject& player);
       void drawAllObjects(float deltaTime);
       void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime, float y);
-      bool updateUI(UIManager::UI_Manager& uiManager, float deltaTime);
+      bool updateUI(UIManager::UI_Manager& uiManager, float deltaTime, UIManager::UISnapshots &snaps);
       void applyUIActions(const UIManager::UIActions& a);
       // void clearRenderer();
       // void renderUpdates();

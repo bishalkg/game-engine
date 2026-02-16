@@ -133,11 +133,9 @@ namespace UIManager {
     act.blockGameLoopUpdates = true;
     // animated backdrop: stepped in renderView before this call
     if (cutsceneMgr.scenes && !cutsceneMgr.scenes->empty()) {
-
       render(sdlState, snaps.deltaTime, cutsceneMgr.currScene());
-      // if (cutsceneMgr.isCutsceneComplete()) {
-      //   renderPresent(sdlState);
-      // }
+    } else {
+      ImGui::Render(); // must force render to close out imgui cycle.
     }
 
     return act;
@@ -152,17 +150,21 @@ namespace UIManager {
       if (snaps.loading.done) {
         act.finishLoading = true;
 
+        // act.nextView = GameView::Playing;
         if (snaps.cutscene != nullptr && snaps.cutSceneID >= 0) {
+          std::cout << "start cutscene" << std::endl;
           cutsceneMgr.start(snaps.cutSceneID, snaps.cutscene);
           act.nextView = GameView::CutScene;
           act.blockGameLoopUpdates = true;
+          ImGui::Render(); // must force render to close out imgui cycle.
         } else {
+          std::cout << "gameviw playing" << std::endl;
           act.nextView = GameView::Playing;
         }
 
       } else {
         act.blockGameLoopUpdates = true; // block updating gameState while next level is loading
-                // ImGui::Render(); // must force render
+        ImGui::Render(); // must force render to close out imgui cycle.
       }
       return act;
   }
@@ -346,30 +348,10 @@ namespace UIManager {
     return scenes->at(sceneIndex);
   }
 
-
-  // void CutSceneManager::update(bool playNextScene, float deltaTime, const UISnapshots& /*snaps*/) {
-  //   if (!scenes || scenes->empty() || sceneIndex >= scenes->size()) return;
-
-  //   const Scene& scene = currScene();
-  //   if (scene.anim) scene.anim->step(deltaTime);
-
-  //   bool advance = playNextScene;
-  //   if (!advance && scene.anim) {
-  //     advance = scene.anim->isDone();
-  //   }
-
-  //   if (advance) {
-  //     if (scene.anim) scene.anim->reset();
-  //     ++sceneIndex;
-  //     if (sceneIndex < scenes->size()) {
-  //       auto &next = scenes->at(sceneIndex);
-  //       if (next.anim) next.anim->reset();
-  //     }
-  //   }
-  // };
-
   void CutSceneManager::update(bool playNextScene, float deltaTime, const UISnapshots& snaps) {
-    if (!scenes || sceneIndex >= scenes->size() || doneWithScene) return;
+    if (!scenes || sceneIndex >= scenes->size()) return;
+
+    // if (doneWithScene) return;
 
     const Scene& scene = currScene();
     if (scene.anim) {
@@ -388,13 +370,10 @@ namespace UIManager {
         doneWithScene = true;
         if (sceneIndex < scenes->size()) {
           std::cout << "increment scene index" << std::endl;
-          sceneIndex++;
+          // sceneIndex++;
           // doneWithCutscene = true;
           // if (scenes->at(sceneIndex).anim) scenes->at(sceneIndex).anim->reset();
         }
-        // setting this to true prevents the scene from looping.
-        // set it to the last frame in the index.
-        // scene.anim->getFrameCount
       }
       // indicate that the scene is complete and stop stepping...will freeze on the last frame!
     }
@@ -406,9 +385,9 @@ namespace UIManager {
     if (playNextScene) { // || isCurrentSceneComplete()
       std::cout << "play next scene" << std::endl;
       if (scene.anim) scene.anim->reset();
-      if (sceneIndex + 1 < scenes->size()) {
+      if (sceneIndex < scenes->size()) {
         sceneIndex++;
-        if (scenes->at(sceneIndex).anim) scenes->at(sceneIndex).anim->reset();
+        // if (scenes->at(sceneIndex).anim) scenes->at(sceneIndex).anim->reset();
       }
     }
 

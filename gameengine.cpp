@@ -137,7 +137,7 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
 void game_engine::Engine::runGameLoop() {
     // start the game loop
   uint64_t prevTime = SDL_GetTicks();
-  UIManager::UI_Manager uiManager = m_resources.m_uiManager;
+  UIManager::UI_Manager& uiManager = m_resources.m_uiManager;
   m_gameRunning.store(true);
 
   while (m_gameRunning.load()){
@@ -153,10 +153,11 @@ void game_engine::Engine::runGameLoop() {
     // we read in snapshots from the server and updateGamePlayState; reconcile each GameObjects position using the m_stateLastUpdatedAt
     game_engine::NetGameInput input; // populate this from runEventLoop
     input.tick = nowTime;
-    runEventLoop(player, input);
+    UIManager::UISnapshots snaps;
+    runEventLoop(player, input, snaps);
 
     // ui_manager to handle this
-    if (updateUI(uiManager, deltaTime)) {
+    if (updateUI(uiManager, deltaTime, snaps)) {
       continue;
     }
 
@@ -361,7 +362,7 @@ void game_engine::Engine::runGameServerLoopThread() {
 // }
 
 
-void game_engine::Engine::runEventLoop(GameObject &player, game_engine::NetGameInput &net_input) {
+void game_engine::Engine::runEventLoop(GameObject &player, game_engine::NetGameInput &net_input, UIManager::UISnapshots &snaps) {
 
     //     // Route input: if UI is modal, don’t drive gameplay
     // if (ui.isBlockingGameInput()) {
@@ -417,6 +418,8 @@ void game_engine::Engine::runEventLoop(GameObject &player, game_engine::NetGameI
             SDL_SetWindowFullscreen(m_sdlState.window, m_sdlState.fullscreen);
           } else if (event.key.scancode == SDL_SCANCODE_TAB) {
             m_gameState.currentView = UIManager::GameView::InventoryMenu;
+          } else if (event.key.scancode == SDL_SCANCODE_RETURN) {
+            snaps.advanceToNextScene = true;
           }
           break;
         }
@@ -711,9 +714,7 @@ void game_engine::Engine::applyUIActions(const UIManager::UIActions& a) {
   if (a.startMultiPlayerHost) { m_gameType = Host; }
 }
 
-bool game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager, float deltaTime) {
-
-  UIManager::UISnapshots snaps;
+bool game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager, float deltaTime, UIManager::UISnapshots &snaps) {
 
   snaps.playerHP = getPlayer().data.player.healthPoints;
   snaps.winDims = ImVec2(m_sdlState.logW, m_sdlState.logH);
@@ -747,32 +748,6 @@ bool game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager, float delta
   UIManager::UIActions actions = uiManager.renderView(m_gameState.currentView, snaps, m_sdlState.ImGuiWindowFlags, m_sdlState);
 
   applyUIActions(actions);
-
-  // if (m_gameState.currentView == UIManager::GameView::MainMenu) {
-  //       // 800w, 540h
-  //   float frameW = 800;
-  //   float frameH = 540;
-  //   m_resources.mainMenuAnim.step(deltaTime);
-
-  //     // select frame from sprite sheet
-  //   float srcX = m_resources.mainMenuAnim.currentFrame() * frameW;
-
-  //   SDL_FRect src{srcX, 0, frameW, frameH};
-
-  //   // scale sprites up or down
-  //   // float drawW = frameW / obj.drawScale;
-  //   float drawW = frameW / 1.5;
-  //   float drawH = frameH / 1.5;
-
-  //   SDL_FRect dst{
-  //     0,
-  //     0,
-  //     drawW,
-  //     drawH
-  //   };
-
-  //   SDL_RenderTexture(m_sdlState.renderer, m_resources.texMainMenu, &src, &dst);
-  // }
 
   return actions.blockGameLoopUpdates;
 }
@@ -947,13 +922,13 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           }
 
         } else {
-        obj.animations[m_resources.ANIM_SHOOT].reset();
-        obj.animations[m_resources.ANIM_SLIDE_SHOOT].reset();
-        // obj.animations[shootAnimIndex].unfreezeAnim();
-        // and then we need to set freezeAtFrame() when .currentFrame() == 4
-        // and unfreezeAnim when SDL_SCANCODE_A is no longer being pressed and set obj.currentAnim accordingly
-        obj.texture = tex;
-        obj.currentAnimation = animIndex;
+          obj.animations[m_resources.ANIM_SHOOT].reset();
+          obj.animations[m_resources.ANIM_SLIDE_SHOOT].reset();
+          // obj.animations[shootAnimIndex].unfreezeAnim();
+          // and then we need to set freezeAtFrame() when .currentFrame() == 4
+          // and unfreezeAnim when SDL_SCANCODE_A is no longer being pressed and set obj.currentAnim accordingly
+          obj.texture = tex;
+          obj.currentAnimation = animIndex;
       }
     };
 
