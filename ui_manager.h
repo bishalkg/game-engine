@@ -64,6 +64,7 @@ namespace UIManager {
     SDL_Texture* mainMenuTex{nullptr};
 
     bool advanceToNextScene = false;
+    bool togglePauseGameplay = false;
     const std::vector<Scene>* cutscene{nullptr};
     int cutSceneID = -1; // test with main menu?
   };

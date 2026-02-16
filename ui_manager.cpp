@@ -222,16 +222,36 @@ namespace UIManager {
           ImGuiWindowFlags_NoScrollbar);
 
       ImVec2 pos(offX + btnOriginX * scale, offY + btnOriginY * scale);
-      for (auto* id : { "##resume","##restart","##settings","##levels","##inventory","##equipment","##shop","##craft","##quit" }) {
-          ImGui::SetCursorScreenPos(pos);
-          if (ImGui::Button(id, ImVec2(btnW_ref * scale, btnH_ref * scale))) {
-              // handle click by id
-          }
-          pos.y += (btnH_ref + btnGap_ref) * scale;
-      }
+
+      auto place = [&](const char* id, auto onClick) {
+        ImGui::SetCursorScreenPos(pos);
+        if (ImGui::Button(id, ImVec2(btnW_ref * scale, btnH_ref * scale))) onClick();
+        if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        pos.y += (btnH_ref + btnGap_ref) * scale;
+      };
+
+      place("##resume", [&]{ act.nextView = GameView::Playing; });
+      place("##restart", [&]{
+        act.restartLevel = true;
+        act.stopGameOverSoundTrack = true;
+        act.nextView = GameView::Playing;
+      });
+      place("##settings", [&]{ act.nextView = GameView::MultiPlayerOptionsMenu;  });
+      place("##levels", [&]{  });
+      place("##inventory", [&]{  });
+      place("##equipment",  [&]{ });
+      place("##shop",   [&]{ });
+      place("##craft",   [&]{ });
+      place("##quit",   [&]{ act.nextView = UIManager::GameView::MainMenu; act.stopBackgroundTrack = true; });
+
       ImGui::End();
       ImGui::PopStyleVar(2);
       ImGui::PopStyleColor(4);
+
+
+      if (snaps.togglePauseGameplay) {
+         act.nextView = GameView::Playing;
+      }
 
       return act;
   }
@@ -276,27 +296,15 @@ namespace UIManager {
       // Optional: remove padding so the button hugs the corner
       ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
       ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-      if (ImGui::Button("Back to Menu", defaultButtonSize)) {
-          act.nextView = UIManager::GameView::MainMenu;
-          // currentView = UIManager::GameView::MainMenu;
-      }
       ImGui::SameLine(0, 2.0f);
-      if (ImGui::Button("Save Game", defaultButtonSize)) {
-        // TODO
-      }
-      ImGui::SameLine(0, 2.0f);
-      if (ImGui::Button("Pause Game", defaultButtonSize)) {
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+      if (ImGui::Button("Pause Game", defaultButtonSize) || snaps.togglePauseGameplay) {
         act.nextView = UIManager::GameView::PauseMenu;
-          // currentView = UIManager::GameView::PauseMenu;
       }
-      ImGui::SameLine(0, 2.0f);
-      if (ImGui::Button("Start Over (Debug)", defaultButtonSize)) {
-        act.restartLevel = true;
-        act.stopGameOverSoundTrack = true;
-      }
+      if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 
       ImGui::PopItemFlag();
-      ImGui::PopStyleVar();
+      ImGui::PopStyleVar(2);
       ImGui::End();
 
       drawPlayerHealthbar(snaps.playerHP, flags);

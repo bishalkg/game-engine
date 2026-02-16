@@ -418,14 +418,22 @@ void game_engine::Engine::runEventLoop(GameObject &player, game_engine::NetGameI
             SDL_SetWindowFullscreen(m_sdlState.window, m_sdlState.fullscreen);
           } else if (event.key.scancode == SDL_SCANCODE_TAB) {
             m_gameState.currentView = UIManager::GameView::InventoryMenu;
-          } else if (event.key.scancode == SDL_SCANCODE_RETURN) {
+          } else if (
+            m_gameState.currentView == UIManager::GameView::CutScene
+            && event.key.scancode == SDL_SCANCODE_RETURN)
+          {
             snaps.advanceToNextScene = true;
+          }
+          else if (
+            (m_gameState.currentView == UIManager::GameView::Playing ||
+            m_gameState.currentView == UIManager::GameView::PauseMenu) &&
+            event.key.scancode == SDL_SCANCODE_P) {
+            snaps.togglePauseGameplay = true;
           }
           break;
         }
       }
     }
-    // }
 }
 
 bool game_engine::Engine::initWindowAndRenderer(int width, int height, int logW, int logH) {
