@@ -569,13 +569,14 @@ namespace game_engine {
           .numFrameColumns = 10,
           .frameH = 540.0f,
           .frameW = 800.0f,
-          .yOffset = -50
+          .yOffset = -50,
+          .loopScene = true,
           }
         };
 
 
         texTestCutscene = m_currLevel->loadTexture(state.renderer, "data/cutscenes/text_test.png");
-        testCusceneAnim = Animation(6, 1.0f);
+        testCusceneAnim = Animation(6, 1.0f, 0, true);
         testCutscene = {
           UIManager::Scene{
           .tex = texTestCutscene,
@@ -584,7 +585,7 @@ namespace game_engine {
           .numFrameColumns = 3,
           .frameH = 360.0f,
           .frameW = 640.0f,
-          // .yOffset = -50
+          .loopScene = false,
           }
         };
 

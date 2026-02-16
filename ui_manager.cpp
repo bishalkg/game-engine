@@ -130,20 +130,15 @@ namespace UIManager {
     ImGui::PopStyleColor(3);
     ImGui::End();
 
+    act.blockGameLoopUpdates = true;
     // animated backdrop: stepped in renderView before this call
     if (cutsceneMgr.scenes && !cutsceneMgr.scenes->empty()) {
+
       render(sdlState, snaps.deltaTime, cutsceneMgr.currScene());
+      // if (cutsceneMgr.isCutsceneComplete()) {
+      //   renderPresent(sdlState);
+      // }
     }
-    // render(sdlState, snaps.deltaTime, Scene{
-    //   .tex = snaps.mainMenuTex,
-    //   .anim = snaps.mainMenuAnim,
-    //   .scale = 1.2,
-    //   .numFrameColumns = 10,
-    //   .frameH = 540.0f,
-    //   .frameW = 800.0f,
-    //   .yOffset = -50
-    // });
-    act.blockGameLoopUpdates = true;
 
     return act;
   }
@@ -167,7 +162,7 @@ namespace UIManager {
 
       } else {
         act.blockGameLoopUpdates = true; // block updating gameState while next level is loading
-        ImGui::Render(); // must force render
+                // ImGui::Render(); // must force render
       }
       return act;
   }
@@ -301,7 +296,9 @@ namespace UIManager {
           UIActions act;
           cutsceneMgr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
           if (cutsceneMgr.scenes && !cutsceneMgr.scenes->empty() && !cutsceneMgr.isCutsceneComplete()) {
+            act.blockGameLoopUpdates = true;
             render(sdlState, snaps.deltaTime, cutsceneMgr.currScene());
+            return act;
           } else {
             std::cout << "cutscene complete" << std::endl;
             act.nextView = GameView::Playing; // need to set this one the cutscene is done
@@ -350,33 +347,83 @@ namespace UIManager {
   }
 
 
-void CutSceneManager::update(bool playNextScene, float deltaTime, const UISnapshots& /*snaps*/) {
-    if (!scenes || scenes->empty() || sceneIndex >= scenes->size()) return;
+  // void CutSceneManager::update(bool playNextScene, float deltaTime, const UISnapshots& /*snaps*/) {
+  //   if (!scenes || scenes->empty() || sceneIndex >= scenes->size()) return;
+
+  //   const Scene& scene = currScene();
+  //   if (scene.anim) scene.anim->step(deltaTime);
+
+  //   bool advance = playNextScene;
+  //   if (!advance && scene.anim) {
+  //     advance = scene.anim->isDone();
+  //   }
+
+  //   if (advance) {
+  //     if (scene.anim) scene.anim->reset();
+  //     ++sceneIndex;
+  //     if (sceneIndex < scenes->size()) {
+  //       auto &next = scenes->at(sceneIndex);
+  //       if (next.anim) next.anim->reset();
+  //     }
+  //   }
+  // };
+
+  void CutSceneManager::update(bool playNextScene, float deltaTime, const UISnapshots& snaps) {
+    if (!scenes || sceneIndex >= scenes->size() || doneWithScene) return;
 
     const Scene& scene = currScene();
-    if (scene.anim) scene.anim->step(deltaTime);
+    if (scene.anim) {
+      scene.anim->step(deltaTime);
+      std::cout << "step scene delta" << std::endl;
+    };
 
-    bool advance = playNextScene;
-    if (!advance && scene.anim) {
-      advance = scene.anim->isDone();
+    if (isCurrentSceneComplete()) {
+      std::cout << "done scene" << std::endl;
+
+      // still printing this even after the scene is done?
+      // how does it default loop forever?
+
+      if (!scene.loopScene) { // set holdLastFrame on Animation.
+        // sceneIndex++; only advance to next scene on user input.
+        doneWithScene = true;
+        if (sceneIndex < scenes->size()) {
+          std::cout << "increment scene index" << std::endl;
+          sceneIndex++;
+          // doneWithCutscene = true;
+          // if (scenes->at(sceneIndex).anim) scenes->at(sceneIndex).anim->reset();
+        }
+        // setting this to true prevents the scene from looping.
+        // set it to the last frame in the index.
+        // scene.anim->getFrameCount
+      }
+      // indicate that the scene is complete and stop stepping...will freeze on the last frame!
     }
 
-    if (advance) {
+    // is currentAnimation finished?
+    // is cutSceneFinished?
+    // do we want to advance automatically with isFinished?
+    // do we need to let the final frame play out first
+    if (playNextScene) { // || isCurrentSceneComplete()
+      std::cout << "play next scene" << std::endl;
       if (scene.anim) scene.anim->reset();
-      ++sceneIndex;
-      if (sceneIndex < scenes->size()) {
-        auto &next = scenes->at(sceneIndex);
-        if (next.anim) next.anim->reset();
+      if (sceneIndex + 1 < scenes->size()) {
+        sceneIndex++;
+        if (scenes->at(sceneIndex).anim) scenes->at(sceneIndex).anim->reset();
       }
     }
-  };
 
+    // scenes[index].data()->anim->step(deltaTime);
+
+    // run animation delta on current animation index
+    // if playNextScene increment index
+  };
 
 
   bool CutSceneManager::isCutsceneComplete(){
     if (!scenes || scenes->empty()) {
       return true;
     }
+    // use a bool to indicate whole cutscene is done
     return sceneIndex >= scenes->size();
   };
 

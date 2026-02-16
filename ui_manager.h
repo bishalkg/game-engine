@@ -47,6 +47,7 @@ namespace UIManager {
     float yOffset = 0;
     float xOffset = 0;
     float scale = 1.0;
+    bool loopScene = false;
     // other things needed for scene
   };
 
@@ -70,7 +71,9 @@ namespace UIManager {
     int cutSceneID = -1; // if ID changes, init new CutScene
     const std::vector<Scene>* scenes = nullptr; // pointed to vector is ready only
     size_t sceneIndex = 0;
-    bool doneWithScene = false;
+    bool doneWithScene = false; // indicates whether you are done with the current animation in the scenes vector.
+    // bool loopScene = false;
+    // bool doneWithCutscene = false;
 
     void start(int sceneID, const std::vector<Scene>* newScenes);
 
