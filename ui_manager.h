@@ -27,7 +27,10 @@ namespace UIManager {
   struct LoadingSnapshot { float progress01; bool done; };
   struct UIActions {
     bool finishLoading = false;
-    bool blockGameLoopUpdates = false;
+    bool blockMainGameDraw = false;
+    bool blockGameplayUpdates = false;
+    bool drawSceneOverlay = false;
+    bool dimBackground = false;
     bool stopBackgroundTrack = false;
     bool stopGameOverSoundTrack = false;
     bool restartLevel = false;
@@ -88,7 +91,7 @@ namespace UIManager {
 
   class UI_Manager {
     public:
-      UI_Manager() = default;
+      UI_Manager(game_engine::SDLState& sdl): sdlState(sdl) {};
       ~UI_Manager() = default;
 
       UIActions renderView(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState);
@@ -96,7 +99,7 @@ namespace UIManager {
       void renderPresent(const game_engine::SDLState& sdlState);
       void clearRenderer(const game_engine::SDLState& sdlState);
 
-      void render(const game_engine::SDLState& sdlState, float deltaTime, const Scene& scene);
+      void draw(const game_engine::SDLState& sdlState, float deltaTime, bool dimBackground);
 
 
     private:
@@ -104,7 +107,7 @@ namespace UIManager {
       UIActions drawGameOver(const LoadingSnapshot& /*unused*/ , ImGuiWindowFlags flags);
       UIActions drawMainMenu(const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState);
       UIActions drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags);
-      UIActions drawInventoryMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
+      UIActions drawPausedMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
 
 
@@ -114,7 +117,7 @@ namespace UIManager {
     private:
       ImVec2 defaultButtonSize = ImVec2(150, 50);
       CutSceneManager cutsceneMgr;
-
+      game_engine::SDLState& sdlState;
   };
 
 

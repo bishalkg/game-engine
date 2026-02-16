@@ -28,13 +28,23 @@ namespace UIManager {
     SDL_RenderClear(sdlState.renderer);
   }
 
-  void UI_Manager::render(const game_engine::SDLState& sdlState, float deltaTime, const Scene& scene) {
+  void UI_Manager::draw(const game_engine::SDLState& sdlState, float deltaTime, bool dimBackground) {
+
+    const Scene& scene = cutsceneMgr.currScene();
 
     if (!scene.anim || !scene.tex) {
       return;
     }
 
-    clearRenderer(sdlState);
+
+    if (dimBackground) {
+      SDL_SetRenderDrawBlendMode(sdlState.renderer, SDL_BLENDMODE_BLEND);
+      SDL_SetRenderDrawColor(sdlState.renderer, 0, 0, 0, 80); // 140/255 alpha
+      SDL_FRect cover{0, 0, (float)sdlState.logW, (float)sdlState.logH};
+      SDL_RenderFillRect(sdlState.renderer, &cover);
+    } else {
+      clearRenderer(sdlState);
+    }
 
         // 800w, 540h
     // float frameW = frameW;
@@ -68,14 +78,14 @@ namespace UIManager {
 
     SDL_RenderTexture(sdlState.renderer, scene.tex, &src, &dst);
 
-    renderPresent(sdlState);
+    // renderPresent(sdlState);
 
   }
 
   // Local helper for the main menu (not a member).
   UIActions UI_Manager::drawMainMenu(const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState) {
 
-        // renderer output and logical ref
+    // renderer output and logical ref
     int outW, outH; SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
     const float refW = 1600.0f, refH = 900.0f;
     // letterbox scale/offset
@@ -130,10 +140,10 @@ namespace UIManager {
     ImGui::PopStyleColor(3);
     ImGui::End();
 
-    act.blockGameLoopUpdates = true;
+    act.blockMainGameDraw = true;
     // animated backdrop: stepped in renderView before this call
     if (cutsceneMgr.scenes && !cutsceneMgr.scenes->empty()) {
-      render(sdlState, snaps.deltaTime, cutsceneMgr.currScene());
+      draw(sdlState, snaps.deltaTime, false);
     } else {
       ImGui::Render(); // must force render to close out imgui cycle.
     }
@@ -155,7 +165,7 @@ namespace UIManager {
           std::cout << "start cutscene" << std::endl;
           cutsceneMgr.start(snaps.cutSceneID, snaps.cutscene);
           act.nextView = GameView::CutScene;
-          act.blockGameLoopUpdates = true;
+          act.blockMainGameDraw = true;
           ImGui::Render(); // must force render to close out imgui cycle.
         } else {
           std::cout << "gameviw playing" << std::endl;
@@ -163,19 +173,66 @@ namespace UIManager {
         }
 
       } else {
-        act.blockGameLoopUpdates = true; // block updating gameState while next level is loading
+        act.blockMainGameDraw = true; // block updating gameState while next level is loading
         ImGui::Render(); // must force render to close out imgui cycle.
       }
       return act;
   }
 
-  UIActions UI_Manager::drawInventoryMenu(const UISnapshots& snaps, ImGuiWindowFlags flags) {
+  UIActions UI_Manager::drawPausedMenu(const UISnapshots& snaps, ImGuiWindowFlags flags) {
       UIActions act;
-      ImGui::Begin("Inventory Menu", nullptr, flags);
-      if (ImGui::Button("Resume")) act.nextView = UIManager::GameView::Playing;
-      if (ImGui::Button("Quit")) act.quitGame = true;
-      // Want to continue rendering the screen underneath. The Pause Menu just overlays.
+      act.blockGameplayUpdates = true;
+      act.drawSceneOverlay = true;
+      act.dimBackground = true;
+
+      if (snaps.cutSceneID != cutsceneMgr.cutSceneID && snaps.cutscene) {
+        cutsceneMgr.start(snaps.cutSceneID, snaps.cutscene);
+      }
+
+      auto scn = cutsceneMgr.currScene();
+
+      // 1) Reference = the PNG’s pixel size
+      const float refW = scn.frameW;   // texture width
+      const float refH = scn.frameH;  // texture height
+
+      // 2) Measure the button stack in the PNG (in pixels of the art)
+      const float btnOriginX = 265.0f; // left edge of the first green button in the art
+      const float btnOriginY = 40.0f; // top edge of the first button in the art
+      const float btnW_ref   = 114.0f;
+      const float btnH_ref   = 20.0f;
+      const float btnGap_ref = 12.0f;  // vertical gap between buttons
+
+      // 3) Scale & offset to current window (letterboxed)
+      int outW, outH; SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
+      float scale  = std::min(outW / refW, outH / refH);
+
+      float offX   = (outW - refW * scale) * 0.5f;
+      float offY   = (outH - refH * scale) * 0.5f;
+
+      // 4) Place buttons in that space
+      ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1,1,1,0.15f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1,1,1,0.25f));
+      ImGui::Begin("##pause_hitboxes", nullptr,
+          ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
+          ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
+          ImGuiWindowFlags_NoScrollbar);
+
+      ImVec2 pos(offX + btnOriginX * scale, offY + btnOriginY * scale);
+      for (auto* id : { "##resume","##restart","##settings","##levels","##inventory","##equipment","##shop","##craft","##quit" }) {
+          ImGui::SetCursorScreenPos(pos);
+          if (ImGui::Button(id, ImVec2(btnW_ref * scale, btnH_ref * scale))) {
+              // handle click by id
+          }
+          pos.y += (btnH_ref + btnGap_ref) * scale;
+      }
       ImGui::End();
+      ImGui::PopStyleVar(2);
+      ImGui::PopStyleColor(4);
+
       return act;
   }
 
@@ -283,8 +340,8 @@ namespace UIManager {
         case GameView::LevelLoading: return drawLoading(snaps, flags);
         case GameView::GameOver: return drawGameOver(snaps.loading, flags);
         case GameView::Playing: return drawGameplay(snaps, flags);
-        case GameView::InventoryMenu: return drawInventoryMenu(snaps, flags);
-        case GameView::PauseMenu: return drawInventoryMenu(snaps, flags); // same as inventory menu because pauses game
+        case GameView::InventoryMenu: return drawPausedMenu(snaps, flags);
+        case GameView::PauseMenu: return drawPausedMenu(snaps, flags); // same as inventory menu because pauses game
         case GameView::MultiPlayerOptionsMenu: return drawMultiplayerOptionsMenu(snaps, flags);
         case GameView::CutScene:
         {
@@ -298,8 +355,8 @@ namespace UIManager {
           UIActions act;
           cutsceneMgr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
           if (cutsceneMgr.scenes && !cutsceneMgr.scenes->empty() && !cutsceneMgr.isCutsceneComplete()) {
-            act.blockGameLoopUpdates = true;
-            render(sdlState, snaps.deltaTime, cutsceneMgr.currScene());
+            act.blockMainGameDraw = true;
+            draw(sdlState, snaps.deltaTime, false);
             return act;
           } else {
             std::cout << "cutscene complete" << std::endl;
@@ -356,11 +413,11 @@ namespace UIManager {
     const Scene& scene = currScene();
     if (scene.anim) {
       scene.anim->step(deltaTime);
-      std::cout << "step scene delta" << std::endl;
+      // std::cout << "step scene delta" << std::endl;
     };
 
     if (isCurrentSceneComplete()) {
-      std::cout << "done scene" << std::endl;
+      // std::cout << "done scene" << std::endl;
 
       // still printing this even after the scene is done?
       // how does it default loop forever?

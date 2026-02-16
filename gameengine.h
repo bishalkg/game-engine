@@ -258,6 +258,10 @@ namespace game_engine {
   };
 
   struct Resources {
+
+
+    Resources(game_engine::SDLState& sdl) : m_uiManager(sdl) {};
+
     // const int ANIM_PLAYER_IDLE = 0;
     // const int ANIM_PLAYER_RUN = 1;
     // const int ANIM_PLAYER_SLIDE = 2;
@@ -315,6 +319,7 @@ namespace game_engine {
 
 
     UIManager::UI_Manager m_uiManager;
+
     std::unique_ptr<Level> m_currLevel;
     std::vector<UIManager::Scene> mainMenuCutscene;
     LevelIndex m_currLevelIdx;
@@ -323,6 +328,11 @@ namespace game_engine {
     std::vector<UIManager::Scene> testCutscene;
     SDL_Texture *texTestCutscene;
     Animation testCusceneAnim;
+
+    // cutscenes
+    std::vector<UIManager::Scene> pauseMenuScene;
+    SDL_Texture *texPauseMenu;
+    Animation pauseMenuAnim;
 
     // Resources() {
     //   m_uiManager = std::make_unique<UIManager::UI_Manager>();
@@ -589,6 +599,19 @@ namespace game_engine {
           }
         };
 
+        texPauseMenu = m_currLevel->loadTexture(state.renderer, "data/cutscenes/menu/pause_menu.png");
+        pauseMenuAnim = Animation(1, 1.0f, 0, true);
+        pauseMenuScene = {
+          UIManager::Scene{
+          .tex = texPauseMenu,
+          .anim = &pauseMenuAnim,
+          .scale = 1.0,
+          .numFrameColumns = 1,
+          .frameH = 360.0f,
+          .frameW = 640.0f,
+          .loopScene = false,
+          }
+        };
       }
 
 
@@ -646,8 +669,7 @@ namespace game_engine {
 
 
     public:
-      Engine() : m_sdlState{}, m_gameState(m_sdlState), m_resources{}, m_gameType(SinglePlayer) {
-        // m_resources.m_uiManager = std::make_unique<UIManager::UI_Manager>();
+      Engine() : m_sdlState{}, m_gameState(m_sdlState), m_resources{m_sdlState}, m_gameType(SinglePlayer) {
       }
       ~Engine();
 
@@ -682,12 +704,12 @@ namespace game_engine {
       void setAudioSoundtrack(MIX_Track* track); // generics
       void stopAudioSoundtrack(MIX_Track* track);
 
-      void updateGameplayState(float deltaTime, GameObject& player);
+      void updateGameplayState(float deltaTime, GameObject& player, UIManager::UIActions& actions);
       void updateAllObjects(float deltaTime);
       void updateMapViewport(GameObject& player);
-      void drawAllObjects(float deltaTime);
+      void drawAllObjects(float deltaTime, UIManager::UIActions& actions);
       void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime, float y);
-      bool updateUI(UIManager::UI_Manager& uiManager, float deltaTime, UIManager::UISnapshots &snaps);
+      UIManager::UIActions updateUI(UIManager::UI_Manager& uiManager, float deltaTime, UIManager::UISnapshots &snaps);
       void applyUIActions(const UIManager::UIActions& a);
       // void clearRenderer();
       // void renderUpdates();

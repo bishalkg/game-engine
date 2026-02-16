@@ -157,66 +157,66 @@ void game_engine::Engine::runGameLoop() {
     runEventLoop(player, input, snaps);
 
     // ui_manager to handle this
-    if (updateUI(uiManager, deltaTime, snaps)) {
-      continue;
-    }
+    UIManager::UIActions actions = updateUI(uiManager, deltaTime, snaps);
 
-    uiManager.clearRenderer(m_sdlState);
+    if (!actions.blockMainGameDraw) {
 
-    if (!handleMultiplayerConnections()) {
-      return; // if we dont update gamePlayState will it render previous state? uiManager.renderPresent inside uiManager in cutscenes
-    }
+      uiManager.clearRenderer(m_sdlState);
 
-    if (isConnectedToServer && m_gameClient) {
-      m_gameClient->OnUserUpdate(deltaTime);
-      if (m_gameClient->IsClientValidated()) {
+      if (!handleMultiplayerConnections()) {
+        return; // if we dont update gamePlayState will it render previous state? uiManager.renderPresent inside uiManager in cutscenes
+      }
 
-        // for jump and swing presses only send message on initial press to prevent double jump..this is broken right now
+      if (isConnectedToServer && m_gameClient) {
+        m_gameClient->OnUserUpdate(deltaTime);
+        if (m_gameClient->IsClientValidated()) {
 
-        // only send msg if there is a real player input; we need to use the scancode up and down logic to handle continuous
-        // vs single time actions
+          // for jump and swing presses only send message on initial press to prevent double jump..this is broken right now
 
-        if (m_sdlState.keys[SDL_SCANCODE_LEFT]) {
-          input.move = game_engine::PlayerInput::MoveLeft;
-          input.shouldSendMessage = true;
-        }
-        if (m_sdlState.keys[SDL_SCANCODE_RIGHT]) {
-          input.move = game_engine::PlayerInput::MoveRight;
-          input.shouldSendMessage = true;
-        }
-        // if (m_sdlState.keys[SDL_SCANCODE_UP]) {
-        //   input.move = game_engine::PlayerInput::Up;
-        //   sendMsg = true;
-        // }
-        if (m_sdlState.keys[SDL_SCANCODE_A]) {
-          input.fireProjectile = game_engine::PlayerInput::Fire;
-          input.shouldSendMessage = true;
-        }
-        // if (m_sdlState.keys[SDL_SCANCODE_S]) {
-        //   input.swingWeapon = game_engine::PlayerInput::Swing;
-        //   sendMsg = true;
-        // }
+          // only send msg if there is a real player input; we need to use the scancode up and down logic to handle continuous
+          // vs single time actions
 
-        if (input.shouldSendMessage) {
-          // game_engine::NetGameInput input; // populate this from runEventLoop
-          net::message<GameMsgHeaders> msg;
-          msg.header.id = GameMsgHeaders::Game_PlayerInput;
-          msg.body = input.serealizeNetGameInput();
-          msg.header.bodySize = msg.body.size();
-          m_gameClient->Send(msg);
+          if (m_sdlState.keys[SDL_SCANCODE_LEFT]) {
+            input.move = game_engine::PlayerInput::MoveLeft;
+            input.shouldSendMessage = true;
+          }
+          if (m_sdlState.keys[SDL_SCANCODE_RIGHT]) {
+            input.move = game_engine::PlayerInput::MoveRight;
+            input.shouldSendMessage = true;
+          }
+          // if (m_sdlState.keys[SDL_SCANCODE_UP]) {
+          //   input.move = game_engine::PlayerInput::Up;
+          //   sendMsg = true;
+          // }
+          if (m_sdlState.keys[SDL_SCANCODE_A]) {
+            input.fireProjectile = game_engine::PlayerInput::Fire;
+            input.shouldSendMessage = true;
+          }
+          // if (m_sdlState.keys[SDL_SCANCODE_S]) {
+          //   input.swingWeapon = game_engine::PlayerInput::Swing;
+          //   sendMsg = true;
+          // }
+
+          if (input.shouldSendMessage) {
+            // game_engine::NetGameInput input; // populate this from runEventLoop
+            net::message<GameMsgHeaders> msg;
+            msg.header.id = GameMsgHeaders::Game_PlayerInput;
+            msg.body = input.serealizeNetGameInput();
+            msg.header.bodySize = msg.body.size();
+            m_gameClient->Send(msg);
+          }
         }
       }
-    }
 
-    // world.update()
-    // if (!ui.isBlockingGameSimulation()) {
-    //     world.update(dt);
-    // }
-    updateGameplayState(deltaTime, player);
+      // world.update()
+      // if (!ui.isBlockingGameSimulation()) {
+      //     world.update(dt);
+      // }
+      updateGameplayState(deltaTime, player, actions);
+    }
 
     uiManager.renderPresent(m_sdlState);
 
-    // prevTime = nowTime;
   };
 
   if (m_gameServer) {
@@ -617,7 +617,7 @@ void game_engine::Engine::updateMapViewport(GameObject& player) {
       std::max(0.0f, float(mapHpx - m_gameState.mapViewport.h)));
 }
 
-void game_engine::Engine::drawAllObjects(float deltaTime) {
+void game_engine::Engine::drawAllObjects(float deltaTime, UIManager::UIActions& actions) {
   // draw all interactable objects
   for (auto &layer : m_gameState.layers) {
     for (GameObject &obj : layer) {
@@ -672,21 +672,30 @@ void game_engine::Engine::drawAllObjects(float deltaTime) {
       drawObject(bullet, bullet.collider.h, bullet.collider.w, deltaTime);
     }
   }
+
+  if (actions.drawSceneOverlay) {
+    m_resources.m_uiManager.draw(m_sdlState, deltaTime, actions.dimBackground);
+  }
+
 }
 
-void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& player) {
+void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& player, UIManager::UIActions& actions) {
 if (m_gameState.currentView == UIManager::GameView::LevelLoading) return;
 
 
-  if (m_gameState.currentView == UIManager::GameView::Playing) {
+  if (m_gameState.currentView == UIManager::GameView::Playing ||
+      m_gameState.currentView == UIManager::GameView::PauseMenu
+  ) {
       setBackgroundSoundtrack(); // TODO we will want to set background track per level
 
       // update & draw game world to sdl.renderer here (before ImGui::Render)
-      updateAllObjects(deltaTime);
+      if (!actions.blockGameplayUpdates) {
+        updateAllObjects(deltaTime);
+        updateMapViewport(player);
+      }
 
-      updateMapViewport(player);
 
-      drawAllObjects(deltaTime);
+      drawAllObjects(deltaTime, actions);
 
       // debugging
       if (m_gameState.debugMode) {
@@ -714,42 +723,81 @@ void game_engine::Engine::applyUIActions(const UIManager::UIActions& a) {
   if (a.startMultiPlayerHost) { m_gameType = Host; }
 }
 
-bool game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager, float deltaTime, UIManager::UISnapshots &snaps) {
+UIManager::UIActions game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager, float deltaTime, UIManager::UISnapshots &snaps) {
 
   snaps.playerHP = getPlayer().data.player.healthPoints;
   snaps.winDims = ImVec2(m_sdlState.logW, m_sdlState.logH);
 
-  if (m_gameState.currentView == UIManager::GameView::LevelLoading)
-  {
-    std::lock_guard<std::mutex> lock(m_levelMutex);
-    const uint8_t p = m_gameState.getLevelLoadProgress();
-    snaps.loading.progress01 = std::clamp(p * 0.01f, 0.0f, 1.0f);
-    snaps.loading.done = (p >= 100);
+  switch (m_gameState.currentView) {
+    case UIManager::GameView::LevelLoading:
+    {
+      std::lock_guard<std::mutex> lock(m_levelMutex);
+      const uint8_t p = m_gameState.getLevelLoadProgress();
+      snaps.loading.progress01 = std::clamp(p * 0.01f, 0.0f, 1.0f);
+      snaps.loading.done = (p >= 100);
+      break;
+    }
+    case UIManager::GameView::MainMenu:
+    {
+      snaps.deltaTime = deltaTime;
+      setAudioSoundtrack(m_resources.mainMenuTrack);
+      snaps.cutscene = &m_resources.mainMenuCutscene;
+      snaps.cutSceneID = 0;
+      // snaps.mainMenuAnim = &m_resources.mainMenuAnim;
+      // snaps.mainMenuTex = m_resources.texMainMenu;
+      break;
+    }
+    case UIManager::GameView::PauseMenu: {
+      snaps.deltaTime = deltaTime;
+      snaps.cutscene = &m_resources.pauseMenuScene;
+      snaps.cutSceneID = 2;
+      break;
+    }
+   case UIManager::GameView::CutScene:
+    {
+      snaps.deltaTime = deltaTime;
+      setAudioSoundtrack(m_resources.mainMenuTrack);
+      snaps.cutscene = &m_resources.testCutscene;
+      snaps.cutSceneID = 1;
+      break;
+    }
+  default:
+    {
+      stopAudioSoundtrack(m_resources.mainMenuTrack);
+    }
   }
 
-  if (m_gameState.currentView == UIManager::GameView::MainMenu) {
-    snaps.deltaTime = deltaTime;
-    setAudioSoundtrack(m_resources.mainMenuTrack);
-    snaps.cutscene = &m_resources.mainMenuCutscene;
-    snaps.cutSceneID = 0;
-    // snaps.mainMenuAnim = &m_resources.mainMenuAnim;
-    // snaps.mainMenuTex = m_resources.texMainMenu;
-  } else {
-    stopAudioSoundtrack(m_resources.mainMenuTrack);
-  }
+  // if (m_gameState.currentView == UIManager::GameView::LevelLoading)
+  // {
+  //   std::lock_guard<std::mutex> lock(m_levelMutex);
+  //   const uint8_t p = m_gameState.getLevelLoadProgress();
+  //   snaps.loading.progress01 = std::clamp(p * 0.01f, 0.0f, 1.0f);
+  //   snaps.loading.done = (p >= 100);
+  // }
 
-  if (m_gameState.currentView == UIManager::GameView::CutScene) {
-    snaps.deltaTime = deltaTime;
-    setAudioSoundtrack(m_resources.mainMenuTrack);
-    snaps.cutscene = &m_resources.testCutscene;
-    snaps.cutSceneID = 1;
-  }
+  // if (m_gameState.currentView == UIManager::GameView::MainMenu) {
+  //   snaps.deltaTime = deltaTime;
+  //   setAudioSoundtrack(m_resources.mainMenuTrack);
+  //   snaps.cutscene = &m_resources.mainMenuCutscene;
+  //   snaps.cutSceneID = 0;
+  //   // snaps.mainMenuAnim = &m_resources.mainMenuAnim;
+  //   // snaps.mainMenuTex = m_resources.texMainMenu;
+  // } else {
+  //   stopAudioSoundtrack(m_resources.mainMenuTrack);
+  // }
+
+  // if (m_gameState.currentView == UIManager::GameView::CutScene) {
+  //   snaps.deltaTime = deltaTime;
+  //   setAudioSoundtrack(m_resources.mainMenuTrack);
+  //   snaps.cutscene = &m_resources.testCutscene;
+  //   snaps.cutSceneID = 1;
+  // }
 
   UIManager::UIActions actions = uiManager.renderView(m_gameState.currentView, snaps, m_sdlState.ImGuiWindowFlags, m_sdlState);
 
   applyUIActions(actions);
 
-  return actions.blockGameLoopUpdates;
+  return actions;
 }
 
 // update updates the state of the passed in game object every render loop
