@@ -119,12 +119,16 @@ namespace UIManager {
 
     // draw buttons at anchor + vertical spacing
     ImVec2 pos = anchor;
+    bool anyHovered = false;
     auto place = [&](const char* id, auto onClick) {
         ImGui::SetCursorScreenPos(pos);
         if (ImGui::Button(id, ImVec2(btnW, btnH))) onClick();
-        if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        anyHovered |= ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly);
         pos.y += btnH + spacing;
     };
+    if (anyHovered) {
+      ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    }
 
     UIActions act;
     act.stopBackgroundTrack = true;
@@ -139,6 +143,9 @@ namespace UIManager {
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor(3);
     ImGui::End();
+    if (anyHovered) {
+      ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    }
 
     act.blockMainGameDraw = true;
     // animated backdrop: stepped in renderView before this call
@@ -222,11 +229,11 @@ namespace UIManager {
           ImGuiWindowFlags_NoScrollbar);
 
       ImVec2 pos(offX + btnOriginX * scale, offY + btnOriginY * scale);
-
+      bool anyHovered = false;
       auto place = [&](const char* id, auto onClick) {
         ImGui::SetCursorScreenPos(pos);
         if (ImGui::Button(id, ImVec2(btnW_ref * scale, btnH_ref * scale))) onClick();
-        if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        anyHovered |= ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly);
         pos.y += (btnH_ref + btnGap_ref) * scale;
       };
 
@@ -243,10 +250,12 @@ namespace UIManager {
       place("##shop",   [&]{ });
       place("##craft",   [&]{ });
       place("##quit",   [&]{ act.nextView = UIManager::GameView::MainMenu; act.stopBackgroundTrack = true; });
-
-      ImGui::End();
+      if (anyHovered) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+      }
       ImGui::PopStyleVar(2);
       ImGui::PopStyleColor(4);
+      ImGui::End();
 
 
       if (snaps.togglePauseGameplay) {
@@ -296,7 +305,6 @@ namespace UIManager {
       // Optional: remove padding so the button hugs the corner
       ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
       ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-      ImGui::SameLine(0, 2.0f);
       ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
       if (ImGui::Button("Pause Game", defaultButtonSize) || snaps.togglePauseGameplay) {
         act.nextView = UIManager::GameView::PauseMenu;
