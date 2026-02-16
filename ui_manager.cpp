@@ -84,8 +84,9 @@ namespace UIManager {
     float offY = (outH - refH * scalePos) * 0.5f;
 
     // anchor in reference pixels (where the art is)
-    ImVec2 anchor = ImVec2(offX + 880.0f * scalePos,
-                          offY + 140.0f * scalePos);
+    // ImVec2 anchor = ImVec2(offX + 880.0f * scalePos,
+    //                       offY + 140.0f * scalePos);
+    ImVec2 anchor = ImVec2(offX + 880.0f * scalePos, offY + 80.0f * scalePos);
 
     // Only downscale size (don’t upscale)
     float scaleSize = std::min(scalePos, 1.0f);
@@ -117,7 +118,11 @@ namespace UIManager {
 
     UIActions act;
     act.stopBackgroundTrack = true;
-    place("##single", [&]{ act.nextView = GameView::Playing; act.startSinglePlayer = true; });
+    place("##single", [&]{
+      act.nextView = GameView::CutScene;
+      // act.nextView = GameView::Playing; // need to set this one the cutscene is done
+      // act.startSinglePlayer = true;
+    });
     place("##multi",  [&]{ act.nextView = GameView::MultiPlayerOptionsMenu; });
     place("##quit",   [&]{ act.quitGame = true; });
 
@@ -126,7 +131,7 @@ namespace UIManager {
     ImGui::End();
 
     // animated backdrop: stepped in renderView before this call
-    if (cutsceneMgr.scenes) {
+    if (cutsceneMgr.scenes && !cutsceneMgr.scenes->empty()) {
       render(sdlState, snaps.deltaTime, cutsceneMgr.currScene());
     }
     // render(sdlState, snaps.deltaTime, Scene{
@@ -272,7 +277,7 @@ namespace UIManager {
       switch (view) {
         case GameView::MainMenu:
         {
-          if (cutsceneMgr.scenes == nullptr && snaps.cutscene) {
+          if (cutsceneMgr.cutSceneID != snaps.cutSceneID && snaps.cutscene) {
             cutsceneMgr.start(snaps.cutSceneID, snaps.cutscene);
           }
           cutsceneMgr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
@@ -286,10 +291,23 @@ namespace UIManager {
         case GameView::MultiPlayerOptionsMenu: return drawMultiplayerOptionsMenu(snaps, flags);
         case GameView::CutScene:
         {
-          bool playNextScene = snaps.advanceToNextScene;
+          bool playNextScene = snaps.advanceToNextScene; // user hit return/enter, force advance to next scene
 
+          if (cutsceneMgr.cutSceneID != snaps.cutSceneID && snaps.cutscene) {
+            std::cout << "starting cutscene" << std::endl;
+            cutsceneMgr.start(snaps.cutSceneID, snaps.cutscene);
+          }
+
+          UIActions act;
           cutsceneMgr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
-          render(sdlState, snaps.deltaTime, cutsceneMgr.currScene());
+          if (cutsceneMgr.scenes && !cutsceneMgr.scenes->empty() && !cutsceneMgr.isCutsceneComplete()) {
+            render(sdlState, snaps.deltaTime, cutsceneMgr.currScene());
+          } else {
+            std::cout << "cutscene complete" << std::endl;
+            act.nextView = GameView::Playing; // need to set this one the cutscene is done
+            act.startSinglePlayer = true;
+            return act;
+          }
 
           // After LevelLoading completes, if currLevel has a cutscene
           // call cutsceneManager.start(data) and set currView = CutScene and blockGameLoopUpdates = true;
@@ -302,7 +320,13 @@ namespace UIManager {
           // playing the next animation.
           // once we reach the last animation, after the use hit enter, we set GameView::Playing, and blockGameLoopUpdates = false;
           // should this happen after LevelLoading? or During LevelLoading?
-
+          // UIActions act;
+          // if (cutsceneMgr.isCutsceneComplete()) {
+          //   std::cout << "cutscene complete" << std::endl;
+          //   act.nextView = GameView::Playing; // need to set this one the cutscene is done
+          //   act.startSinglePlayer = true;
+          //   return act;
+          // }
 
         }
         default:                     return {};
@@ -318,55 +342,48 @@ namespace UIManager {
   }
 
   const Scene& CutSceneManager::currScene() {
+    static const Scene kDummy{nullptr, nullptr, 1, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+    if (!scenes || scenes->empty() || sceneIndex >= scenes->size()) {
+      return kDummy;
+    }
     return scenes->at(sceneIndex);
   }
 
 
-void CutSceneManager::update(bool playNextScene, float deltaTime, const UISnapshots& snaps) {
-    if (!scenes || sceneIndex >= scenes->size() || doneWithScene) return;
+void CutSceneManager::update(bool playNextScene, float deltaTime, const UISnapshots& /*snaps*/) {
+    if (!scenes || scenes->empty() || sceneIndex >= scenes->size()) return;
 
     const Scene& scene = currScene();
     if (scene.anim) scene.anim->step(deltaTime);
 
-    if (isCurrentSceneComplete()) {
-      std::cout << "done scene" << std::endl;
-      doneWithScene = true;
-      // indicate that the scene is complete and stop stepping...will freeze on the last frame!
+    bool advance = playNextScene;
+    if (!advance && scene.anim) {
+      advance = scene.anim->isDone();
     }
 
-    // is currentAnimation finished?
-    // is cutSceneFinished?
-    // do we want to advance automatically with isFinished?
-    // do we need to let the final frame play out first
-    if (playNextScene) { // || isCurrentSceneComplete()
+    if (advance) {
       if (scene.anim) scene.anim->reset();
-      if (sceneIndex + 1 < scenes->size()) {
-        sceneIndex++;
-        if (scenes->at(sceneIndex).anim) scenes->at(sceneIndex).anim->reset();
+      ++sceneIndex;
+      if (sceneIndex < scenes->size()) {
+        auto &next = scenes->at(sceneIndex);
+        if (next.anim) next.anim->reset();
       }
     }
-
-    // scenes[index].data()->anim->step(deltaTime);
-
-    // run animation delta on current animation index
-    // if playNextScene increment index
   };
 
 
 
   bool CutSceneManager::isCutsceneComplete(){
-    if (!scenes) {
+    if (!scenes || scenes->empty()) {
       return true;
     }
     return sceneIndex >= scenes->size();
   };
 
   bool CutSceneManager::isCurrentSceneComplete(){
-    if (!scenes) {
-      return true;
-    }
-
-    return scenes->at(sceneIndex).anim->isDone();
+    if (!scenes || scenes->empty() || sceneIndex >= scenes->size()) return true;
+    const auto &scene = scenes->at(sceneIndex);
+    return scene.anim ? scene.anim->isDone() : true;
   };
 
 

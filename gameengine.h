@@ -319,6 +319,11 @@ namespace game_engine {
     std::vector<UIManager::Scene> mainMenuCutscene;
     LevelIndex m_currLevelIdx;
 
+    // cutscenes
+    std::vector<UIManager::Scene> testCutscene;
+    SDL_Texture *texTestCutscene;
+    Animation testCusceneAnim;
+
     // Resources() {
     //   m_uiManager = std::make_unique<UIManager::UI_Manager>();
     // };
@@ -552,7 +557,7 @@ namespace game_engine {
         texBulletHit = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
         texBullet = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
         texMainMenu = m_currLevel->loadTexture(state.renderer, "data/maps/title_screen/title_screen_sized.png");
-        mainMenuAnim = Animation(58, 10.0f);
+        mainMenuAnim = Animation(58, 7.0f);
         auto [mainMenuAudio, mainMenuTrack] = loadAudioChunk("data/audio/22. Banners in the Wind.wav", chunkAudioGain);
         this->mainMenuTrack = mainMenuTrack;
         // TODO make scene from level manifest
@@ -567,6 +572,22 @@ namespace game_engine {
           .yOffset = -50
           }
         };
+
+
+        texTestCutscene = m_currLevel->loadTexture(state.renderer, "data/cutscenes/text_test.png");
+        testCusceneAnim = Animation(6, 1.0f);
+        testCutscene = {
+          UIManager::Scene{
+          .tex = texTestCutscene,
+          .anim = &testCusceneAnim,
+          .scale = 1.0,
+          .numFrameColumns = 3,
+          .frameH = 360.0f,
+          .frameW = 640.0f,
+          // .yOffset = -50
+          }
+        };
+
       }
 
 

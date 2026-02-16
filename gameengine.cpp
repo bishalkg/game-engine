@@ -737,6 +737,13 @@ bool game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager, float delta
     stopAudioSoundtrack(m_resources.mainMenuTrack);
   }
 
+  if (m_gameState.currentView == UIManager::GameView::CutScene) {
+    snaps.deltaTime = deltaTime;
+    setAudioSoundtrack(m_resources.mainMenuTrack);
+    snaps.cutscene = &m_resources.testCutscene;
+    snaps.cutSceneID = 1;
+  }
+
   UIManager::UIActions actions = uiManager.renderView(m_gameState.currentView, snaps, m_sdlState.ImGuiWindowFlags, m_sdlState);
 
   applyUIActions(actions);
