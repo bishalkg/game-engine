@@ -21,12 +21,17 @@ struct PlayerData {
   PlayerState state;
   Timer damageTimer;
   int healthPoints;
+  int maxHealthPoints;
+  int manaPoints;
+  int maxManaPoints;
+  Timer manaRecoveryTimer;
+  Timer healthRecoveryTimer;
   Timer weaponTimer;
   Timer jumpWindupTimer;
   bool jumpImpulseApplied;
   bool playLandingFrame = false;
 
-  PlayerData(): weaponTimer(0.1f), damageTimer(1.0f), jumpWindupTimer(0.00f) { state = PlayerState::idle; healthPoints = 100; };
+  PlayerData(): weaponTimer(0.1f), damageTimer(1.0f), jumpWindupTimer(0.00f), manaRecoveryTimer(0.2f), healthRecoveryTimer(0.2f) { state = PlayerState::idle; healthPoints = maxHealthPoints = manaPoints = maxManaPoints = 100;};
 };
 
 struct LevelData {
@@ -49,7 +54,7 @@ struct EnemyData {
   int srcH, srcW;
 
 
-  EnemyData(): state(EnemyState::idle), damageTimer(1.0f), attackTimer(1.0), idleTimer(1.0) {
+  EnemyData(): state(EnemyState::idle), damageTimer(0.4f), attackTimer(1.0), idleTimer(1.0) {
     healthPoints = 100;
   };
 };

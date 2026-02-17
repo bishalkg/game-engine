@@ -733,7 +733,9 @@ void game_engine::Engine::applyUIActions(const UIManager::UIActions& a) {
 
 UIManager::UIActions game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager, float deltaTime, UIManager::UISnapshots &snaps) {
 
-  snaps.playerHP = getPlayer().data.player.healthPoints;
+  auto player = getPlayer();
+  snaps.playerHP = player.data.player.healthPoints;
+  snaps.playerMana = player.data.player.manaPoints;
   snaps.winDims = ImVec2(m_sdlState.logW, m_sdlState.logH);
 
   switch (m_gameState.currentView) {
@@ -882,6 +884,20 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     Timer &weaponTimer = obj.data.player.weaponTimer;
     weaponTimer.step(deltaTime);
 
+    obj.data.player.healthRecoveryTimer.step(deltaTime);
+    obj.data.player.manaRecoveryTimer.step(deltaTime);
+
+    if (obj.data.player.healthRecoveryTimer.isTimedOut()) {
+      obj.data.player.healthRecoveryTimer.reset();
+      obj.data.player.healthPoints = std::clamp(obj.data.player.healthPoints + 1, 0,
+      obj.data.player.maxHealthPoints);
+    }
+    if (obj.data.player.manaRecoveryTimer.isTimedOut()) {
+      obj.data.player.manaRecoveryTimer.reset();
+      obj.data.player.manaPoints = std::clamp(obj.data.player.manaPoints + 1, 0,
+      obj.data.player.maxManaPoints);
+    }
+
     const auto handleAttacking = [this, &obj, &entityRes, &weaponTimer, &currDirection, deltaTime, widenColliderForSwing](
       SDL_Texture *tex, SDL_Texture *attackTex, int animIndex, int attackAnimIndex, bool handleJump){
 
@@ -912,13 +928,17 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
           m_resources.whooshCooldown.step(deltaTime); // whooshCooldown should have same length as bullet weaponTimer
           // When you shoot (no loops, no track index needed):
-          if (m_resources.whooshCooldown.isTimedOut()) {
-            m_resources.whooshCooldown.reset();
-            MIX_PlayAudio(m_resources.mixer, m_resources.audioShoot);
-          }
 
-          if (weaponTimer.isTimedOut()) {
+          if (weaponTimer.isTimedOut() && obj.data.player.manaPoints > 10) {
+
             weaponTimer.reset();
+
+            if (m_resources.whooshCooldown.isTimedOut()) {
+              m_resources.whooshCooldown.reset();
+              MIX_PlayAudio(m_resources.mixer, m_resources.audioShoot);
+            }
+            obj.data.player.manaPoints = std::clamp(obj.data.player.manaPoints -10, 0,
+            obj.data.player.maxManaPoints);
             // create bullets
             GameObject bullet(128, 128);
             bullet.drawScale = 2.0f;
@@ -1027,7 +1047,6 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           obj.data.player.state = PlayerState::idle;
           obj.texture = entityRes.texIdle;
           obj.currentAnimation = m_resources.ANIM_IDLE;
-          obj.data.player.damageTimer.reset();
         }
         break;
       }
@@ -1213,7 +1232,6 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           obj.data.enemy.state = EnemyState::idle;
           obj.texture = entityRes.texIdle;
           obj.currentAnimation = m_resources.ANIM_IDLE;
-          obj.data.enemy.damageTimer.reset();
         }
         break;
       }
@@ -1354,8 +1372,9 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               d.state = PlayerState::hurt;
 
               // damage and flag dead
-              if (!d.damageTimer.isTimedOut()) {
+              if (d.damageTimer.isTimedOut()) {
                 d.healthPoints -= 50.0;
+                d.damageTimer.reset();
               }
               if (d.healthPoints <= 0) {
                 d.state = PlayerState::dead;
@@ -1392,8 +1411,11 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               objB.currentAnimation = m_resources.ANIM_HIT;
               d.state = EnemyState::hurt;
 
-              // damage and flag dead
-              d.healthPoints -= 10;
+              if (d.damageTimer.isTimedOut()) {
+                d.healthPoints -= 50;
+                d.damageTimer.reset();
+              }
+
               if (d.healthPoints <= 0) {
                 d.state = EnemyState::dead;
                 objB.texture = entityRes.texDie;
@@ -1456,7 +1478,11 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               d.state = EnemyState::hurt;
 
               // damage and flag dead
-              d.healthPoints -= 10;
+              if (d.damageTimer.isTimedOut()) {
+                d.healthPoints -= 50;
+                d.damageTimer.reset();
+              }
+
               if (d.healthPoints <= 0) {
                 d.state = EnemyState::dead;
                 objB.texture = entityRes.texDie;
@@ -1505,9 +1531,11 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               playerData.state = PlayerState::hurt;
 
               // damage and flag dead
-              if (!playerData.damageTimer.isTimedOut()) {
+              if (playerData.damageTimer.isTimedOut()) {
                 playerData.healthPoints -= 10.0;
+                playerData.damageTimer.reset();
               }
+
               if (playerData.healthPoints <= 0) {
                 playerData.state = PlayerState::dead;
                 objB.texture = playerRes.texDie;
@@ -1539,9 +1567,11 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               d.state = EnemyState::hurt;
 
               // damage and flag dead
-              if (!d.damageTimer.isTimedOut()) {
-                d.healthPoints -= 50.0;
+              if (d.damageTimer.isTimedOut()) {
+                d.healthPoints -= 50;
+                d.damageTimer.reset();
               }
+
               if (d.healthPoints <= 0) {
                 d.state = EnemyState::dead;
                 objA.texture = entityRes.texDie;

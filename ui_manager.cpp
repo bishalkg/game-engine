@@ -315,22 +315,22 @@ namespace UIManager {
       ImGui::PopStyleVar(2);
       ImGui::End();
 
-      drawPlayerHealthbar(snaps.playerHP, flags);
-      // drawPlayerHealthbar(snaps.playerHP, flags); // mana bar
+      drawPlayerHealthbar("HP", snaps.playerHP, IM_COL32(0, 200, 0, 255), flags);
+      drawPlayerHealthbar("Mana", snaps.playerMana, IM_COL32(186, 154, 255, 255), flags);
 
       return act;
   }
 
 
-  void UI_Manager::drawPlayerHealthbar(const int playerHP, ImGuiWindowFlags flags) {
+  void UI_Manager::drawPlayerHealthbar(const std::string& name, const int value, ImU32 color, ImGuiWindowFlags flags) {
       ImGui::SetNextWindowPos(ImVec2(10, 10));
       ImGui::Begin("HUD", nullptr, ImGuiWindowFlags_NoTitleBar |
                                   ImGuiWindowFlags_NoBackground |
                                   ImGuiWindowFlags_NoResize |
                                   ImGuiWindowFlags_NoMove);
-      float hpFrac = static_cast<float>(playerHP) / 100.0; // 0..1
-      ImGui::Text("HP");
-      ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(0, 200, 0, 255)); // green
+      float hpFrac = static_cast<float>(value) / 100.0; // 0..1
+      ImGui::TextUnformatted(name.c_str());
+      ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color); // green
       ImGui::ProgressBar(hpFrac, ImVec2(150, 24));ImGui::PopStyleColor();
       ImGui::End();
   }

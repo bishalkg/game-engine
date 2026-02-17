@@ -57,6 +57,7 @@ namespace UIManager {
   struct UISnapshots {
     LoadingSnapshot loading; /* add title/pause data */
     int playerHP;
+    int playerMana;
     ImVec2 winDims;
     float deltaTime;
 
@@ -112,7 +113,7 @@ namespace UIManager {
       UIActions drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
 
 
-      void drawPlayerHealthbar(const int playerHP, ImGuiWindowFlags flags);
+      void drawPlayerHealthbar(const std::string& name, const int playerHP, ImU32 color, ImGuiWindowFlags flags);
 
 
     private:
