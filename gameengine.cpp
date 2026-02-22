@@ -687,7 +687,7 @@ void game_engine::Engine::drawAllObjects(float deltaTime, UIManager::UIActions& 
   }
 
   if (actions.drawSceneOverlay) {
-    m_resources.m_uiManager.draw(m_sdlState, deltaTime, actions.dimBackground, actions.drawText);
+    m_resources.m_uiManager.draw(m_sdlState, deltaTime, actions.dimBackground, actions.drawText, 0);
   }
 
 }

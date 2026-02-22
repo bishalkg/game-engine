@@ -55,7 +55,6 @@ namespace UIManager {
     float xOffset = 0;
     float scale = 1.0;
     bool loopScene = false;
-    // other things needed for scene
   };
 
   struct UISnapshots {
@@ -80,7 +79,15 @@ namespace UIManager {
     int cutSceneID = -1; // if ID changes, init new CutScene
     const std::vector<Cutscene>* scenes = nullptr; // pointed to vector is ready only
     size_t sceneIndex = 0;
-    bool doneWithCurrScene = false; // indicates whether you are done with the current animation in the scenes vector.
+    bool doneWithCurrScene = false; // indicates
+    float elapsed = 0.0f;
+    float charsPerSecond = 15.0f;
+    int visibleChars = 0;
+    // other things needed for scene
+
+    // void step(float dt) {
+    //   elapsed += dt;
+    // }
     // bool loopScene = false;
     // bool doneWithCutscene = false;
 
@@ -105,7 +112,7 @@ namespace UIManager {
       void renderPresent(const game_engine::SDLState& sdlState);
       void clearRenderer(const game_engine::SDLState& sdlState);
 
-      void draw(const game_engine::SDLState& sdlState, float deltaTime, bool dimBackground, bool drawDialogue);
+      void draw(const game_engine::SDLState& sdlState, float deltaTime, bool dimBackground, bool drawDialogue, int visible);
 
 
     private:

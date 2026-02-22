@@ -28,7 +28,7 @@ namespace UIManager {
     SDL_RenderClear(sdlState.renderer);
   }
 
-  void UI_Manager::draw(const game_engine::SDLState& sdlState, float deltaTime, bool dimBackground, bool drawDialogue) {
+  void UI_Manager::draw(const game_engine::SDLState& sdlState, float deltaTime, bool dimBackground, bool drawDialogue, int visible) {
 
     const Cutscene& scene = cutscenePlr.currScene();
 
@@ -81,16 +81,18 @@ namespace UIManager {
     // renderPresent(sdlState);
     if (drawDialogue && !scene.dialogue.empty()) {
       // 2) build a text surface with SDL_ttf
-      const auto text = scene.dialogue.at(0);
+      const auto text = scene.dialogue.at(scene.currDialogueIdx);
+      std::string shown = text.substr(0, visible);
+      // std::cout << "visible chars: " << shown << std::endl;
       SDL_Color fg{0,0,0,0};
       // SDL_Surface* surf = TTF_RenderText_Blended(&font, text.c_str(), text.length(), fg);   // blended = alpha
       TTF_SetFontHinting(&font, TTF_HINTING_MONO);
-      SDL_Surface* surf = TTF_RenderText_Solid(&font, text.c_str(), text.length(), fg);   // blended = alpha
+      SDL_Surface* surf = TTF_RenderText_Solid(&font, shown.c_str(), shown.length(), fg);   // blended = alpha
 
       if (surf) {
           // 3) turn it into a texture so the renderer can draw it
           SDL_Texture* textTex = SDL_CreateTextureFromSurface(sdlState.renderer, surf);
-          // SDL_DestroySurface(surf);
+          // SDL_DestroySurface(surf); //
 
           if (textTex) {
               SDL_SetTextureScaleMode(textTex, SDL_SCALEMODE_NEAREST); // optional, keeps pixel fonts crisp
@@ -175,7 +177,7 @@ namespace UIManager {
     act.blockMainGameDraw = true;
     // animated backdrop: stepped in renderView before this call
     if (cutscenePlr.scenes && !cutscenePlr.scenes->empty()) {
-      draw(sdlState, snaps.deltaTime, false, false);
+      draw(sdlState, snaps.deltaTime, false, false, 0);
     } else {
       ImGui::Render(); // must force render to close out imgui cycle.
     }
@@ -400,7 +402,7 @@ namespace UIManager {
           cutscenePlr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
           if (cutscenePlr.scenes && !cutscenePlr.scenes->empty() && !cutscenePlr.isCutsceneComplete()) {
             act.blockMainGameDraw = true;
-            draw(sdlState, snaps.deltaTime, false, true);
+            draw(sdlState, snaps.deltaTime, false, true, cutscenePlr.visibleChars);
             return act;
           } else {
             std::cout << "cutscene complete" << std::endl;
@@ -457,8 +459,20 @@ namespace UIManager {
     const Cutscene& scene = currScene();
     if (scene.anim) {
       scene.anim->step(deltaTime);
+      // step(deltaTime);
+
+      if (!scene.dialogue.empty()) {
+        elapsed += deltaTime;                   // seconds
+        int visible = (int)std::floor(elapsed * charsPerSecond);
+        auto text = scene.dialogue.at(scene.currDialogueIdx);
+        visibleChars = std::clamp(visible, 0, (int)text.size());
+      }
+
+
+      // std::string shown = text.substr(0, visible);
       // std::cout << "step scene delta" << std::endl;
     };
+
 
     if (isCurrentSceneComplete()) {
       // std::cout << "done scene" << std::endl;
@@ -469,6 +483,7 @@ namespace UIManager {
       if (!scene.loopScene) { // set holdLastFrame on Animation.
         // sceneIndex++; only advance to next scene on user input.
         doneWithCurrScene = true;
+        // elapsed = 0;
         if (sceneIndex < scenes->size()) {
           std::cout << "increment scene index" << std::endl;
           // sceneIndex++;
