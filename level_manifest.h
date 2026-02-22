@@ -58,5 +58,6 @@ struct LevelAssets {
   std::string background1PathName; //Flora1x32
   std::string backgroundAudioPath; // data/audio/Level_3_Final_Floor.wav
   std::string gameOverAudioPath;
+  std::string stepAudioPath;
   std::vector<SpriteType> enemyTypes;
 };

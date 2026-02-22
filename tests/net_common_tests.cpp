@@ -30,7 +30,7 @@ bool equalSnapshots(const game_engine::NetGameObjectSnapshot& a,
              a.data.enemy.healthPoints == b.data.enemy.healthPoints &&
              a.data.enemy.srcH == b.data.enemy.srcH &&
              a.data.enemy.srcW == b.data.enemy.srcW;
-    case ObjectClass::Bullet:
+    case ObjectClass::Projectile:
       return a.data.bullet.state == b.data.bullet.state;
     case ObjectClass::Level:
       return a.data.level.src.x == b.data.level.src.x &&
@@ -41,9 +41,6 @@ bool equalSnapshots(const game_engine::NetGameObjectSnapshot& a,
              a.data.level.dst.y == b.data.level.dst.y &&
              a.data.level.dst.w == b.data.level.dst.w &&
              a.data.level.dst.h == b.data.level.dst.h;
-    case ObjectClass::Sword:
-      // not serialized currently; treat as equal if we reach here
-      return true;
   }
   return false;
 }
@@ -94,7 +91,7 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   NetGameObjectSnapshot bullet{};
   bullet.id = 3;
   bullet.layer = 1;
-  bullet.type = ObjectClass::Bullet;
+  bullet.type = ObjectClass::Projectile;
   bullet.position = {7.f, 8.f};
   bullet.velocity = {2.f, 0.f};
   bullet.acceleration = {0.f, 0.f};

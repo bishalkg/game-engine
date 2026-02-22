@@ -163,7 +163,7 @@ namespace game_engine {
             w.write_u32(static_cast<uint32_t>(obj.data.player.healthPoints));
             break;
           }
-          case ObjectClass::Bullet: {
+          case ObjectClass::Projectile: {
             w.write_enum<BulletState>(obj.data.bullet.state);
             break;
           }
@@ -220,7 +220,7 @@ namespace game_engine {
             obj.data.player.healthPoints = r.read_u32();
             break;
           }
-          case ObjectClass::Bullet: {
+          case ObjectClass::Projectile: {
             new (&obj.data.bullet) BulletData{}; // set active member
             obj.data.bullet.state = r.read_enum<BulletState>();
             break;

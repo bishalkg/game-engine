@@ -39,6 +39,25 @@ void game_engine::Engine::setBackgroundSoundtrack() {
   }
 };
 
+void game_engine::Engine::setAudioSoundtrack(MIX_Track* track) {
+  if (!MIX_TrackPlaying(track)) {
+    SDL_PropertiesID opts = SDL_CreateProperties();
+    SDL_SetNumberProperty(opts, MIX_PROP_PLAY_LOOPS_NUMBER, -1); // loop forever
+    if (!MIX_PlayTrack(track, opts)) {
+        SDL_Log("Music Play failed: %s", SDL_GetError());
+    }
+    SDL_DestroyProperties(opts); // destory internal resources
+  }
+};
+
+void game_engine::Engine::stopAudioSoundtrack(MIX_Track* track) {
+  if (MIX_TrackPlaying(track)) {
+    if (!MIX_StopTrack(track, 10)) {
+        SDL_Log("stopping Background Music Play failed: %s", SDL_GetError());
+    }
+  }
+};
+
 void game_engine::Engine::stopBackgroundSoundtrack() {
   if (MIX_TrackPlaying(m_resources.m_currLevel->backgroundTrack)) {
     if (!MIX_StopTrack(m_resources.m_currLevel->backgroundTrack, 10)) {
@@ -80,6 +99,9 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
     return false;
   };
 
+  // TTF_Init();
+  // m_resources.font = TTF_OpenFont("data/cutscenes/fonts/to_the_point_regular.ttf", 12);
+
   // mixer must be created before loading in audio files in res.load()
   if (!MIX_Init()) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL Mixer Failed to init", "Failed to init audio", nullptr);
@@ -98,7 +120,6 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
   MIX_SetMasterGain(m_resources.mixer, 0.5f);  // 50% master
 
   m_gameState = std::move(GameState(m_sdlState));
-
   // load game assets
   m_resources.loadAllAssets(m_sdlState, m_gameState, false);
   if (!m_resources.m_currLevel->texCharacterMap[SpriteType::Player_Knight].texIdle) {
@@ -119,84 +140,86 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
 void game_engine::Engine::runGameLoop() {
     // start the game loop
   uint64_t prevTime = SDL_GetTicks();
+  UIManager::UI_Manager& uiManager = m_resources.m_uiManager;
   m_gameRunning.store(true);
 
-  // GameState &gs = getGameState();
-  // SDLState &sdl = getSDLState();
-  // Resources &res = getResources();
-
   while (m_gameRunning.load()){
+
     uint64_t nowTime = SDL_GetTicks();
     float deltaTime = (nowTime - prevTime) / 1000.0f; // convert to seconds; time bw frames
+    prevTime = nowTime;
 
-    // TODO the type of player is enemy????? i think we're following the wrong guy
-    GameObject &player = getPlayer();  // fetch each frame in case index changes
-    // use gs.currentView directly so state changes take effect immediately
+    GameObject &player = getPlayer();
 
-    if (updateImGuiMenuRenderState()) {
-      ImGui::Render();
-      continue;
-    }
-
-    clearRenderer();
-
-    if (!handleMultiplayerConnections()) {
-      return;
-    }
 
     // runEventLoop takes in key inputs that we want the client to send to the server
     // we read in snapshots from the server and updateGamePlayState; reconcile each GameObjects position using the m_stateLastUpdatedAt
     game_engine::NetGameInput input; // populate this from runEventLoop
     input.tick = nowTime;
-    runEventLoop(player, input);
+    UIManager::UISnapshots snaps;
+    runEventLoop(player, input, snaps);
 
-    if (isConnectedToServer && m_gameClient) {
-      m_gameClient->OnUserUpdate(deltaTime);
-      if (m_gameClient->IsClientValidated()) {
+    // ui_manager to handle this
+    UIManager::UIActions actions = updateUI(uiManager, deltaTime, snaps);
 
-        // for jump and swing presses only send message on initial press to prevent double jump..this is broken right now
+    if (!actions.blockMainGameDraw) {
 
-        // only send msg if there is a real player input; we need to use the scancode up and down logic to handle continuous
-        // vs single time actions
+      uiManager.clearRenderer(m_sdlState);
 
-        if (m_sdlState.keys[SDL_SCANCODE_LEFT]) {
-          input.move = game_engine::PlayerInput::MoveLeft;
-          input.shouldSendMessage = true;
-        }
-        if (m_sdlState.keys[SDL_SCANCODE_RIGHT]) {
-          input.move = game_engine::PlayerInput::MoveRight;
-          input.shouldSendMessage = true;
-        }
-        // if (m_sdlState.keys[SDL_SCANCODE_UP]) {
-        //   input.move = game_engine::PlayerInput::Up;
-        //   sendMsg = true;
-        // }
-        if (m_sdlState.keys[SDL_SCANCODE_A]) {
-          input.fireProjectile = game_engine::PlayerInput::Fire;
-          input.shouldSendMessage = true;
-        }
-        // if (m_sdlState.keys[SDL_SCANCODE_S]) {
-        //   input.swingWeapon = game_engine::PlayerInput::Swing;
-        //   sendMsg = true;
-        // }
+      if (!handleMultiplayerConnections()) {
+        return; // if we dont update gamePlayState will it render previous state? uiManager.renderPresent inside uiManager in cutscenes
+      }
 
-        if (input.shouldSendMessage) {
-          // game_engine::NetGameInput input; // populate this from runEventLoop
-          net::message<GameMsgHeaders> msg;
-          msg.header.id = GameMsgHeaders::Game_PlayerInput;
-          msg.body = input.serealizeNetGameInput();
-          msg.header.bodySize = msg.body.size();
-          m_gameClient->Send(msg);
+      if (isConnectedToServer && m_gameClient) {
+        m_gameClient->OnUserUpdate(deltaTime);
+        if (m_gameClient->IsClientValidated()) {
+
+          // for jump and swing presses only send message on initial press to prevent double jump..this is broken right now
+
+          // only send msg if there is a real player input; we need to use the scancode up and down logic to handle continuous
+          // vs single time actions
+
+          if (m_sdlState.keys[SDL_SCANCODE_LEFT]) {
+            input.move = game_engine::PlayerInput::MoveLeft;
+            input.shouldSendMessage = true;
+          }
+          if (m_sdlState.keys[SDL_SCANCODE_RIGHT]) {
+            input.move = game_engine::PlayerInput::MoveRight;
+            input.shouldSendMessage = true;
+          }
+          // if (m_sdlState.keys[SDL_SCANCODE_UP]) {
+          //   input.move = game_engine::PlayerInput::Up;
+          //   sendMsg = true;
+          // }
+          if (m_sdlState.keys[SDL_SCANCODE_A]) {
+            input.fireProjectile = game_engine::PlayerInput::Fire;
+            input.shouldSendMessage = true;
+          }
+          // if (m_sdlState.keys[SDL_SCANCODE_S]) {
+          //   input.swingWeapon = game_engine::PlayerInput::Swing;
+          //   sendMsg = true;
+          // }
+
+          if (input.shouldSendMessage) {
+            // game_engine::NetGameInput input; // populate this from runEventLoop
+            net::message<GameMsgHeaders> msg;
+            msg.header.id = GameMsgHeaders::Game_PlayerInput;
+            msg.body = input.serealizeNetGameInput();
+            msg.header.bodySize = msg.body.size();
+            m_gameClient->Send(msg);
+          }
         }
       }
+
+      // world.update()
+      // if (!ui.isBlockingGameSimulation()) {
+      //     world.update(dt);
+      // }
+      updateGameplayState(deltaTime, player, actions);
     }
 
+    uiManager.renderPresent(m_sdlState);
 
-    updateGameplayState(deltaTime, player);
-
-    renderUpdates();
-
-    prevTime = nowTime;
   };
 
   if (m_gameServer) {
@@ -251,7 +274,7 @@ bool game_engine::Engine::handleMultiplayerConnections() {
 }
 
 void game_engine::Engine::asyncSwitchToLevel(LevelIndex lvl) {
-  m_gameState.currentView = GameView::LevelLoading;
+  m_gameState.currentView = UIManager::GameView::LevelLoading;
   m_gameState.setLevelLoadProgress(0);
   m_levelLoadThd = std::thread(&game_engine::Engine::initNextLevel, this, lvl);
 }
@@ -264,7 +287,7 @@ void game_engine::Engine::initNextLevel(LevelIndex lvl) {
 
   // throw away old world; create new gameState that will be updated in initAllTiles
   GameState newGameState(m_sdlState);
-  newGameState.currentView = GameView::LevelLoading;
+  newGameState.currentView = UIManager::GameView::LevelLoading;
 
   // rebuild layers/objects from the newly loaded map
   initAllTiles(newGameState); // this mutates gameState
@@ -318,25 +341,40 @@ void game_engine::Engine::runGameServerLoopThread() {
   }
 }
 
-void game_engine::Engine::clearRenderer(){
-    // clear the backbuffer before drawing onto it with black from draw color above
-    SDL_SetRenderDrawColor(m_sdlState.renderer, 20, 10, 30, 255);
-    SDL_RenderClear(m_sdlState.renderer);
-}
+// void game_engine::Engine::clearRenderer(){
+//     // clear the backbuffer before drawing onto it with black from draw color above
+//     SDL_SetRenderDrawColor(m_sdlState.renderer, 20, 10, 30, 255);
+//     SDL_RenderClear(m_sdlState.renderer);
+// }
 
-void game_engine::Engine::renderUpdates(){
-  // swap backbuffer to display new state
-  // Textures live in GPU memory; the renderer batches copies/draws and flushes them on present.
-  // 6) Render ImGui on top of your SDL frame
-  SDL_SetRenderLogicalPresentation(m_sdlState.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
-  ImGui::Render();
-  ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), m_sdlState.renderer);
-  SDL_SetRenderLogicalPresentation(m_sdlState.renderer, m_sdlState.logW, m_sdlState.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
-  SDL_RenderPresent(m_sdlState.renderer);
-}
+// void game_engine::Engine::renderUpdates(){
+//   // swap backbuffer to display new state
+//   // Textures live in GPU memory; the renderer batches copies/draws and flushes them on present.
+//   // 6) Render ImGui on top of your SDL frame
+//   // world.render()
+//   m_resources.m_uiManager.renderPresent(m_sdlState);
+//   // SDL_SetRenderLogicalPresentation(m_sdlState.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+
+//   // // ui.render()
+//   // ImGui::Render();
+//   // ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), m_sdlState.renderer);
+//   // SDL_SetRenderLogicalPresentation(m_sdlState.renderer, m_sdlState.logW, m_sdlState.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+
+//   // // renderer.present()
+//   // SDL_RenderPresent(m_sdlState.renderer);
+// }
 
 
-void game_engine::Engine::runEventLoop(GameObject &player, game_engine::NetGameInput &net_input) {
+void game_engine::Engine::runEventLoop(GameObject &player, game_engine::NetGameInput &net_input, UIManager::UISnapshots &snaps) {
+
+    //     // Route input: if UI is modal, don’t drive gameplay
+    // if (ui.isBlockingGameInput()) {
+    //     ui.handleInput(input);        // arrows/confirm/back handled by UI
+    // } else {
+    //     gameplay.handleInput(input);  // movement, actions, etc.
+    //     ui.handleNonBlocking(input);  // e.g., HUD hover/tooltips if you want
+    // }
+
     // event loop
     SDL_Event event{0};
     while (SDL_PollEvent(&event)) {
@@ -378,16 +416,27 @@ void game_engine::Engine::runEventLoop(GameObject &player, game_engine::NetGameI
           handleKeyInput(player, event.key.scancode, false, net_input);
           if (event.key.scancode == SDL_SCANCODE_Q) {
             m_gameState.debugMode = !m_gameState.debugMode;
-          }
-          else if (event.key.scancode == SDL_SCANCODE_F11) {
+          } else if (event.key.scancode == SDL_SCANCODE_F11) {
             m_sdlState.fullscreen = !m_sdlState.fullscreen;
             SDL_SetWindowFullscreen(m_sdlState.window, m_sdlState.fullscreen);
+          } else if (event.key.scancode == SDL_SCANCODE_TAB) {
+            m_gameState.currentView = UIManager::GameView::InventoryMenu;
+          } else if (
+            m_gameState.currentView == UIManager::GameView::CutScene
+            && event.key.scancode == SDL_SCANCODE_RETURN)
+          {
+            snaps.advanceToNextScene = true;
+          }
+          else if (
+            (m_gameState.currentView == UIManager::GameView::Playing ||
+            m_gameState.currentView == UIManager::GameView::PauseMenu) &&
+            event.key.scancode == SDL_SCANCODE_P) {
+            snaps.togglePauseGameplay = true;
           }
           break;
         }
       }
     }
-    // }
 }
 
 bool game_engine::Engine::initWindowAndRenderer(int width, int height, int logW, int logH) {
@@ -413,7 +462,7 @@ bool game_engine::Engine::initWindowAndRenderer(int width, int height, int logW,
   SDL_SetRenderVSync(m_sdlState.renderer, 1);
 
   // configure presentation
-  SDL_SetRenderLogicalPresentation(m_sdlState.renderer, m_sdlState.logW , m_sdlState.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+  SDL_SetRenderLogicalPresentation(m_sdlState.renderer, m_sdlState.logW , m_sdlState.logH, SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
 
   // Setup ImGui context
   IMGUI_CHECKVERSION();
@@ -443,6 +492,8 @@ void game_engine::Engine::cleanup() {
   ImGui_ImplSDLRenderer3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
   ImGui::DestroyContext();
+  TTF_CloseFont(m_resources.font);
+  TTF_Quit();
   // if (state.renderer) { SDL_DestroyRenderer(state.renderer); state.renderer = nullptr; }
   // if (state.window) { SDL_DestroyWindow(state.window); state.window = nullptr; }
   // SDL_Quit();
@@ -579,7 +630,7 @@ void game_engine::Engine::updateMapViewport(GameObject& player) {
       std::max(0.0f, float(mapHpx - m_gameState.mapViewport.h)));
 }
 
-void game_engine::Engine::drawAllObjects(float deltaTime) {
+void game_engine::Engine::drawAllObjects(float deltaTime, UIManager::UIActions& actions) {
   // draw all interactable objects
   for (auto &layer : m_gameState.layers) {
     for (GameObject &obj : layer) {
@@ -634,21 +685,30 @@ void game_engine::Engine::drawAllObjects(float deltaTime) {
       drawObject(bullet, bullet.collider.h, bullet.collider.w, deltaTime);
     }
   }
+
+  if (actions.drawSceneOverlay) {
+    m_resources.m_uiManager.draw(m_sdlState, deltaTime, actions.dimBackground, actions.drawText);
+  }
+
 }
 
-void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& player) {
-if (m_gameState.currentView == GameView::LevelLoading) return;
+void game_engine::Engine::updateGameplayState(float deltaTime, GameObject& player, UIManager::UIActions& actions) {
+if (m_gameState.currentView == UIManager::GameView::LevelLoading) return;
 
 
-  if (m_gameState.currentView == GameView::Playing) {
+  if (m_gameState.currentView == UIManager::GameView::Playing ||
+      m_gameState.currentView == UIManager::GameView::PauseMenu
+  ) {
       setBackgroundSoundtrack(); // TODO we will want to set background track per level
 
       // update & draw game world to sdl.renderer here (before ImGui::Render)
-      updateAllObjects(deltaTime);
+      if (!actions.blockGameplayUpdates) {
+        updateAllObjects(deltaTime);
+        updateMapViewport(player);
+      }
 
-      updateMapViewport(player);
 
-      drawAllObjects(deltaTime);
+      drawAllObjects(deltaTime, actions);
 
       // debugging
       if (m_gameState.debugMode) {
@@ -657,122 +717,102 @@ if (m_gameState.currentView == GameView::LevelLoading) return;
             m_sdlState.renderer,
             5,
             5,
-            std::format("State3: {}  Direction: {} B: {}, G: {}, Px: {}, Py:{}, VPx: {}", static_cast<int>(player.data.player.state), player.direction, m_gameState.bullets.size(), player.grounded, player.position.x, player.position.y, m_gameState.mapViewport.x).c_str());
+            std::format("State: {}  Direction: {} B: {}, G: {}, Px: {}, Py:{}, VPx: {}", static_cast<int>(player.data.player.state), player.direction, m_gameState.bullets.size(), player.grounded, player.position.x, player.position.y, m_gameState.mapViewport.x).c_str());
       }
     }
 
 }
 
-bool game_engine::Engine::updateImGuiMenuRenderState() {
-    // 4) Start a new ImGui frame
-    ImGui_ImplSDLRenderer3_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    ImGui::NewFrame();
+void game_engine::Engine::applyUIActions(const UIManager::UIActions& a) {
+  if (a.stopBackgroundTrack) { stopBackgroundSoundtrack(); }
+  if (a.startSinglePlayer) { m_gameType = SinglePlayer; }
+  if (a.quitGame) { m_gameRunning.store(false); }
+  if (a.finishLoading) { if (m_levelLoadThd.joinable()) m_levelLoadThd.join(); }
+  if (a.nextView) m_gameState.currentView = *a.nextView;
+  if (a.stopBackgroundTrack) { stopBackgroundSoundtrack(); }
+  if (a.stopGameOverSoundTrack ) { stopGameOverSoundtrack(); }
+  if (a.restartLevel) { asyncSwitchToLevel(m_resources.m_currLevelIdx); }
+  if (a.startMultiPlayerClient) { m_gameType = Client; }
+  if (a.startMultiPlayerHost) { m_gameType = Host; }
+}
 
-    // 5) Build your ImGui UI for THIS frame
-    // (menus, pause, debug overlay, etc.)
-    ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(io.DisplaySize);
+UIManager::UIActions game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager, float deltaTime, UIManager::UISnapshots &snaps) {
 
-    ImVec2 buttonSize = ImVec2(150, 50); // TODO put in config
+  auto player = getPlayer();
+  snaps.playerHP = player.data.player.healthPoints;
+  snaps.playerMana = player.data.player.manaPoints;
+  snaps.winDims = ImVec2(m_sdlState.logW, m_sdlState.logH);
 
-    switch (m_gameState.currentView) {
-      case GameView::MainMenu:
-      {
-        this->stopBackgroundSoundtrack();
-        ImGui::Begin("Main Menu", nullptr, m_sdlState.ImGuiWindowFlags);
-        ImGui::Text("Hello from ImGui in SDL3!");
-        if (ImGui::Button("Single Player", buttonSize)) {
-            std::cout << "start game" << std::endl;
-            std::puts("Start clicked");
-            m_gameState.currentView = GameView::Playing;
-            m_gameType = game_engine::Engine::SinglePlayer;
-        }
-        if (ImGui::Button("Multiplayer",buttonSize)) {
-          m_gameState.currentView = GameView::MultiPlayerOptionsMenu;
-          std::cout << "multi game" << std::endl;
-        }
-        if (ImGui::Button("Quit", buttonSize)) {
-            std::cout << "quit game" << std::endl;
-            m_gameRunning.store(false);
-        }
-        ImGui::End();
-        break;
-      }
-      case GameView::LevelLoading:
-      {
-        {
-          std::lock_guard<std::mutex> lock(m_levelMutex);
-          uint8_t p = m_gameState.getLevelLoadProgress();  // store as 0..1 or convert
-          if (p >= 100) {
-            if (m_levelLoadThd.joinable()) {
-                m_levelLoadThd.join();
-            }
-            m_gameState.currentView = GameView::Playing;
-            break;
-          }
-
-          ImGui::Begin("Loading", nullptr, m_sdlState.ImGuiWindowFlags);
-          ImGui::Text("Loading level...");
-          ImGui::ProgressBar(p <= 1.0f ? p : p * 0.01f, ImVec2(200, 0));
-          ImGui::End();
-          return true;
-        }
-        break;
-      }
-      case GameView::GameOver:
-      {
-        // When player
-        stopBackgroundSoundtrack();
-        // setGameOverSoundtrack();
-        ImGui::Begin("GameOver", nullptr, m_sdlState.ImGuiWindowFlags);
-        ImGui::Text("GAME OVER");
-        if (ImGui::Button("Try Again")) {
-          asyncSwitchToLevel(m_resources.m_currLevelIdx);
-          stopGameOverSoundtrack();
-        }
-        ImGui::End();
-        break;
-      }
-      case GameView::PauseMenu:
-      {
-        ImGui::Begin("Pause", nullptr, m_sdlState.ImGuiWindowFlags);
-        if (ImGui::Button("Resume")) m_gameState.currentView = GameView::Playing;
-        if (ImGui::Button("Quit")) m_gameRunning.store(false);
-        ImGui::End();
-        break;
-      }
-      case GameView::MultiPlayerOptionsMenu:
-      {
-        // drawSettings();
-        ImGui::Begin("MultiPlayer Menu", nullptr, m_sdlState.ImGuiWindowFlags);
-        if (ImGui::Button("Host A Game",buttonSize)) {
-          m_gameType = game_engine::Engine::Host;
-          m_gameState.currentView = GameView::Playing;
-        }
-        if (ImGui::Button("Join A Game", buttonSize)) {
-          m_gameType = game_engine::Engine::Client;
-          m_gameState.currentView = GameView::Playing;
-        }
-        if (ImGui::Button("Back to Menu", buttonSize)) {
-          // todo; should reset game state unless saved
-          m_gameState.currentView = GameView::MainMenu;
-        }
-        ImGui::End();
-        break;
-      }
-      case GameView::Playing:
-      {
-        if (m_gameState.drawMenuSettingsDuringGameplay(buttonSize)) {
-           asyncSwitchToLevel(m_resources.m_currLevelIdx);
-        }
-        m_gameState.drawPlayerHealthBar();
-        break;
-      }
+  switch (m_gameState.currentView) {
+    case UIManager::GameView::LevelLoading:
+    {
+      std::lock_guard<std::mutex> lock(m_levelMutex);
+      const uint8_t p = m_gameState.getLevelLoadProgress();
+      snaps.loading.progress01 = std::clamp(p * 0.01f, 0.0f, 1.0f);
+      snaps.loading.done = (p >= 100);
+      break;
     }
+    case UIManager::GameView::MainMenu:
+    {
+      snaps.deltaTime = deltaTime;
+      setAudioSoundtrack(m_resources.mainMenuTrack);
+      snaps.cutscene = &m_resources.mainMenuCutscene;
+      snaps.cutSceneID = 0;
+      // snaps.mainMenuAnim = &m_resources.mainMenuAnim;
+      // snaps.mainMenuTex = m_resources.texMainMenu;
+      break;
+    }
+    case UIManager::GameView::PauseMenu: {
+      snaps.deltaTime = deltaTime;
+      snaps.cutscene = &m_resources.pauseMenuScene;
+      snaps.cutSceneID = 2;
+      break;
+    }
+   case UIManager::GameView::CutScene:
+    {
+      snaps.deltaTime = deltaTime;
+      setAudioSoundtrack(m_resources.mainMenuTrack);
+      snaps.cutscene = &m_resources.testCutscene;
+      snaps.cutSceneID = 1;
+      break;
+    }
+  default:
+    {
+      stopAudioSoundtrack(m_resources.mainMenuTrack);
+    }
+  }
 
-    return false;
+  // if (m_gameState.currentView == UIManager::GameView::LevelLoading)
+  // {
+  //   std::lock_guard<std::mutex> lock(m_levelMutex);
+  //   const uint8_t p = m_gameState.getLevelLoadProgress();
+  //   snaps.loading.progress01 = std::clamp(p * 0.01f, 0.0f, 1.0f);
+  //   snaps.loading.done = (p >= 100);
+  // }
+
+  // if (m_gameState.currentView == UIManager::GameView::MainMenu) {
+  //   snaps.deltaTime = deltaTime;
+  //   setAudioSoundtrack(m_resources.mainMenuTrack);
+  //   snaps.cutscene = &m_resources.mainMenuCutscene;
+  //   snaps.cutSceneID = 0;
+  //   // snaps.mainMenuAnim = &m_resources.mainMenuAnim;
+  //   // snaps.mainMenuTex = m_resources.texMainMenu;
+  // } else {
+  //   stopAudioSoundtrack(m_resources.mainMenuTrack);
+  // }
+
+  // if (m_gameState.currentView == UIManager::GameView::CutScene) {
+  //   snaps.deltaTime = deltaTime;
+  //   setAudioSoundtrack(m_resources.mainMenuTrack);
+  //   snaps.cutscene = &m_resources.testCutscene;
+  //   snaps.cutSceneID = 1;
+  // }
+
+  UIManager::UIActions actions = uiManager.renderView(m_gameState.currentView, snaps, m_sdlState.ImGuiWindowFlags, m_sdlState);
+
+  applyUIActions(actions);
+
+  return actions;
 }
 
 // update updates the state of the passed in game object every render loop
@@ -827,7 +867,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
 
   const auto widenColliderForSwing = [&](GameObject& o) {
       const float drawW = o.spritePixelW / o.drawScale;
-      const float extra = 0.3f * drawW;
+      const float extra = 0.2f * drawW;
 
       SDL_FRect c = baseFacing(o);
       c.w += extra;
@@ -849,17 +889,32 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     Timer &weaponTimer = obj.data.player.weaponTimer;
     weaponTimer.step(deltaTime);
 
+    obj.data.player.healthRecoveryTimer.step(deltaTime);
+    obj.data.player.manaRecoveryTimer.step(deltaTime);
+
+    if (obj.data.player.healthRecoveryTimer.isTimedOut()) {
+      obj.data.player.healthRecoveryTimer.reset();
+      obj.data.player.healthPoints = std::clamp(obj.data.player.healthPoints + 1, 0,
+      obj.data.player.maxHealthPoints);
+    }
+    if (obj.data.player.manaRecoveryTimer.isTimedOut()) {
+      obj.data.player.manaRecoveryTimer.reset();
+      obj.data.player.manaPoints = std::clamp(obj.data.player.manaPoints + 1, 0,
+      obj.data.player.maxManaPoints);
+    }
+
     const auto handleAttacking = [this, &obj, &entityRes, &weaponTimer, &currDirection, deltaTime, widenColliderForSwing](
       SDL_Texture *tex, SDL_Texture *attackTex, int animIndex, int attackAnimIndex, bool handleJump){
 
 
-        if (m_sdlState.keys[SDL_SCANCODE_S]) {
+        if (m_sdlState.keys[SDL_SCANCODE_S] && obj.data.player.state != PlayerState::swingWeapon) {
 
           obj.texture = attackTex;
           obj.currentAnimation = attackAnimIndex;
           obj.animations[attackAnimIndex].reset();
           obj.data.player.state = PlayerState::swingWeapon;
           widenColliderForSwing(obj);
+          MIX_PlayAudio(m_resources.mixer, m_resources.audioSword1);
 
         } else if (m_sdlState.keys[SDL_SCANCODE_A]) {
 
@@ -876,15 +931,19 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           }
 
 
-          // When you shoot (no loops, no track index needed):
-          if (m_resources.whooshCooldown.isTimedOut()) {
-            m_resources.whooshCooldown.reset();
-            MIX_PlayAudio(m_resources.mixer, m_resources.audioShoot);
-          }
           m_resources.whooshCooldown.step(deltaTime); // whooshCooldown should have same length as bullet weaponTimer
+          // When you shoot (no loops, no track index needed):
 
-          if (weaponTimer.isTimedOut()) {
+          if (weaponTimer.isTimedOut() && obj.data.player.manaPoints > 10) {
+
             weaponTimer.reset();
+
+            if (m_resources.whooshCooldown.isTimedOut()) {
+              m_resources.whooshCooldown.reset();
+              MIX_PlayAudio(m_resources.mixer, m_resources.audioShoot);
+            }
+            obj.data.player.manaPoints = std::clamp(obj.data.player.manaPoints -10, 0,
+            obj.data.player.maxManaPoints);
             // create bullets
             GameObject bullet(128, 128);
             bullet.drawScale = 2.0f;
@@ -892,27 +951,29 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
             bullet.applyScale();
 
             bullet.data.bullet = BulletData();
-            bullet.objClass = ObjectClass::Bullet;
+            bullet.objClass = ObjectClass::Projectile;
             bullet.direction = obj.direction;
             bullet.texture = m_resources.texBullet;
             bullet.currentAnimation = m_resources.ANIM_BULLET_MOVING;
             const int yJitter = 50;
             const float yVelocity = SDL_rand(yJitter) - yJitter / 1.5f;
-            bullet.velocity = glm::vec2(
-              obj.velocity.x + 200.0f,
-              yVelocity
-            ) * obj.direction;
+
+            const float baseSpeed = 200.0f;
+            const float inherit   = obj.velocity.x * 0.2f; // optional
+            bullet.velocity.x = baseSpeed * obj.direction + inherit;
+            bullet.velocity.y = yVelocity;
+
             bullet.maxSpeedX = 1000.0f;
             bullet.animations = m_resources.bulletAnims;
 
             // adjust depending on direction faced; lerp
-            const float left = -10;
-            const float right = 50;
-            const float t = (obj.direction + 1) / 2.0f; // 0 or 1 taking into account neg sign
+            const float left = -20;
+            const float right = 20;
+            const float t = (obj.direction + 1) / 1.0f; // 0 or 1 taking into account neg sign
             const float xOffset = left + right * t;
             bullet.position = glm::vec2(
               obj.position.x + xOffset,
-              obj.position.y + (obj.spritePixelH/bullet.drawScale) / 3.0
+              obj.position.y + (obj.spritePixelH/bullet.drawScale) / 8.0
             );
 
             bool foundInactive = false;
@@ -944,13 +1005,13 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           }
 
         } else {
-        obj.animations[m_resources.ANIM_SHOOT].reset();
-        obj.animations[m_resources.ANIM_SLIDE_SHOOT].reset();
-        // obj.animations[shootAnimIndex].unfreezeAnim();
-        // and then we need to set freezeAtFrame() when .currentFrame() == 4
-        // and unfreezeAnim when SDL_SCANCODE_A is no longer being pressed and set obj.currentAnim accordingly
-        obj.texture = tex;
-        obj.currentAnimation = animIndex;
+          obj.animations[m_resources.ANIM_SHOOT].reset();
+          obj.animations[m_resources.ANIM_SLIDE_SHOOT].reset();
+          // obj.animations[shootAnimIndex].unfreezeAnim();
+          // and then we need to set freezeAtFrame() when .currentFrame() == 4
+          // and unfreezeAnim when SDL_SCANCODE_A is no longer being pressed and set obj.currentAnim accordingly
+          obj.texture = tex;
+          obj.currentAnimation = animIndex;
       }
     };
 
@@ -978,8 +1039,6 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           }
         }
 
-        // handleAttacking(entityRes.texIdle, entityRes.texShoot, m_resources.ANIM_IDLE, m_resources.ANIM_SHOOT, false);
-
         if (wantSwing && canSwing) {
             handleAttacking(entityRes.texRun, entityRes.texRunAttack, m_resources.ANIM_RUN, m_resources.ANIM_RUN_ATTACK, false);
         } else {
@@ -993,7 +1052,6 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           obj.data.player.state = PlayerState::idle;
           obj.texture = entityRes.texIdle;
           obj.currentAnimation = m_resources.ANIM_IDLE;
-          obj.data.player.damageTimer.reset();
         }
         break;
       }
@@ -1003,7 +1061,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           obj.currentAnimation = -1; // prevent animation from looping after death
           obj.spriteFrame = 4;
 
-          m_gameState.currentView = GameView::GameOver;
+          m_gameState.currentView = UIManager::GameView::GameOver;
           setGameOverSoundtrack();
         }
         break;
@@ -1012,6 +1070,12 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
       {
         if (currDirection == 0) {
           obj.data.player.state = PlayerState::idle;
+        }
+
+        m_resources.stepAudioCooldown.step(deltaTime);
+        if (m_resources.stepAudioCooldown.isTimedOut()) {
+          m_resources.stepAudioCooldown.reset();
+          MIX_PlayAudio(m_resources.mixer, m_resources.m_currLevel->audioStep);
         }
 
         // move in opposite dir of velocity, sliding
@@ -1035,6 +1099,31 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           if (obj.data.player.jumpWindupTimer.isTimedOut()) {
               obj.velocity.y += JUMP_FORCE;   // upward impulse
               obj.data.player.jumpImpulseApplied = true;
+              MIX_PlayAudio(m_resources.mixer, m_resources.audioJump);
+          }
+        } else {
+          int n = obj.animations[m_resources.ANIM_JUMP].getFrameCount(); // e.g. 6 frames -> indices 0..5
+
+          // Airborne: hold second‑to‑last frame once reached
+          if (!obj.grounded && obj.currentAnimation == m_resources.ANIM_JUMP) {
+              if (obj.animations[m_resources.ANIM_JUMP].currentFrame() >= n - 2) {
+                  obj.currentAnimation = -1;           // stop timered anim
+                  obj.spriteFrame = (n - 2) + 1;       // freeze on frame n-2 (1‑based)
+                  obj.data.player.playLandingFrame = true;
+              }
+          }
+
+          if (obj.grounded) {
+              if (obj.data.player.playLandingFrame) {
+                  obj.currentAnimation = -1;           // show landing frame once
+                  obj.spriteFrame = (n - 1) + 1;       // last frame (1‑based)
+                  obj.data.player.playLandingFrame = false;
+                  break;                               // render this frame; state stays jumping this tick
+              } else {
+                  obj.velocity.y = 0;
+                  obj.data.player.state = PlayerState::idle; // or running
+                  obj.animations[m_resources.ANIM_JUMP].reset();
+              }
           }
         }
 
@@ -1043,10 +1132,6 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         } else {
           handleAttacking(entityRes.texJump, entityRes.texRunShoot, m_resources.ANIM_JUMP, m_resources.ANIM_JUMP, true);
         }
-
-        // handleShooting(m_resources.texRun, m_resources.texRunShoot, m_resources.ANIM_PLAYER_RUN, m_resources.ANIM_PLAYER_RUN);
-        // obj.texture = m_resources.texJump;
-        // obj.currentAnimation = m_resources.ANIM_PLAYER_JUMP;
         break;
       }
       case PlayerState::swingWeapon: { // handle swinging weapon like handleShooting
@@ -1074,7 +1159,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
         break;
       }
     }
-  } else if (obj.objClass == ObjectClass::Bullet) {
+  } else if (obj.objClass == ObjectClass::Projectile) {
 
     obj.data.bullet.liveTimer.step(deltaTime);
     switch (obj.data.bullet.state) {
@@ -1107,6 +1192,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
     switch (obj.data.enemy.state) {
       case EnemyState::idle:
       {
+        // obj.collider = baseFacing(obj);
         glm::vec2 distToPlayer = this->getPlayer().position - obj.position;
         if (glm::length(distToPlayer) < 100) {
           // face the enemy towards the player
@@ -1125,6 +1211,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
             obj.texture = entityRes.texAttack;
             obj.currentAnimation = m_resources.ANIM_SWING;
             obj.data.enemy.attackTimer.reset();
+            widenColliderForSwing(obj);
           }
 
 
@@ -1144,6 +1231,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           obj.texture = entityRes.texIdle;
           obj.currentAnimation = m_resources.ANIM_IDLE;
           obj.data.enemy.idleTimer.reset();
+          obj.collider = baseFacing(obj);  // revert to normal collider
         }
       }
       case EnemyState::hurt:
@@ -1152,7 +1240,7 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
           obj.data.enemy.state = EnemyState::idle;
           obj.texture = entityRes.texIdle;
           obj.currentAnimation = m_resources.ANIM_IDLE;
-          obj.data.enemy.damageTimer.reset();
+          obj.collider = baseFacing(obj);
         }
         break;
       }
@@ -1235,15 +1323,16 @@ void game_engine::Engine::updateGameObject(GameObject &obj, float deltaTime) {
   if (obj.grounded != foundGround) {
     // switching grounded state
     obj.grounded = foundGround;
-    if (foundGround && obj.objClass == ObjectClass::Player) {
-      obj.data.player.state = PlayerState::running;
+    if (foundGround && obj.objClass == ObjectClass::Player && !obj.data.player.playLandingFrame) {
+        obj.data.player.state = PlayerState::running;
 
-      if (obj.grounded && obj.data.player.jumpImpulseApplied) {
-        obj.data.player.state = PlayerState::idle;
-        obj.data.player.jumpImpulseApplied = false;
-        obj.data.player.jumpWindupTimer.reset();
+        if (obj.grounded && obj.data.player.jumpImpulseApplied) {
+          obj.data.player.state = PlayerState::idle;
+          obj.data.player.jumpImpulseApplied = false;
+          obj.data.player.jumpWindupTimer.reset();
+        }
       }
-    }
+
   }
 }
 
@@ -1292,8 +1381,9 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               d.state = PlayerState::hurt;
 
               // damage and flag dead
-              if (!d.damageTimer.isTimedOut()) {
+              if (d.damageTimer.isTimedOut()) {
                 d.healthPoints -= 50.0;
+                d.damageTimer.reset();
               }
               if (d.healthPoints <= 0) {
                 d.state = PlayerState::dead;
@@ -1303,7 +1393,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
                 objA.velocity = glm::vec2(0);
                 // m_gameState.currentView = GameView::GameOver;
               }
-              MIX_PlayTrack(m_resources.enemyHitTrack, 0);
+              MIX_PlayTrack(m_resources.boneImpactHitTrack, 0);
             }
 
         } else {
@@ -1314,7 +1404,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
       case ObjectClass::Enemy:
       {
         if (objB.data.enemy.state != EnemyState::dead) {
-          objA.velocity = glm::vec2(50, 0) * - objA.direction;
+
 
           if (objA.data.player.state == PlayerState::swingWeapon) {
             // when swinging weapon and colliding, reduce enemy health
@@ -1330,17 +1420,28 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               objB.currentAnimation = m_resources.ANIM_HIT;
               d.state = EnemyState::hurt;
 
-              // damage and flag dead
-              d.healthPoints -= 10;
+              if (d.damageTimer.isTimedOut()) {
+                d.healthPoints -= 50;
+                d.damageTimer.reset();
+              }
+
               if (d.healthPoints <= 0) {
                 d.state = EnemyState::dead;
                 objB.texture = entityRes.texDie;
                 objB.currentAnimation = m_resources.ANIM_DIE;
-                MIX_PlayTrack(m_resources.enemyDieTrack, 0);
+                MIX_PlayAudio(m_resources.mixer, m_resources.audioEnemyDie);
               }
-              MIX_PlayTrack(m_resources.enemyHitTrack, 0);
+              // MIX_PlayAudio(m_resources.mixer, m_resources.audioBoneImpact);
+              MIX_PlayTrack(m_resources.boneImpactHitTrack, 0);
+              // TODO wrap this in a func() so that it doesnt allow more than one sound to occur until its done.
+              // PlayTrack doesnt allow repeating while the track is already playing so might be better to use it instead actually.
             }
+          } else {
+            // push back player
+            objA.velocity = glm::vec2(50, 0) * - objA.direction;
           }
+
+          // defaultResponse(); // TODO need to handle correctly
         }
         break;
       }
@@ -1354,7 +1455,7 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
         break;
       }
     }
-  } else if (objA.objClass == ObjectClass::Bullet) {
+  } else if (objA.objClass == ObjectClass::Projectile) {
 
     bool passthrough = false;
     switch (objA.data.bullet.state) {
@@ -1366,6 +1467,9 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
             if (!MIX_PlayTrack(m_resources.hitTrack, 0)) {
             // SDL_Log("Play failed: %s", SDL_GetError());
             };
+            // if (!MIX_PlayAudio(m_resources.mixer, m_resources.audioShootHit)) {
+            // // SDL_Log("Play failed: %s", SDL_GetError());
+            // };
 
             break;
           }
@@ -1385,14 +1489,19 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               d.state = EnemyState::hurt;
 
               // damage and flag dead
-              d.healthPoints -= 10;
+              if (d.damageTimer.isTimedOut()) {
+                d.healthPoints -= 50;
+                d.damageTimer.reset();
+              }
+
               if (d.healthPoints <= 0) {
                 d.state = EnemyState::dead;
                 objB.texture = entityRes.texDie;
                 objB.currentAnimation = m_resources.ANIM_DIE;
-                MIX_PlayTrack(m_resources.enemyDieTrack, 0);
+                MIX_PlayAudio(m_resources.mixer, m_resources.audioEnemyDie);
               }
-              MIX_PlayTrack(m_resources.enemyHitTrack, 0);
+              // MIX_PlayAudio(m_resources.mixer, m_resources.audioProjectileEnemyHit);
+              MIX_PlayTrack(m_resources.enemyProjectileHitTrack, 0);
             } else {
               passthrough = true;
             }
@@ -1433,18 +1542,19 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               playerData.state = PlayerState::hurt;
 
               // damage and flag dead
-              if (!playerData.damageTimer.isTimedOut()) {
-                playerData.healthPoints -= 10.0;
+              if (playerData.damageTimer.isTimedOut()) {
+                playerData.healthPoints -= 33.0;
+                playerData.damageTimer.reset();
               }
+
               if (playerData.healthPoints <= 0) {
                 playerData.state = PlayerState::dead;
                 objB.texture = playerRes.texDie;
                 objB.currentAnimation = m_resources.ANIM_DIE;
-                MIX_PlayTrack(m_resources.enemyDieTrack, 0);
+                MIX_PlayAudio(m_resources.mixer, m_resources.audioEnemyDie);
                 objB.velocity = glm::vec2(0);
-                // m_gameState.currentView = GameView::GameOver;
               }
-              MIX_PlayTrack(m_resources.enemyHitTrack, 0);
+              MIX_PlayTrack(m_resources.boneImpactHitTrack, 0);
             }
         }
         // if collision if with player and enemy is swinging
@@ -1466,18 +1576,20 @@ void game_engine::Engine::collisionResponse(const SDL_FRect &rectA, const SDL_FR
               d.state = EnemyState::hurt;
 
               // damage and flag dead
-              if (!d.damageTimer.isTimedOut()) {
-                d.healthPoints -= 50.0;
+              if (d.damageTimer.isTimedOut()) {
+                d.healthPoints -= 50;
+                d.damageTimer.reset();
               }
+
               if (d.healthPoints <= 0) {
                 d.state = EnemyState::dead;
                 objA.texture = entityRes.texDie;
                 objA.currentAnimation = m_resources.ANIM_DIE;
-                MIX_PlayTrack(m_resources.enemyDieTrack, 0);
+                MIX_PlayAudio(m_resources.mixer, m_resources.audioEnemyDie);
                 objA.velocity = glm::vec2(0);
                 // m_gameState.currentView = GameView::GameOver;
               }
-              MIX_PlayTrack(m_resources.enemyHitTrack, 0);
+              MIX_PlayTrack(m_resources.boneImpactHitTrack, 0);
             }
 
         } else {
@@ -1756,7 +1868,7 @@ bool game_engine::Engine::initAllTiles(GameState &newGameState) {
             case SpriteType::Player_Marie:
             {
               player.colliderNorm = { .x=0.30f, .y=0.5f, .w=wFrac, .h=0.5f };
-              player.drawScale = 1.5f;
+              player.drawScale = 2.0f;
               break;
             }
           };
@@ -1828,22 +1940,30 @@ void game_engine::Engine::handleKeyInput(GameObject &obj, SDL_Scancode key, bool
       }
       case PlayerState::jumping:
       {
-        // if (!keyDown) { // once you stop holding down the key, set player state back to idle
-        //   obj.velocity.y = 0;
-        //   obj.data.player.state = PlayerState::idle;
-        // }
-        // if (obj.animations[m_resources.ANIM_JUMP].isDone()) {
-        //   // fix current frame to last frame
-        //   obj.currentAnimation = -1;
-        // }
+          // While airborne: play jump anim, but clamp to frame n-2 once reached
+          if (!obj.grounded && obj.currentAnimation == m_resources.ANIM_JUMP) {
+              int n   = obj.animations[m_resources.ANIM_JUMP].getFrameCount();
+              int cap = std::max(0, n - 2);
+              if (obj.spriteFrame >= cap) {
+                  obj.spriteFrame = cap;           // hold second-to-last frame
+                  obj.data.player.playLandingFrame = true;
+              }
+          }
 
-        if (obj.grounded) { // once you stop holding down the key, set player state back to idle
-          obj.velocity.y = 0;
-          obj.data.player.state = PlayerState::idle;
-
-          // obj.animations[m_resources.ANIM_JUMP].reset();
-        }
-        break;
+          if (obj.grounded) {
+              if (obj.data.player.playLandingFrame) {
+                  int n = obj.animations[m_resources.ANIM_JUMP].getFrameCount();
+                  obj.currentAnimation = m_resources.ANIM_JUMP;
+                  obj.spriteFrame = n - 1;         // show last frame on landing
+                  obj.data.player.playLandingFrame = false;
+                  break; // let this frame render the landing frame
+              } else {
+                  obj.velocity.y = 0;
+                  obj.data.player.state = PlayerState::idle; // or running
+                  obj.animations[m_resources.ANIM_JUMP].reset();
+              }
+          }
+          break;
       }
       case PlayerState::running:
       {
