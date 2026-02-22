@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "animation.h"
 #include <SDL3/SDL_render.h>
+#include <SDL3_ttf/SDL_ttf.h>
 #include <optional>
 #include <vector>
 
@@ -31,6 +32,7 @@ namespace UIManager {
     bool blockGameplayUpdates = false;
     bool drawSceneOverlay = false;
     bool dimBackground = false;
+    bool drawText = false;
     bool stopBackgroundTrack = false;
     bool stopGameOverSoundTrack = false;
     bool restartLevel = false;
@@ -41,9 +43,11 @@ namespace UIManager {
     bool quitGame = false;
   };
 
-  struct Scene {
+  struct Cutscene {
     SDL_Texture* tex;
     Animation* anim;
+    std::vector<std::string> dialogue; // each animation can have multiple bubbles of dialogue
+    int currDialogueIdx = 0; // the current dialogue displayed
     int numFrameColumns;
     float frameW;
     float frameH;
@@ -66,34 +70,34 @@ namespace UIManager {
 
     bool advanceToNextScene = false;
     bool togglePauseGameplay = false;
-    const std::vector<Scene>* cutscene{nullptr};
+    const std::vector<Cutscene>* cutscene{nullptr};
     int cutSceneID = -1; // test with main menu?
   };
 
   // cutscene manager gets set once when we enter GameView::CutScene
 
-  struct CutSceneManager {
+  struct CutscenePlayer {
     int cutSceneID = -1; // if ID changes, init new CutScene
-    const std::vector<Scene>* scenes = nullptr; // pointed to vector is ready only
+    const std::vector<Cutscene>* scenes = nullptr; // pointed to vector is ready only
     size_t sceneIndex = 0;
-    bool doneWithScene = false; // indicates whether you are done with the current animation in the scenes vector.
+    bool doneWithCurrScene = false; // indicates whether you are done with the current animation in the scenes vector.
     // bool loopScene = false;
     // bool doneWithCutscene = false;
 
-    void start(int sceneID, const std::vector<Scene>* newScenes);
+    void start(int sceneID, const std::vector<Cutscene>* newScenes);
 
     void update(bool playNextScene, float deltaTime, const UISnapshots& snaps);
 
     bool isCutsceneComplete();
     bool isCurrentSceneComplete();
 
-    const Scene& currScene();
+    const Cutscene& currScene();
 
   };
 
   class UI_Manager {
     public:
-      UI_Manager(game_engine::SDLState& sdl): sdlState(sdl) {};
+      UI_Manager(game_engine::SDLState& sdl, TTF_Font& ttfFont): sdlState(sdl),  font(ttfFont){};
       ~UI_Manager() = default;
 
       UIActions renderView(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState);
@@ -101,7 +105,7 @@ namespace UIManager {
       void renderPresent(const game_engine::SDLState& sdlState);
       void clearRenderer(const game_engine::SDLState& sdlState);
 
-      void draw(const game_engine::SDLState& sdlState, float deltaTime, bool dimBackground);
+      void draw(const game_engine::SDLState& sdlState, float deltaTime, bool dimBackground, bool drawDialogue);
 
 
     private:
@@ -118,8 +122,9 @@ namespace UIManager {
 
     private:
       ImVec2 defaultButtonSize = ImVec2(150, 50);
-      CutSceneManager cutsceneMgr;
+      CutscenePlayer cutscenePlr;
       game_engine::SDLState& sdlState;
+      TTF_Font& font;
   };
 
 

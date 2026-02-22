@@ -13,6 +13,7 @@ find_package(SDL3 REQUIRED CONFIG) # config means look for the config.make file 
 find_package(SDL3_mixer REQUIRED CONFIG)
 find_package(SDL3_image REQUIRED CONFIG)
 find_package(glm REQUIRED CONFIG)
+find_package(SDL3_ttf REQUIRED CONFIG)
 
 # link asio as vendor
 set(ASIO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/asio)
@@ -51,7 +52,7 @@ target_include_directories(game_engine PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendo
 
 target_link_libraries(imgui PUBLIC SDL3::SDL3)  # backend needs SDL headers
 target_link_libraries(game_engine
-  PRIVATE SDL3::SDL3 SDL3_image::SDL3_image SDL3_mixer::SDL3_mixer glm::glm imgui asio
+  PRIVATE SDL3::SDL3 SDL3_image::SDL3_image SDL3_mixer::SDL3_mixer SDL3_ttf::SDL3_ttf glm::glm imgui asio
 )
 
 add_executable(net_common_tests

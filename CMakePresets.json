@@ -14,8 +14,8 @@
         "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
         "CMAKE_CXX_STANDARD": "23",
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "CMAKE_PREFIX_PATH": "/Users/bishalgautam/SDL3-3.3/lib/cmake/SDL3;/Users/bishalgautam/SDL3-mixer-3.1.0/lib/cmake/SDL3_mixer;/Users/bishalgautam/SDL3-image-3.3/lib/cmake/SDL3_image;/opt/homebrew/Cellar/glm/1.0.2/share/glm",
+        "CMAKE_EXPORT_COMPILE_COMMANDS":  { "type": "BOOL", "value": true },
+        "CMAKE_PREFIX_PATH": "/Users/bishalgautam/SDL3-3.3/lib/cmake/SDL3;/Users/bishalgautam/SDL3-mixer-3.1.0/lib/cmake/SDL3_mixer;/Users/bishalgautam/SDL3-image-3.3/lib/cmake/SDL3_image;/Users/bishalgautam/SDL3_ttf-custom/lib/cmake/SDL3_ttf;/opt/homebrew/Cellar/glm/1.0.2/share/glm",
         "IMGUI_DIR": "${sourceDir}/vendor/imgui"
       }
     }

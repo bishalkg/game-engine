@@ -28,9 +28,9 @@ namespace UIManager {
     SDL_RenderClear(sdlState.renderer);
   }
 
-  void UI_Manager::draw(const game_engine::SDLState& sdlState, float deltaTime, bool dimBackground) {
+  void UI_Manager::draw(const game_engine::SDLState& sdlState, float deltaTime, bool dimBackground, bool drawDialogue) {
 
-    const Scene& scene = cutsceneMgr.currScene();
+    const Cutscene& scene = cutscenePlr.currScene();
 
     if (!scene.anim || !scene.tex) {
       return;
@@ -79,6 +79,31 @@ namespace UIManager {
     SDL_RenderTexture(sdlState.renderer, scene.tex, &src, &dst);
 
     // renderPresent(sdlState);
+    if (drawDialogue && !scene.dialogue.empty()) {
+      // 2) build a text surface with SDL_ttf
+      const auto text = scene.dialogue.at(0);
+      SDL_Color fg{0,0,0,0};
+      // SDL_Surface* surf = TTF_RenderText_Blended(&font, text.c_str(), text.length(), fg);   // blended = alpha
+      TTF_SetFontHinting(&font, TTF_HINTING_MONO);
+      SDL_Surface* surf = TTF_RenderText_Solid(&font, text.c_str(), text.length(), fg);   // blended = alpha
+
+      if (surf) {
+          // 3) turn it into a texture so the renderer can draw it
+          SDL_Texture* textTex = SDL_CreateTextureFromSurface(sdlState.renderer, surf);
+          // SDL_DestroySurface(surf);
+
+          if (textTex) {
+              SDL_SetTextureScaleMode(textTex, SDL_SCALEMODE_NEAREST); // optional, keeps pixel fonts crisp
+              SDL_FRect textDst{
+                  dst.x + 60.0f,                  // position on top of your panel
+                  dst.y + dst.h - (float)surf->h - 60.0f,
+                  (float)surf->w, (float)surf->h
+              };
+              SDL_RenderTexture(sdlState.renderer, textTex, nullptr, &textDst);
+              // SDL_DestroyTexture(textTex);
+          }
+      }
+    }
 
   }
 
@@ -102,7 +127,7 @@ namespace UIManager {
     float scaleSize = std::min(scalePos, 1.0f);
     float btnW = 500.0f * scaleSize;
     float btnH = 125.0f * scaleSize;
-    float spacing = 5.0f * scaleSize;
+    float spacing = 12.0f * scaleSize;
 
     ImGui::SetNextWindowPos(ImVec2(0,0));
     ImGui::SetNextWindowSize(ImVec2((float)outW, (float)outH));
@@ -149,8 +174,8 @@ namespace UIManager {
 
     act.blockMainGameDraw = true;
     // animated backdrop: stepped in renderView before this call
-    if (cutsceneMgr.scenes && !cutsceneMgr.scenes->empty()) {
-      draw(sdlState, snaps.deltaTime, false);
+    if (cutscenePlr.scenes && !cutscenePlr.scenes->empty()) {
+      draw(sdlState, snaps.deltaTime, false, false);
     } else {
       ImGui::Render(); // must force render to close out imgui cycle.
     }
@@ -170,7 +195,7 @@ namespace UIManager {
         // act.nextView = GameView::Playing;
         if (snaps.cutscene != nullptr && snaps.cutSceneID >= 0) {
           std::cout << "start cutscene" << std::endl;
-          cutsceneMgr.start(snaps.cutSceneID, snaps.cutscene);
+          cutscenePlr.start(snaps.cutSceneID, snaps.cutscene);
           act.nextView = GameView::CutScene;
           act.blockMainGameDraw = true;
           ImGui::Render(); // must force render to close out imgui cycle.
@@ -192,11 +217,11 @@ namespace UIManager {
       act.drawSceneOverlay = true;
       act.dimBackground = true;
 
-      if (snaps.cutSceneID != cutsceneMgr.cutSceneID && snaps.cutscene) {
-        cutsceneMgr.start(snaps.cutSceneID, snaps.cutscene);
+      if (snaps.cutSceneID != cutscenePlr.cutSceneID && snaps.cutscene) {
+        cutscenePlr.start(snaps.cutSceneID, snaps.cutscene);
       }
 
-      auto scn = cutsceneMgr.currScene();
+      auto scn = cutscenePlr.currScene();
 
       // 1) Reference = the PNG’s pixel size
       const float refW = scn.frameW;   // texture width
@@ -300,6 +325,7 @@ namespace UIManager {
 
   UIActions UI_Manager::drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags) {
       UIActions act;
+
       ImGuiWindowFlags windowFlags = flags | ImGuiWindowFlags_NoBackground;
       ImGui::Begin("HUD", nullptr, windowFlags);
       // Optional: remove padding so the button hugs the corner
@@ -310,7 +336,6 @@ namespace UIManager {
         act.nextView = UIManager::GameView::PauseMenu;
       }
       if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-
       ImGui::PopItemFlag();
       ImGui::PopStyleVar(2);
       ImGui::End();
@@ -331,7 +356,10 @@ namespace UIManager {
       float hpFrac = static_cast<float>(value) / 100.0; // 0..1
       ImGui::TextUnformatted(name.c_str());
       ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color); // green
-      ImGui::ProgressBar(hpFrac, ImVec2(150, 24));ImGui::PopStyleColor();
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+      ImGui::ProgressBar(hpFrac, ImVec2(150, 24));
+      ImGui::PopStyleColor();
+      ImGui::PopStyleVar();
       ImGui::End();
   }
 
@@ -347,10 +375,10 @@ namespace UIManager {
       switch (view) {
         case GameView::MainMenu:
         {
-          if (cutsceneMgr.cutSceneID != snaps.cutSceneID && snaps.cutscene) {
-            cutsceneMgr.start(snaps.cutSceneID, snaps.cutscene);
+          if (cutscenePlr.cutSceneID != snaps.cutSceneID && snaps.cutscene) {
+            cutscenePlr.start(snaps.cutSceneID, snaps.cutscene);
           }
-          cutsceneMgr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
+          cutscenePlr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
           return drawMainMenu(snaps, flags, sdlState);
         }
         case GameView::LevelLoading: return drawLoading(snaps, flags);
@@ -363,16 +391,16 @@ namespace UIManager {
         {
           bool playNextScene = snaps.advanceToNextScene; // user hit return/enter, force advance to next scene
 
-          if (cutsceneMgr.cutSceneID != snaps.cutSceneID && snaps.cutscene) {
+          if (cutscenePlr.cutSceneID != snaps.cutSceneID && snaps.cutscene) {
             std::cout << "starting cutscene" << std::endl;
-            cutsceneMgr.start(snaps.cutSceneID, snaps.cutscene);
+            cutscenePlr.start(snaps.cutSceneID, snaps.cutscene);
           }
 
           UIActions act;
-          cutsceneMgr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
-          if (cutsceneMgr.scenes && !cutsceneMgr.scenes->empty() && !cutsceneMgr.isCutsceneComplete()) {
+          cutscenePlr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
+          if (cutscenePlr.scenes && !cutscenePlr.scenes->empty() && !cutscenePlr.isCutsceneComplete()) {
             act.blockMainGameDraw = true;
-            draw(sdlState, snaps.deltaTime, false);
+            draw(sdlState, snaps.deltaTime, false, true);
             return act;
           } else {
             std::cout << "cutscene complete" << std::endl;
@@ -406,27 +434,27 @@ namespace UIManager {
   }
 
 
-  void CutSceneManager::start(int sceneID, const std::vector<Scene>* newScenes) {
+  void CutscenePlayer::start(int sceneID, const std::vector<Cutscene>* newScenes) {
       cutSceneID = sceneID;
       scenes = newScenes;
       sceneIndex = 0;
-      doneWithScene = false;
+      doneWithCurrScene = false;
   }
 
-  const Scene& CutSceneManager::currScene() {
-    static const Scene kDummy{nullptr, nullptr, 1, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+  const Cutscene& CutscenePlayer::currScene() {
+    static const Cutscene kDummy{nullptr, nullptr, {}, 1, 0, 0.0f, 0.0f, 0.0f, 1.0f};
     if (!scenes || scenes->empty() || sceneIndex >= scenes->size()) {
       return kDummy;
     }
     return scenes->at(sceneIndex);
   }
 
-  void CutSceneManager::update(bool playNextScene, float deltaTime, const UISnapshots& snaps) {
+  void CutscenePlayer::update(bool playNextScene, float deltaTime, const UISnapshots& snaps) {
     if (!scenes || sceneIndex >= scenes->size()) return;
 
     // if (doneWithScene) return;
 
-    const Scene& scene = currScene();
+    const Cutscene& scene = currScene();
     if (scene.anim) {
       scene.anim->step(deltaTime);
       // std::cout << "step scene delta" << std::endl;
@@ -440,7 +468,7 @@ namespace UIManager {
 
       if (!scene.loopScene) { // set holdLastFrame on Animation.
         // sceneIndex++; only advance to next scene on user input.
-        doneWithScene = true;
+        doneWithCurrScene = true;
         if (sceneIndex < scenes->size()) {
           std::cout << "increment scene index" << std::endl;
           // sceneIndex++;
@@ -471,7 +499,7 @@ namespace UIManager {
   };
 
 
-  bool CutSceneManager::isCutsceneComplete(){
+  bool CutscenePlayer::isCutsceneComplete(){
     if (!scenes || scenes->empty()) {
       return true;
     }
@@ -479,7 +507,7 @@ namespace UIManager {
     return sceneIndex >= scenes->size();
   };
 
-  bool CutSceneManager::isCurrentSceneComplete(){
+  bool CutscenePlayer::isCurrentSceneComplete(){
     if (!scenes || scenes->empty() || sceneIndex >= scenes->size()) return true;
     const auto &scene = scenes->at(sceneIndex);
     return scene.anim ? scene.anim->isDone() : true;

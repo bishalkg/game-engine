@@ -260,7 +260,7 @@ namespace game_engine {
   struct Resources {
 
 
-    Resources(game_engine::SDLState& sdl) : m_uiManager(sdl) {};
+    Resources(game_engine::SDLState& sdl, TTF_Font* font) : m_uiManager(sdl, *font), font(font) {};
 
     // const int ANIM_PLAYER_IDLE = 0;
     // const int ANIM_PLAYER_RUN = 1;
@@ -318,19 +318,22 @@ namespace game_engine {
     // ------- AudioManager^
 
 
+    TTF_Font* font;
     UIManager::UI_Manager m_uiManager;
 
     std::unique_ptr<Level> m_currLevel;
-    std::vector<UIManager::Scene> mainMenuCutscene;
+    std::vector<UIManager::Cutscene> mainMenuCutscene;
     LevelIndex m_currLevelIdx;
 
     // cutscenes
-    std::vector<UIManager::Scene> testCutscene;
+    std::vector<UIManager::Cutscene> testCutscene;
     SDL_Texture *texTestCutscene;
     Animation testCusceneAnim;
+    SDL_Texture *texTestCutscene2;
+    Animation testCusceneAnim2;
 
     // cutscenes
-    std::vector<UIManager::Scene> pauseMenuScene;
+    std::vector<UIManager::Cutscene> pauseMenuScene;
     SDL_Texture *texPauseMenu;
     Animation pauseMenuAnim;
 
@@ -566,17 +569,18 @@ namespace game_engine {
         // texBulletHit = loadTexture(state.renderer, "data/bullet_hit.png");
         texBulletHit = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
         texBullet = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
-        texMainMenu = m_currLevel->loadTexture(state.renderer, "data/maps/title_screen/title_screen_sized.png");
+        texMainMenu = m_currLevel->loadTexture(state.renderer, "data/maps/title_screen/title_screen_3.png");
         mainMenuAnim = Animation(58, 7.0f);
-        auto [mainMenuAudio, mainMenuTrack] = loadAudioChunk("data/audio/22. Banners in the Wind.wav", chunkAudioGain);
+        // auto [mainMenuAudio, mainMenuTrack] = loadAudioChunk("data/audio/22. Banners in the Wind.wav", chunkAudioGain);
+        auto [mainMenuAudio, mainMenuTrack] = loadAudioChunk("data/audio/Final_Boss_Battle.wav", chunkAudioGain);
         this->mainMenuTrack = mainMenuTrack;
         // TODO make scene from level manifest
         mainMenuCutscene = {
-          UIManager::Scene{
+          UIManager::Cutscene{
           .tex = texMainMenu,
           .anim = &mainMenuAnim,
           .scale = 1.2,
-          .numFrameColumns = 10,
+          .numFrameColumns = 8,
           .frameH = 540.0f,
           .frameW = 800.0f,
           .yOffset = -50,
@@ -584,25 +588,43 @@ namespace game_engine {
           }
         };
 
+        // 2 animations.
+        // Each animation has multiple dialogues.
 
-        texTestCutscene = m_currLevel->loadTexture(state.renderer, "data/cutscenes/text_test.png");
-        testCusceneAnim = Animation(6, 1.0f, 0, true);
+        texTestCutscene = m_currLevel->loadTexture(state.renderer, "data/cutscenes/text_test_3.png");
+        testCusceneAnim = Animation(6, 1.0f);
+        texTestCutscene2 = m_currLevel->loadTexture(state.renderer, "data/cutscenes/text_test_3.png");
+        testCusceneAnim2 = Animation(8, 1.0f);
         testCutscene = {
-          UIManager::Scene{
+          UIManager::Cutscene{
           .tex = texTestCutscene,
           .anim = &testCusceneAnim,
           .scale = 1.0,
           .numFrameColumns = 3,
           .frameH = 360.0f,
           .frameW = 640.0f,
-          .loopScene = false,
+          .loopScene = true, // whats diff bw this and Animation -> hold last frame=True which prevents looping
+          .dialogue = {
+            "I think that Jeetbug loves me more!",
+            "No I think that Shes loves ME more!",
+            "Ok yeah you're probably right..."
+          }
+          },
+          UIManager::Cutscene{
+          .tex = texTestCutscene2,
+          .anim = &testCusceneAnim2,
+          .scale = 1.0,
+          .numFrameColumns = 3,
+          .frameH = 360.0f,
+          .frameW = 640.0f,
+          .loopScene = true,
           }
         };
 
         texPauseMenu = m_currLevel->loadTexture(state.renderer, "data/cutscenes/menu/pause_menu.png");
         pauseMenuAnim = Animation(1, 1.0f, 0, true);
         pauseMenuScene = {
-          UIManager::Scene{
+          UIManager::Cutscene{
           .tex = texPauseMenu,
           .anim = &pauseMenuAnim,
           .scale = 1.0,
@@ -644,6 +666,7 @@ namespace game_engine {
 
   /*
   Engine is the main class that provides all the functionality to run our game
+  TODO: Must refactor this with Template pattern to make it a standalone reusable 2D game engine interface
   */
   class Engine
   {
@@ -669,34 +692,51 @@ namespace game_engine {
 
 
     public:
-      Engine() : m_sdlState{}, m_gameState(m_sdlState), m_resources{m_sdlState}, m_gameType(SinglePlayer) {
+    // TODO later will need to pass gameConfig to constructor
+      Engine(TTF_Font* font) : m_sdlState{}, m_gameState(m_sdlState), m_resources(m_sdlState, font), m_gameType(SinglePlayer) {
       }
       ~Engine();
 
+      // physics should handle this and collision and response
       inline static constexpr glm::vec2 GRAVITY = glm::vec2(0, 600);
+      inline static constexpr float JUMP_FORCE = -400.0f;
+
       inline static constexpr size_t LAYER_IDX_LEVEL = 0;
       inline static constexpr size_t LAYER_IDX_CHARACTERS = 1;
       inline static constexpr int TILE_SIZE = 32;
-      inline static constexpr float JUMP_FORCE = -400.0f;
 
-
+      // core engine/renderer
       bool init(int width, int height, int logW, int logH);
-      void runGameLoop();
-      void runEventLoop(GameObject &player, game_engine::NetGameInput &input, UIManager::UISnapshots &snaps);
-
       bool initWindowAndRenderer(int width, int height, int logW, int logH);
-      void cleanupTextures();
-      void cleanup(); // can be ref or pointer; if using pointer, need to use -> instead of .
+      void runGameLoop();
+      void updateGameplayState(float deltaTime, GameObject& player, UIManager::UIActions& actions);
+      void updateAllObjects(float deltaTime);
+      void updateMapViewport(GameObject& player);
+      void drawAllObjects(float deltaTime, UIManager::UIActions& actions);
+      void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime, float y);
+      void initNextLevel(LevelIndex lvl);
+      void asyncSwitchToLevel(LevelIndex lvl);
+
+      // ResourcesManager
       void drawObject(GameObject &obj, float height, float width, float deltaTime);
       void updateGameObject(GameObject &obj, float deltaTime);
       bool initAllTiles(GameState &gameState);
-      // const tmx::TileSet* pickTileset(uint32_t gid);
+      void cleanupTextures();
+      void cleanup(); // can be ref or pointer; if using pointer, need to use -> instead of
 
+      // PhysicsManager
       void handleCollision(GameObject &a, GameObject &b, float deltaTime);
       void collisionResponse(const SDL_FRect &rectA, const SDL_FRect &rectB, const SDL_FRect &rectC, GameObject &objA, GameObject &objB, float deltaTime);
 
+      // InputManager
+      void runEventLoop(GameObject &player, game_engine::NetGameInput &input, UIManager::UISnapshots &snaps);
       void handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown, game_engine::NetGameInput &input);
 
+      // UIManager
+      void applyUIActions(const UIManager::UIActions& a);
+      UIManager::UIActions updateUI(UIManager::UI_Manager& uiManager, float deltaTime, UIManager::UISnapshots &snaps);
+
+      // AudioManager
       void setBackgroundSoundtrack();
       void stopBackgroundSoundtrack();
       void setGameOverSoundtrack();
@@ -704,21 +744,10 @@ namespace game_engine {
       void setAudioSoundtrack(MIX_Track* track); // generics
       void stopAudioSoundtrack(MIX_Track* track);
 
-      void updateGameplayState(float deltaTime, GameObject& player, UIManager::UIActions& actions);
-      void updateAllObjects(float deltaTime);
-      void updateMapViewport(GameObject& player);
-      void drawAllObjects(float deltaTime, UIManager::UIActions& actions);
-      void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime, float y);
-      UIManager::UIActions updateUI(UIManager::UI_Manager& uiManager, float deltaTime, UIManager::UISnapshots &snaps);
-      void applyUIActions(const UIManager::UIActions& a);
-      // void clearRenderer();
-      // void renderUpdates();
-
+      // Networking
       void buildAuthoritativeStateForServer();
       bool handleMultiplayerConnections();
       void runGameServerLoopThread();
-      void initNextLevel(LevelIndex lvl);
-      void asyncSwitchToLevel(LevelIndex lvl);
       // MIX_PauseTrack(track) / MIX_ResumeTrack(track)
 
       // getters

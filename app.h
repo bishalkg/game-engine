@@ -9,8 +9,8 @@ namespace App {
 
   class App
   {
-
-    game_engine::Engine GameEngine;
+    // TODO gameConfig will be passed to GameEngine
+    // game_engine::Engine GameEngine;
     // Net::Client client; // TODO, build subclass into the App or GameEngine
     // Net::Server server; // TODO
 

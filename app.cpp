@@ -19,8 +19,16 @@
 
 void App::App::Run() {
 
-  game_engine::Engine game;
-  if (!game.init(1600, 900, 640, 360)) { // 1600, 900, 640, 320
+  // move these inside init
+  TTF_Init();
+  TTF_Font* font = TTF_OpenFont("data/cutscenes/fonts/to_the_point_regular.ttf", 24);
+  if (!font) {
+      SDL_Log("TTF_OpenFont failed: %s", SDL_GetError());
+      // handle error...
+  }
+
+  game_engine::Engine game(font);
+  if (!game.init(1280, 720, 640, 360)) { // 1600, 900, 640, 320
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Game Init Failed", "Failed to init Game", nullptr);
     return;
   }
