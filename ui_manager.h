@@ -47,7 +47,7 @@ namespace UIManager {
     SDL_Texture* tex;
     Animation* anim;
     std::vector<std::string> dialogue; // each animation can have multiple bubbles of dialogue
-    int currDialogueIdx = 0; // the current dialogue displayed
+    // int currDialogueIdx = 0; // the current dialogue displayed
     int numFrameColumns;
     float frameW;
     float frameH;
@@ -83,6 +83,9 @@ namespace UIManager {
     float elapsed = 0.0f;
     float charsPerSecond = 15.0f;
     int visibleChars = 0;
+
+    int currDialogueIdx = 0; // the current dialogue displayed
+    bool showNextDialogue = false;
     // other things needed for scene
 
     // void step(float dt) {

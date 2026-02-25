@@ -81,7 +81,7 @@ namespace UIManager {
     // renderPresent(sdlState);
     if (drawDialogue && !scene.dialogue.empty()) {
       // 2) build a text surface with SDL_ttf
-      const auto text = scene.dialogue.at(scene.currDialogueIdx);
+      const auto text = scene.dialogue.at(cutscenePlr.currDialogueIdx);
       std::string shown = text.substr(0, visible);
       // std::cout << "visible chars: " << shown << std::endl;
       SDL_Color fg{0,0,0,0};
@@ -455,6 +455,7 @@ namespace UIManager {
     if (!scenes || sceneIndex >= scenes->size()) return;
 
     // if (doneWithScene) return;
+    bool finalDialogueComplete = false;
 
     const Cutscene& scene = currScene();
     if (scene.anim) {
@@ -463,9 +464,27 @@ namespace UIManager {
 
       if (!scene.dialogue.empty()) {
         elapsed += deltaTime;                   // seconds
+
+        if (showNextDialogue == true && playNextScene) {
+          showNextDialogue = false; // reset
+          if (currDialogueIdx < scene.dialogue.size() - 1) {
+            elapsed = 0;
+            currDialogueIdx += 1;
+          } else {
+            elapsed = 0;
+            currDialogueIdx = 0;
+            finalDialogueComplete = true;
+          }
+        }
+
         int visible = (int)std::floor(elapsed * charsPerSecond);
-        auto text = scene.dialogue.at(scene.currDialogueIdx);
+        auto text = scene.dialogue.at(currDialogueIdx);
         visibleChars = std::clamp(visible, 0, (int)text.size());
+
+        if (visibleChars >= text.length()) {
+          // signal done with currDialogueIndex so that loop we can set the new dialogueIndex
+          showNextDialogue = true;
+        }
       }
 
 
@@ -474,34 +493,35 @@ namespace UIManager {
     };
 
 
-    if (isCurrentSceneComplete()) {
-      // std::cout << "done scene" << std::endl;
+    // if (isCurrentSceneComplete()) {
+    //   // std::cout << "done scene" << std::endl;
 
-      // still printing this even after the scene is done?
-      // how does it default loop forever?
+    //   // still printing this even after the scene is done?
+    //   // how does it default loop forever?
 
-      if (!scene.loopScene) { // set holdLastFrame on Animation.
-        // sceneIndex++; only advance to next scene on user input.
-        doneWithCurrScene = true;
-        // elapsed = 0;
-        if (sceneIndex < scenes->size()) {
-          std::cout << "increment scene index" << std::endl;
-          // sceneIndex++;
-          // doneWithCutscene = true;
-          // if (scenes->at(sceneIndex).anim) scenes->at(sceneIndex).anim->reset();
-        }
-      }
-      // indicate that the scene is complete and stop stepping...will freeze on the last frame!
-    }
+    //   if (!scene.loopScene) { // set holdLastFrame on Animation.
+    //     // sceneIndex++; only advance to next scene on user input.
+    //     doneWithCurrScene = true;
+    //     // elapsed = 0;
+    //     if (sceneIndex < scenes->size()) {
+    //       std::cout << "increment scene index" << std::endl;
+    //       // sceneIndex++;
+    //       // doneWithCutscene = true;
+    //       // if (scenes->at(sceneIndex).anim) scenes->at(sceneIndex).anim->reset();
+    //     }
+    //   }
+    //   // indicate that the scene is complete and stop stepping...will freeze on the last frame!
+    // }
 
     // is currentAnimation finished?
     // is cutSceneFinished?
     // do we want to advance automatically with isFinished?
     // do we need to let the final frame play out first
-    if (playNextScene) { // || isCurrentSceneComplete()
-      std::cout << "play next scene" << std::endl;
+    // this can only happen once we're on the last dialogue
+    if (playNextScene && finalDialogueComplete) { // || isCurrentSceneComplete()
       if (scene.anim) scene.anim->reset();
       if (sceneIndex < scenes->size()) {
+        std::cout << "play next scene" << std::endl;
         sceneIndex++;
         // if (scenes->at(sceneIndex).anim) scenes->at(sceneIndex).anim->reset();
       }

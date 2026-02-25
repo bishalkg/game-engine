@@ -594,7 +594,7 @@ namespace game_engine {
         texTestCutscene = m_currLevel->loadTexture(state.renderer, "data/cutscenes/text_test_3.png");
         testCusceneAnim = Animation(6, 1.0f);
         texTestCutscene2 = m_currLevel->loadTexture(state.renderer, "data/cutscenes/text_test_3.png");
-        testCusceneAnim2 = Animation(8, 1.0f);
+        testCusceneAnim2 = Animation(6, 1.0f);
         testCutscene = {
           UIManager::Cutscene{
           .tex = texTestCutscene,
@@ -618,6 +618,10 @@ namespace game_engine {
           .frameH = 360.0f,
           .frameW = 640.0f,
           .loopScene = true,
+          .dialogue = {
+            "This is the next scene",
+            "And then dialogue after",
+          }
           }
         };
 
