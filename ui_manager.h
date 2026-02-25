@@ -85,6 +85,7 @@ namespace UIManager {
     int visibleChars = 0;
 
     int currDialogueIdx = 0; // the current dialogue displayed
+    bool endOfCurrDialogue = false;
     bool showNextDialogue = false;
     // other things needed for scene
 

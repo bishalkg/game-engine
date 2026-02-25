@@ -451,86 +451,63 @@ namespace UIManager {
     return scenes->at(sceneIndex);
   }
 
-  void CutscenePlayer::update(bool playNextScene, float deltaTime, const UISnapshots& snaps) {
+  void CutscenePlayer::update(bool usrWantsNextScene, float deltaTime, const UISnapshots& snaps) {
     if (!scenes || sceneIndex >= scenes->size()) return;
 
-    // if (doneWithScene) return;
     bool finalDialogueComplete = false;
+    int lenCurrText = 0;
 
     const Cutscene& scene = currScene();
     if (scene.anim) {
       scene.anim->step(deltaTime);
-      // step(deltaTime);
 
       if (!scene.dialogue.empty()) {
-        elapsed += deltaTime;                   // seconds
+        elapsed += deltaTime;
 
-        if (showNextDialogue == true && playNextScene) {
+        if (showNextDialogue && usrWantsNextScene) { // endOfCurrDialogue
           showNextDialogue = false; // reset
           if (currDialogueIdx < scene.dialogue.size() - 1) {
+            showNextDialogue = false;
             elapsed = 0;
             currDialogueIdx += 1;
           } else {
+            // next dialogue
             elapsed = 0;
             currDialogueIdx = 0;
             finalDialogueComplete = true;
+            showNextDialogue = false;
           }
         }
 
-        int visible = (int)std::floor(elapsed * charsPerSecond);
-        auto text = scene.dialogue.at(currDialogueIdx);
-        visibleChars = std::clamp(visible, 0, (int)text.size());
+        if (!showNextDialogue) {
+          int visible = (int)std::floor(elapsed * charsPerSecond);
+          auto text = scene.dialogue.at(currDialogueIdx);
+          lenCurrText = text.length();
+          visibleChars = std::clamp(visible, 0, (int)text.size());
 
-        if (visibleChars >= text.length()) {
-          // signal done with currDialogueIndex so that loop we can set the new dialogueIndex
-          showNextDialogue = true;
+          if (visibleChars >= text.length()) {
+            // signal done with currDialogueIndex so that loop we can set the new dialogueIndex
+            showNextDialogue = true;
+          }
         }
+
       }
 
-
-      // std::string shown = text.substr(0, visible);
-      // std::cout << "step scene delta" << std::endl;
     };
 
-
-    // if (isCurrentSceneComplete()) {
-    //   // std::cout << "done scene" << std::endl;
-
-    //   // still printing this even after the scene is done?
-    //   // how does it default loop forever?
-
-    //   if (!scene.loopScene) { // set holdLastFrame on Animation.
-    //     // sceneIndex++; only advance to next scene on user input.
-    //     doneWithCurrScene = true;
-    //     // elapsed = 0;
-    //     if (sceneIndex < scenes->size()) {
-    //       std::cout << "increment scene index" << std::endl;
-    //       // sceneIndex++;
-    //       // doneWithCutscene = true;
-    //       // if (scenes->at(sceneIndex).anim) scenes->at(sceneIndex).anim->reset();
-    //     }
-    //   }
-    //   // indicate that the scene is complete and stop stepping...will freeze on the last frame!
-    // }
-
-    // is currentAnimation finished?
-    // is cutSceneFinished?
-    // do we want to advance automatically with isFinished?
-    // do we need to let the final frame play out first
-    // this can only happen once we're on the last dialogue
-    if (playNextScene && finalDialogueComplete) { // || isCurrentSceneComplete()
-      if (scene.anim) scene.anim->reset();
-      if (sceneIndex < scenes->size()) {
-        std::cout << "play next scene" << std::endl;
-        sceneIndex++;
-        // if (scenes->at(sceneIndex).anim) scenes->at(sceneIndex).anim->reset();
+    if (usrWantsNextScene) {
+      if (finalDialogueComplete) {
+        if (scene.anim) scene.anim->reset();
+        if (sceneIndex < scenes->size()) {
+          std::cout << "play next scene" << std::endl;
+          sceneIndex++;
+        }
+      } else if (visibleChars != 0) {
+        visibleChars = lenCurrText;
+        showNextDialogue = true;
       }
     }
 
-    // scenes[index].data()->anim->step(deltaTime);
-
-    // run animation delta on current animation index
-    // if playNextScene increment index
   };
 
 
