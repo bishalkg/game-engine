@@ -50,6 +50,19 @@ struct SpriteAssets {
   std::unordered_map<int, std::pair<int, float>> animSettings; // ressources::ANIM_IDLE -> {framecount, length}
 };
 
+struct CutsceneAsset {
+    std::string texPath;
+    std::pair<int, float> animSetting;
+    std::vector<std::string> dialogue; // each animation can have multiple bubbles of dialogue
+    int numFrameColumns;
+    float frameW;
+    float frameH;
+    float yOffset = 0;
+    float xOffset = 0;
+    float scale = 1.0;
+    bool loopScene = false;
+};
+
 struct LevelAssets {
   std::string mapPath;
   std::string background4PathName; //Skyx32
@@ -60,4 +73,5 @@ struct LevelAssets {
   std::string gameOverAudioPath;
   std::string stepAudioPath;
   std::vector<SpriteType> enemyTypes;
+  std::vector<CutsceneAsset> cutsceneData;
 };

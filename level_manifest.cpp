@@ -212,6 +212,39 @@ inline std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
       .gameOverAudioPath = DEFAULT_GAME_OVER_SOUND,
       .stepAudioPath = "data/audio/movement/step_grass.wav",
       .enemyTypes = { SpriteType::Minotaur_1,  SpriteType::Skeleton_Warrior},
+      .cutsceneData = {
+        {
+            .texPath = "data/cutscenes/text_test_3.png",
+            .animSetting = {6, 1.0f},
+            .dialogue = {
+            "I think that Jeetbug loves me more!",
+            "No I think that Shes loves ME more!",
+            "Ok yeah you're probably right..."
+            },
+            .numFrameColumns = 3,
+            .frameW = 640.0f,
+            .frameH = 360.0f,
+            .yOffset = 0,
+            .xOffset = 0,
+            .scale = 1.0,
+            .loopScene = true,
+        },
+        {
+            .texPath = "data/cutscenes/text_test_3.png",
+            .animSetting = {6, 1.0f},
+            .dialogue = {
+              "This is the next scene",
+              "And then dialogue after",
+            },
+            .numFrameColumns = 3,
+            .frameW = 640,
+            .frameH = 360,
+            .yOffset = 0,
+            .xOffset = 0,
+            .scale = 1.0,
+            .loopScene = true,
+        }
+      }
     },
   },
   {

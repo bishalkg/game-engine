@@ -45,7 +45,7 @@ namespace UIManager {
 
   struct Cutscene {
     SDL_Texture* tex;
-    Animation* anim;
+    std::shared_ptr<Animation> anim;
     std::vector<std::string> dialogue; // each animation can have multiple bubbles of dialogue
     // int currDialogueIdx = 0; // the current dialogue displayed
     int numFrameColumns;
