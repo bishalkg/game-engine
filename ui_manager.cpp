@@ -126,7 +126,6 @@ namespace UIManager {
     // ImU32 color_end = ImGui::GetColorU32(ImVec4(0.0f, 0.5f, 1.0f, 1.0f));
     // ImU32 color_handle = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
 
-
     ImGui::InvisibleButton(label.c_str(), ImVec2(width, height));
 
     if (ImGui::IsItemActive()) {
@@ -159,7 +158,7 @@ namespace UIManager {
                                     ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
                                     ImGuiWindowFlags_NoScrollbar);
     // draw audio slider
-    act.newVolume = drawCustomSlider("volume", snaps.currVolume, 0.0f, 100.0f);
+    act.newVolume = drawCustomSlider("volume", snaps.currVolume, 0.0f, 1.0f);
     if (act.newVolume != snaps.currVolume) {
       act.adjustVolume = true;
     }
