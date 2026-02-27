@@ -109,8 +109,60 @@ namespace UIManager {
 
   }
 
+
+
+  float UI_Manager::drawCustomSlider(const std::string& label, float currVal, float v_min, float v_max) {
+
+    float newVal = currVal;
+
+    ImGui::PushID(label.c_str());
+    ImGui::Text("%s", label.c_str());
+
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    float width = 100.0f;
+    float height = 15.0f;
+
+    // ImU32 color_bg = ImGui::GetColorU32(ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+    // ImU32 color_end = ImGui::GetColorU32(ImVec4(0.0f, 0.5f, 1.0f, 1.0f));
+    // ImU32 color_handle = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+
+
+    ImGui::InvisibleButton(label.c_str(), ImVec2(width, height));
+
+    if (ImGui::IsItemActive()) {
+        float t = (ImGui::GetMousePos().x - p.x) / width;
+        t = std::clamp(t, 0.0f, 1.0f);
+        newVal = v_min + t * (v_max - v_min);
+    }
+
+    float fillWidth = (newVal - v_min) / (v_max - v_min) * width;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(p, ImVec2(p.x + width, p.y + height), IM_COL32(50,50,50,255), height * 0.3f);
+    dl->AddRectFilled(p, ImVec2(p.x + fillWidth, p.y + height), IM_COL32(0,128,255,255), height * 0.3f);
+    dl->AddCircleFilled(ImVec2(p.x + fillWidth, p.y + height * 0.5f), height * 0.4f, IM_COL32(255,255,255,255));
+
+
+    ImGui::PopID();
+
+    return newVal;
+
+  }
+
+
+
   // Local helper for the main menu (not a member).
   UIActions UI_Manager::drawMainMenu(const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState) {
+
+    UIActions act;
+
+    ImGui::Begin("##menu_hitboxes", nullptr, ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
+                                    ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
+                                    ImGuiWindowFlags_NoScrollbar);
+    // draw audio slider
+    act.newVolume = drawCustomSlider("volume", snaps.currVolume, 0.0f, 100.0f);
+    if (act.newVolume != snaps.currVolume) {
+      act.adjustVolume = true;
+    }
 
     // renderer output and logical ref
     int outW, outH; SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
@@ -133,9 +185,6 @@ namespace UIManager {
 
     ImGui::SetNextWindowPos(ImVec2(0,0));
     ImGui::SetNextWindowSize(ImVec2((float)outW, (float)outH));
-    ImGui::Begin("##menu_hitboxes", nullptr, ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
-                                        ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
-                                        ImGuiWindowFlags_NoScrollbar);
 
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
@@ -143,7 +192,6 @@ namespace UIManager {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1,1,1,0.2f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1,1,1,0.3f));
-
     // draw buttons at anchor + vertical spacing
     ImVec2 pos = anchor;
     bool anyHovered = false;
@@ -157,7 +205,6 @@ namespace UIManager {
       ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     }
 
-    UIActions act;
     act.stopBackgroundTrack = true;
     place("##single", [&]{
       act.nextView = GameView::CutScene;

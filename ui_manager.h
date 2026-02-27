@@ -36,6 +36,8 @@ namespace UIManager {
     bool stopBackgroundTrack = false;
     bool stopGameOverSoundTrack = false;
     bool restartLevel = false;
+    float newVolume = 0.0f;
+    bool adjustVolume = false;
     std::optional<bool> startSinglePlayer;
     std::optional<bool> startMultiPlayerHost;
     std::optional<bool> startMultiPlayerClient;
@@ -63,6 +65,7 @@ namespace UIManager {
     int playerMana;
     ImVec2 winDims;
     float deltaTime;
+    float currVolume;
 
     Animation* mainMenuAnim{nullptr};
     SDL_Texture* mainMenuTex{nullptr};
@@ -126,6 +129,7 @@ namespace UIManager {
       UIActions drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawPausedMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
+      float drawCustomSlider(const std::string& label, float currVal, float v_min, float v_max);
 
 
       void drawPlayerHealthbar(const std::string& name, const int playerHP, ImU32 color, ImGuiWindowFlags flags);

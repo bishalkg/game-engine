@@ -734,6 +734,10 @@ void game_engine::Engine::applyUIActions(const UIManager::UIActions& a) {
   if (a.restartLevel) { asyncSwitchToLevel(m_resources.m_currLevelIdx); }
   if (a.startMultiPlayerClient) { m_gameType = Client; }
   if (a.startMultiPlayerHost) { m_gameType = Host; }
+  if (a.adjustVolume) {
+    m_resources.m_masterAudioGain = a.newVolume;
+    // restart track with new volume? or is there an adjust gain func?
+  }
 }
 
 UIManager::UIActions game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager, float deltaTime, UIManager::UISnapshots &snaps) {
@@ -755,6 +759,7 @@ UIManager::UIActions game_engine::Engine::updateUI(UIManager::UI_Manager& uiMana
     case UIManager::GameView::MainMenu:
     {
       snaps.deltaTime = deltaTime;
+      snaps.currVolume = m_resources.m_masterAudioGain;
       setAudioSoundtrack(m_resources.mainMenuTrack);
       snaps.cutscene = &m_resources.mainMenuCutscene;
       snaps.cutSceneID = -3;
