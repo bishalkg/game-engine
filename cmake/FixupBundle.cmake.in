@@ -18,3 +18,20 @@ message(STATUS "Fixing bundle dependencies for: ${APP_BUNDLE}")
 message(STATUS "Fixup search dirs: ${FIXUP_SEARCH_DIRS}")
 
 fixup_bundle("${APP_BUNDLE}" "" "${FIXUP_SEARCH_DIRS}")
+
+find_program(CODESIGN_EXECUTABLE codesign)
+if(NOT CODESIGN_EXECUTABLE)
+  message(FATAL_ERROR "codesign tool not found; cannot re-sign bundled binaries.")
+endif()
+
+message(STATUS "Applying ad-hoc code signature to bundle: ${APP_BUNDLE}")
+execute_process(
+  COMMAND "${CODESIGN_EXECUTABLE}" --force --deep --sign - --timestamp=none "${APP_BUNDLE}"
+  RESULT_VARIABLE CODESIGN_RESULT
+  OUTPUT_VARIABLE CODESIGN_STDOUT
+  ERROR_VARIABLE CODESIGN_STDERR
+)
+
+if(NOT CODESIGN_RESULT EQUAL 0)
+  message(FATAL_ERROR "codesign failed (${CODESIGN_RESULT}): ${CODESIGN_STDERR}")
+endif()
