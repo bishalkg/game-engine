@@ -2,6 +2,8 @@
 #include <vector>
 #include <string>
 #include <format>
+#include <filesystem>
+#include <system_error>
 // #include <array>
 
 #include <SDL3/SDL.h>
@@ -17,7 +19,41 @@
 #include "backends/imgui_impl_sdlrenderer3.h"
 #include "app.h"
 
+namespace {
+  void setWorkingDirToBundleResourcesIfNeeded() {
+    const char* basePathRaw = SDL_GetBasePath();
+    if (!basePathRaw || !*basePathRaw) {
+      return;
+    }
+
+    std::filesystem::path exeDir(basePathRaw);
+    exeDir = exeDir.lexically_normal();
+    if (exeDir.filename().empty()) {
+      exeDir = exeDir.parent_path();
+    }
+
+    const std::filesystem::path contentsDir = exeDir.parent_path();
+    const std::filesystem::path bundleDir = contentsDir.parent_path();
+    const bool isBundleLayout =
+      (exeDir.filename() == "MacOS") &&
+      (contentsDir.filename() == "Contents") &&
+      (bundleDir.extension() == ".app");
+
+    if (!isBundleLayout) {
+      return;
+    }
+
+    const std::filesystem::path resourcesDir = contentsDir / "Resources";
+    std::error_code ec;
+    std::filesystem::current_path(resourcesDir, ec);
+    if (ec) {
+      SDL_Log("Failed to switch cwd to bundle Resources: %s", ec.message().c_str());
+    }
+  }
+}
+
 void App::App::Run() {
+  setWorkingDirToBundleResourcesIfNeeded();
 
   // move these inside init
   TTF_Init();
@@ -201,7 +237,6 @@ void App::App::Run() {
 //         SDL_RenderPresent(g_Renderer);
 //     }
 // }
-
 
 
 
