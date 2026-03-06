@@ -236,6 +236,9 @@ namespace game_engine {
     std::unordered_map<SpriteType, EntityResources> texCharacterMap;
     int bg1Idx, bg2Idx, bg3Idx, bg4Idx; // indexes of where in the map are the bg tilsets
     std::vector<SDL_Texture*> textures; // store textures to cleanup later
+
+    std::vector<UIManager::Cutscene> cutscenes;
+
     MIX_Audio *backgroundAudio{nullptr};
     MIX_Track *backgroundTrack{nullptr};
     MIX_Audio *gameOverAudio{nullptr};
@@ -293,7 +296,7 @@ namespace game_engine {
     SDL_Texture  *texBullet, *texBulletHit; // tex of bullets
 
     SDL_Texture *texMainMenu;
-    Animation mainMenuAnim;
+    std::shared_ptr<Animation> mainMenuAnim;
     MIX_Track *mainMenuTrack;
 
     // ----- AudioManager
@@ -335,7 +338,7 @@ namespace game_engine {
     // cutscenes
     std::vector<UIManager::Cutscene> pauseMenuScene;
     SDL_Texture *texPauseMenu;
-    Animation pauseMenuAnim;
+    std::shared_ptr<Animation> pauseMenuAnim;
 
     // Resources() {
     //   m_uiManager = std::make_unique<UIManager::UI_Manager>();
@@ -376,6 +379,27 @@ namespace game_engine {
 
       m_currLevel->map = tmx::loadMap(assets.mapPath); // only the resource struct instance can hold this pointer and it will be automatically deleted when not used (eg. when we swap out maps)
       gs.setLevelLoadProgress(40);
+
+      if (!headless) {
+        // load cutscene assets for the level
+        for (auto csa: assets.cutsceneData) {
+          m_currLevel->cutscenes.emplace_back(UIManager::Cutscene{
+              .tex = m_currLevel->loadTexture(state.renderer, csa.texPath),
+              .anim = std::make_shared<Animation>(csa.animSetting.first, csa.animSetting.second, 0, true),
+              .scale = csa.scale,
+              .numFrameColumns = csa.numFrameColumns,
+              .frameH = csa.frameH,
+              .frameW = csa.frameW,
+              .loopScene = csa.loopScene,
+              .dialogue = csa.dialogue,
+              .yOffset = csa.yOffset,
+              .xOffset = csa.xOffset
+          });
+        }
+      }
+
+
+
       if (!headless) {
         int i = 0;
         for (tmx::TileSet &tileSet: m_currLevel->map->tileSets)
@@ -570,15 +594,18 @@ namespace game_engine {
         texBulletHit = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
         texBullet = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
         texMainMenu = m_currLevel->loadTexture(state.renderer, "data/maps/title_screen/title_screen_3.png");
-        mainMenuAnim = Animation(58, 7.0f);
+
+
+
+        // TODO make scene from level manifest for main menu and and pause menu
+        mainMenuAnim = std::make_shared<Animation>(58, 7.0f);
         // auto [mainMenuAudio, mainMenuTrack] = loadAudioChunk("data/audio/22. Banners in the Wind.wav", chunkAudioGain);
         auto [mainMenuAudio, mainMenuTrack] = loadAudioChunk("data/audio/Final_Boss_Battle.wav", chunkAudioGain);
         this->mainMenuTrack = mainMenuTrack;
-        // TODO make scene from level manifest
         mainMenuCutscene = {
           UIManager::Cutscene{
           .tex = texMainMenu,
-          .anim = &mainMenuAnim,
+          .anim = mainMenuAnim,
           .scale = 1.2,
           .numFrameColumns = 8,
           .frameH = 540.0f,
@@ -588,45 +615,12 @@ namespace game_engine {
           }
         };
 
-        // 2 animations.
-        // Each animation has multiple dialogues.
-
-        texTestCutscene = m_currLevel->loadTexture(state.renderer, "data/cutscenes/text_test_3.png");
-        testCusceneAnim = Animation(6, 1.0f);
-        texTestCutscene2 = m_currLevel->loadTexture(state.renderer, "data/cutscenes/text_test_3.png");
-        testCusceneAnim2 = Animation(8, 1.0f);
-        testCutscene = {
-          UIManager::Cutscene{
-          .tex = texTestCutscene,
-          .anim = &testCusceneAnim,
-          .scale = 1.0,
-          .numFrameColumns = 3,
-          .frameH = 360.0f,
-          .frameW = 640.0f,
-          .loopScene = true, // whats diff bw this and Animation -> hold last frame=True which prevents looping
-          .dialogue = {
-            "I think that Jeetbug loves me more!",
-            "No I think that Shes loves ME more!",
-            "Ok yeah you're probably right..."
-          }
-          },
-          UIManager::Cutscene{
-          .tex = texTestCutscene2,
-          .anim = &testCusceneAnim2,
-          .scale = 1.0,
-          .numFrameColumns = 3,
-          .frameH = 360.0f,
-          .frameW = 640.0f,
-          .loopScene = true,
-          }
-        };
-
         texPauseMenu = m_currLevel->loadTexture(state.renderer, "data/cutscenes/menu/pause_menu.png");
-        pauseMenuAnim = Animation(1, 1.0f, 0, true);
+        pauseMenuAnim = std::make_shared<Animation>(1, 1.0f, 0, true);
         pauseMenuScene = {
           UIManager::Cutscene{
           .tex = texPauseMenu,
-          .anim = &pauseMenuAnim,
+          .anim = pauseMenuAnim,
           .scale = 1.0,
           .numFrameColumns = 1,
           .frameH = 360.0f,

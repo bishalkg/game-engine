@@ -687,7 +687,7 @@ void game_engine::Engine::drawAllObjects(float deltaTime, UIManager::UIActions& 
   }
 
   if (actions.drawSceneOverlay) {
-    m_resources.m_uiManager.draw(m_sdlState, deltaTime, actions.dimBackground, actions.drawText);
+    m_resources.m_uiManager.draw(m_sdlState, deltaTime, actions.dimBackground, actions.drawText, 0);
   }
 
 }
@@ -734,6 +734,12 @@ void game_engine::Engine::applyUIActions(const UIManager::UIActions& a) {
   if (a.restartLevel) { asyncSwitchToLevel(m_resources.m_currLevelIdx); }
   if (a.startMultiPlayerClient) { m_gameType = Client; }
   if (a.startMultiPlayerHost) { m_gameType = Host; }
+  if (a.adjustVolume && m_resources.mixer) {
+    m_resources.m_masterAudioGain = a.newVolume;
+    if (!MIX_SetMasterGain(m_resources.mixer, a.newVolume)) {
+        SDL_Log("MIX_SetMasterGain failed: %s", SDL_GetError());
+    }
+  }
 }
 
 UIManager::UIActions game_engine::Engine::updateUI(UIManager::UI_Manager& uiManager, float deltaTime, UIManager::UISnapshots &snaps) {
@@ -755,25 +761,28 @@ UIManager::UIActions game_engine::Engine::updateUI(UIManager::UI_Manager& uiMana
     case UIManager::GameView::MainMenu:
     {
       snaps.deltaTime = deltaTime;
+      snaps.currVolume = m_resources.m_masterAudioGain; // 0-1.0f
       setAudioSoundtrack(m_resources.mainMenuTrack);
       snaps.cutscene = &m_resources.mainMenuCutscene;
-      snaps.cutSceneID = 0;
-      // snaps.mainMenuAnim = &m_resources.mainMenuAnim;
-      // snaps.mainMenuTex = m_resources.texMainMenu;
+      snaps.cutSceneID = -3;
       break;
     }
     case UIManager::GameView::PauseMenu: {
       snaps.deltaTime = deltaTime;
       snaps.cutscene = &m_resources.pauseMenuScene;
-      snaps.cutSceneID = 2;
+      snaps.cutSceneID = -2;
       break;
     }
    case UIManager::GameView::CutScene:
     {
-      snaps.deltaTime = deltaTime;
-      setAudioSoundtrack(m_resources.mainMenuTrack);
-      snaps.cutscene = &m_resources.testCutscene;
-      snaps.cutSceneID = 1;
+      if (m_resources.m_currLevel && !m_resources.m_currLevel->cutscenes.empty()) {
+        snaps.deltaTime = deltaTime;
+        // pull out the cutscene from the current level
+        stopAudioSoundtrack(m_resources.mainMenuTrack);
+        setAudioSoundtrack(m_resources.m_currLevel->backgroundTrack);
+        snaps.cutscene = &m_resources.m_currLevel->cutscenes;
+        snaps.cutSceneID = static_cast<int>(m_resources.m_currLevel->lvlIdx);
+      }
       break;
     }
   default:
@@ -781,32 +790,6 @@ UIManager::UIActions game_engine::Engine::updateUI(UIManager::UI_Manager& uiMana
       stopAudioSoundtrack(m_resources.mainMenuTrack);
     }
   }
-
-  // if (m_gameState.currentView == UIManager::GameView::LevelLoading)
-  // {
-  //   std::lock_guard<std::mutex> lock(m_levelMutex);
-  //   const uint8_t p = m_gameState.getLevelLoadProgress();
-  //   snaps.loading.progress01 = std::clamp(p * 0.01f, 0.0f, 1.0f);
-  //   snaps.loading.done = (p >= 100);
-  // }
-
-  // if (m_gameState.currentView == UIManager::GameView::MainMenu) {
-  //   snaps.deltaTime = deltaTime;
-  //   setAudioSoundtrack(m_resources.mainMenuTrack);
-  //   snaps.cutscene = &m_resources.mainMenuCutscene;
-  //   snaps.cutSceneID = 0;
-  //   // snaps.mainMenuAnim = &m_resources.mainMenuAnim;
-  //   // snaps.mainMenuTex = m_resources.texMainMenu;
-  // } else {
-  //   stopAudioSoundtrack(m_resources.mainMenuTrack);
-  // }
-
-  // if (m_gameState.currentView == UIManager::GameView::CutScene) {
-  //   snaps.deltaTime = deltaTime;
-  //   setAudioSoundtrack(m_resources.mainMenuTrack);
-  //   snaps.cutscene = &m_resources.testCutscene;
-  //   snaps.cutSceneID = 1;
-  // }
 
   UIManager::UIActions actions = uiManager.renderView(m_gameState.currentView, snaps, m_sdlState.ImGuiWindowFlags, m_sdlState);
 

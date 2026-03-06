@@ -36,6 +36,8 @@ namespace UIManager {
     bool stopBackgroundTrack = false;
     bool stopGameOverSoundTrack = false;
     bool restartLevel = false;
+    float newVolume = 0.0f;
+    bool adjustVolume = false;
     std::optional<bool> startSinglePlayer;
     std::optional<bool> startMultiPlayerHost;
     std::optional<bool> startMultiPlayerClient;
@@ -45,9 +47,9 @@ namespace UIManager {
 
   struct Cutscene {
     SDL_Texture* tex;
-    Animation* anim;
+    std::shared_ptr<Animation> anim;
     std::vector<std::string> dialogue; // each animation can have multiple bubbles of dialogue
-    int currDialogueIdx = 0; // the current dialogue displayed
+    // int currDialogueIdx = 0; // the current dialogue displayed
     int numFrameColumns;
     float frameW;
     float frameH;
@@ -55,7 +57,6 @@ namespace UIManager {
     float xOffset = 0;
     float scale = 1.0;
     bool loopScene = false;
-    // other things needed for scene
   };
 
   struct UISnapshots {
@@ -64,6 +65,7 @@ namespace UIManager {
     int playerMana;
     ImVec2 winDims;
     float deltaTime;
+    float currVolume;
 
     Animation* mainMenuAnim{nullptr};
     SDL_Texture* mainMenuTex{nullptr};
@@ -80,7 +82,19 @@ namespace UIManager {
     int cutSceneID = -1; // if ID changes, init new CutScene
     const std::vector<Cutscene>* scenes = nullptr; // pointed to vector is ready only
     size_t sceneIndex = 0;
-    bool doneWithCurrScene = false; // indicates whether you are done with the current animation in the scenes vector.
+    bool doneWithCurrScene = false; // indicates
+    float elapsed = 0.0f;
+    float charsPerSecond = 15.0f;
+    int visibleChars = 0;
+
+    int currDialogueIdx = 0; // the current dialogue displayed
+    bool endOfCurrDialogue = false;
+    bool showNextDialogue = false;
+    // other things needed for scene
+
+    // void step(float dt) {
+    //   elapsed += dt;
+    // }
     // bool loopScene = false;
     // bool doneWithCutscene = false;
 
@@ -105,7 +119,7 @@ namespace UIManager {
       void renderPresent(const game_engine::SDLState& sdlState);
       void clearRenderer(const game_engine::SDLState& sdlState);
 
-      void draw(const game_engine::SDLState& sdlState, float deltaTime, bool dimBackground, bool drawDialogue);
+      void draw(const game_engine::SDLState& sdlState, float deltaTime, bool dimBackground, bool drawDialogue, int visible);
 
 
     private:
@@ -115,6 +129,7 @@ namespace UIManager {
       UIActions drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawPausedMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
+      float drawCustomSlider(const std::string& label, float currVal, float v_min, float v_max);
 
 
       void drawPlayerHealthbar(const std::string& name, const int playerHP, ImU32 color, ImGuiWindowFlags flags);

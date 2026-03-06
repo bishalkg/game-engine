@@ -28,7 +28,7 @@ namespace UIManager {
     SDL_RenderClear(sdlState.renderer);
   }
 
-  void UI_Manager::draw(const game_engine::SDLState& sdlState, float deltaTime, bool dimBackground, bool drawDialogue) {
+  void UI_Manager::draw(const game_engine::SDLState& sdlState, float deltaTime, bool dimBackground, bool drawDialogue, int visible) {
 
     const Cutscene& scene = cutscenePlr.currScene();
 
@@ -81,16 +81,18 @@ namespace UIManager {
     // renderPresent(sdlState);
     if (drawDialogue && !scene.dialogue.empty()) {
       // 2) build a text surface with SDL_ttf
-      const auto text = scene.dialogue.at(0);
+      const auto text = scene.dialogue.at(cutscenePlr.currDialogueIdx);
+      std::string shown = text.substr(0, visible);
+      // std::cout << "visible chars: " << shown << std::endl;
       SDL_Color fg{0,0,0,0};
       // SDL_Surface* surf = TTF_RenderText_Blended(&font, text.c_str(), text.length(), fg);   // blended = alpha
       TTF_SetFontHinting(&font, TTF_HINTING_MONO);
-      SDL_Surface* surf = TTF_RenderText_Solid(&font, text.c_str(), text.length(), fg);   // blended = alpha
+      SDL_Surface* surf = TTF_RenderText_Solid(&font, shown.c_str(), shown.length(), fg);   // blended = alpha
 
       if (surf) {
           // 3) turn it into a texture so the renderer can draw it
           SDL_Texture* textTex = SDL_CreateTextureFromSurface(sdlState.renderer, surf);
-          // SDL_DestroySurface(surf);
+          // SDL_DestroySurface(surf); //
 
           if (textTex) {
               SDL_SetTextureScaleMode(textTex, SDL_SCALEMODE_NEAREST); // optional, keeps pixel fonts crisp
@@ -107,8 +109,59 @@ namespace UIManager {
 
   }
 
+
+
+  float UI_Manager::drawCustomSlider(const std::string& label, float currVal, float v_min, float v_max) {
+
+    float newVal = currVal;
+
+    ImGui::PushID(label.c_str());
+    ImGui::Text("%s", label.c_str());
+
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    float width = 100.0f;
+    float height = 15.0f;
+
+    // ImU32 color_bg = ImGui::GetColorU32(ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+    // ImU32 color_end = ImGui::GetColorU32(ImVec4(0.0f, 0.5f, 1.0f, 1.0f));
+    // ImU32 color_handle = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+
+    ImGui::InvisibleButton(label.c_str(), ImVec2(width, height));
+
+    if (ImGui::IsItemActive()) {
+        float t = (ImGui::GetMousePos().x - p.x) / width;
+        t = std::clamp(t, 0.0f, 1.0f);
+        newVal = v_min + t * (v_max - v_min);
+    }
+
+    float fillWidth = (newVal - v_min) / (v_max - v_min) * width;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(p, ImVec2(p.x + width, p.y + height), IM_COL32(50,50,50,255), height * 0.3f);
+    dl->AddRectFilled(p, ImVec2(p.x + fillWidth, p.y + height), IM_COL32(0,128,255,255), height * 0.3f);
+    dl->AddCircleFilled(ImVec2(p.x + fillWidth, p.y + height * 0.5f), height * 0.4f, IM_COL32(255,255,255,255));
+
+
+    ImGui::PopID();
+
+    return newVal;
+
+  }
+
+
+
   // Local helper for the main menu (not a member).
   UIActions UI_Manager::drawMainMenu(const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState) {
+
+    UIActions act;
+
+    ImGui::Begin("##menu_hitboxes", nullptr, ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
+                                    ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
+                                    ImGuiWindowFlags_NoScrollbar);
+    // draw audio slider
+    act.newVolume = drawCustomSlider("volume", snaps.currVolume, 0.0f, 1.0f);
+    if (act.newVolume != snaps.currVolume) {
+      act.adjustVolume = true;
+    }
 
     // renderer output and logical ref
     int outW, outH; SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
@@ -131,9 +184,6 @@ namespace UIManager {
 
     ImGui::SetNextWindowPos(ImVec2(0,0));
     ImGui::SetNextWindowSize(ImVec2((float)outW, (float)outH));
-    ImGui::Begin("##menu_hitboxes", nullptr, ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
-                                        ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
-                                        ImGuiWindowFlags_NoScrollbar);
 
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
@@ -141,7 +191,6 @@ namespace UIManager {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1,1,1,0.2f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1,1,1,0.3f));
-
     // draw buttons at anchor + vertical spacing
     ImVec2 pos = anchor;
     bool anyHovered = false;
@@ -155,7 +204,6 @@ namespace UIManager {
       ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     }
 
-    UIActions act;
     act.stopBackgroundTrack = true;
     place("##single", [&]{
       act.nextView = GameView::CutScene;
@@ -175,7 +223,7 @@ namespace UIManager {
     act.blockMainGameDraw = true;
     // animated backdrop: stepped in renderView before this call
     if (cutscenePlr.scenes && !cutscenePlr.scenes->empty()) {
-      draw(sdlState, snaps.deltaTime, false, false);
+      draw(sdlState, snaps.deltaTime, false, false, 0);
     } else {
       ImGui::Render(); // must force render to close out imgui cycle.
     }
@@ -400,7 +448,7 @@ namespace UIManager {
           cutscenePlr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
           if (cutscenePlr.scenes && !cutscenePlr.scenes->empty() && !cutscenePlr.isCutsceneComplete()) {
             act.blockMainGameDraw = true;
-            draw(sdlState, snaps.deltaTime, false, true);
+            draw(sdlState, snaps.deltaTime, false, true, cutscenePlr.visibleChars);
             return act;
           } else {
             std::cout << "cutscene complete" << std::endl;
@@ -449,53 +497,63 @@ namespace UIManager {
     return scenes->at(sceneIndex);
   }
 
-  void CutscenePlayer::update(bool playNextScene, float deltaTime, const UISnapshots& snaps) {
+  void CutscenePlayer::update(bool usrWantsNextScene, float deltaTime, const UISnapshots& snaps) {
     if (!scenes || sceneIndex >= scenes->size()) return;
 
-    // if (doneWithScene) return;
+    bool finalDialogueComplete = false;
+    int lenCurrText = 0;
 
     const Cutscene& scene = currScene();
     if (scene.anim) {
       scene.anim->step(deltaTime);
-      // std::cout << "step scene delta" << std::endl;
+
+      if (!scene.dialogue.empty()) {
+        elapsed += deltaTime;
+
+        if (showNextDialogue && usrWantsNextScene) { // endOfCurrDialogue
+          showNextDialogue = false; // reset
+          if (currDialogueIdx < scene.dialogue.size() - 1) {
+            showNextDialogue = false;
+            elapsed = 0;
+            currDialogueIdx += 1;
+          } else {
+            // next dialogue
+            elapsed = 0;
+            currDialogueIdx = 0;
+            finalDialogueComplete = true;
+            showNextDialogue = false;
+          }
+        }
+
+        if (!showNextDialogue) {
+          int visible = (int)std::floor(elapsed * charsPerSecond);
+          auto text = scene.dialogue.at(currDialogueIdx);
+          lenCurrText = text.length();
+          visibleChars = std::clamp(visible, 0, (int)text.size());
+
+          if (visibleChars >= text.length()) {
+            // signal done with currDialogueIndex so that loop we can set the new dialogueIndex
+            showNextDialogue = true;
+          }
+        }
+
+      }
+
     };
 
-    if (isCurrentSceneComplete()) {
-      // std::cout << "done scene" << std::endl;
-
-      // still printing this even after the scene is done?
-      // how does it default loop forever?
-
-      if (!scene.loopScene) { // set holdLastFrame on Animation.
-        // sceneIndex++; only advance to next scene on user input.
-        doneWithCurrScene = true;
+    if (usrWantsNextScene) {
+      if (finalDialogueComplete) {
+        if (scene.anim) scene.anim->reset();
         if (sceneIndex < scenes->size()) {
-          std::cout << "increment scene index" << std::endl;
-          // sceneIndex++;
-          // doneWithCutscene = true;
-          // if (scenes->at(sceneIndex).anim) scenes->at(sceneIndex).anim->reset();
+          std::cout << "play next scene" << std::endl;
+          sceneIndex++;
         }
-      }
-      // indicate that the scene is complete and stop stepping...will freeze on the last frame!
-    }
-
-    // is currentAnimation finished?
-    // is cutSceneFinished?
-    // do we want to advance automatically with isFinished?
-    // do we need to let the final frame play out first
-    if (playNextScene) { // || isCurrentSceneComplete()
-      std::cout << "play next scene" << std::endl;
-      if (scene.anim) scene.anim->reset();
-      if (sceneIndex < scenes->size()) {
-        sceneIndex++;
-        // if (scenes->at(sceneIndex).anim) scenes->at(sceneIndex).anim->reset();
+      } else if (visibleChars != 0) {
+        visibleChars = lenCurrText;
+        showNextDialogue = true;
       }
     }
 
-    // scenes[index].data()->anim->step(deltaTime);
-
-    // run animation delta on current animation index
-    // if playNextScene increment index
   };
 
 
