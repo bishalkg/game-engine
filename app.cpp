@@ -4,6 +4,9 @@
 #include <format>
 #include <filesystem>
 #include <system_error>
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 // #include <array>
 
 #include <SDL3/SDL.h>
@@ -20,16 +23,35 @@
 #include "app.h"
 
 namespace {
-  void setWorkingDirToBundleResourcesIfNeeded() {
+  std::filesystem::path resolveExecutableDir() {
+#if defined(__APPLE__)
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    if (size > 0) {
+      std::string pathBuf(size, '\0');
+      if (_NSGetExecutablePath(pathBuf.data(), &size) == 0) {
+        return std::filesystem::path(pathBuf.c_str()).parent_path().lexically_normal();
+      }
+    }
+#endif
+
     const char* basePathRaw = SDL_GetBasePath();
     if (!basePathRaw || !*basePathRaw) {
-      return;
+      return {};
     }
 
     std::filesystem::path exeDir(basePathRaw);
     exeDir = exeDir.lexically_normal();
     if (exeDir.filename().empty()) {
       exeDir = exeDir.parent_path();
+    }
+    return exeDir;
+  }
+
+  void setWorkingDirToBundleResourcesIfNeeded() {
+    std::filesystem::path exeDir = resolveExecutableDir();
+    if (exeDir.empty()) {
+      return;
     }
 
     const std::filesystem::path contentsDir = exeDir.parent_path();
@@ -237,7 +259,6 @@ void App::App::Run() {
 //         SDL_RenderPresent(g_Renderer);
 //     }
 // }
-
 
 
 

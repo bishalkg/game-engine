@@ -378,6 +378,29 @@ namespace game_engine {
       LevelAssets& assets = LEVEL_CONFIG.at(levelId);
 
       m_currLevel->map = tmx::loadMap(assets.mapPath); // only the resource struct instance can hold this pointer and it will be automatically deleted when not used (eg. when we swap out maps)
+      if (!m_currLevel->map) {
+        // Bundle fallback: resolve from <App>.app/Contents/Resources when launched via Finder/open.
+        const char* basePathRaw = SDL_GetBasePath();
+        if (basePathRaw && *basePathRaw) {
+          std::filesystem::path basePath(basePathRaw);
+          basePath = basePath.lexically_normal();
+          if (basePath.filename().empty()) {
+            basePath = basePath.parent_path();
+          }
+          const std::filesystem::path resourcesPath =
+            (basePath.filename() == "MacOS" ? basePath.parent_path() : basePath.parent_path().parent_path()) / "Resources";
+          const std::filesystem::path fallbackMapPath = resourcesPath / assets.mapPath;
+          if (std::filesystem::exists(fallbackMapPath)) {
+            m_currLevel->map = tmx::loadMap(fallbackMapPath.string());
+          }
+        }
+      }
+      if (!m_currLevel->map) {
+        std::error_code ec;
+        const std::string cwd = std::filesystem::current_path(ec).string();
+        SDL_Log("Failed to load map: '%s' (cwd: '%s')", assets.mapPath.c_str(), cwd.c_str());
+        return false;
+      }
       gs.setLevelLoadProgress(40);
 
       if (!headless) {
