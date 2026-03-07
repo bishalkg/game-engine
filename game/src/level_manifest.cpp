@@ -1,8 +1,7 @@
-#pragma once
-#include "level_manifest.h"
+#include "game/level_manifest.h"
 
 
-static std::unordered_map<std::string, SpriteType> CHARACTER_NAME_TO_SPRITE_TYPE = {
+const std::unordered_map<std::string, SpriteType> CHARACTER_NAME_TO_SPRITE_TYPE = {
   {"Player_Knight", SpriteType::Player_Knight},
   {"Player_Mage", SpriteType::Player_Mage},
   {"Player_Marie", SpriteType::Player_Marie},
@@ -13,7 +12,7 @@ static std::unordered_map<std::string, SpriteType> CHARACTER_NAME_TO_SPRITE_TYPE
 };
 
 
-static std::unordered_map<SpriteType, SpriteAssets> PLAYER_CONFIG = {
+const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
   {
     SpriteType::Player_Mage,
     SpriteAssets{
@@ -110,7 +109,7 @@ static std::unordered_map<SpriteType, SpriteAssets> PLAYER_CONFIG = {
 };
 
 // enemyTypes map should be global and the level assets just has a vector of SpriteType::Minotaur_1
-static std::unordered_map<SpriteType, SpriteAssets> ENEMY_CONFIG = {
+const std::unordered_map<SpriteType, SpriteAssets> ENEMY_CONFIG = {
   {
     SpriteType::Minotaur_1,
     SpriteAssets{
@@ -194,10 +193,10 @@ static std::unordered_map<SpriteType, SpriteAssets> ENEMY_CONFIG = {
 };
 
 
-inline constexpr const char* DEFAULT_GAME_OVER_SOUND = "data/audio/game_over.mp3";
+const char* DEFAULT_GAME_OVER_SOUND = "data/audio/game_over.mp3";
 
 // Define config for each level
-inline std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
+const std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
   {
     LevelIndex::LEVEL_1,
     LevelAssets{

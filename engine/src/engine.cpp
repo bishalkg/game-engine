@@ -1,5 +1,6 @@
-#include "gameengine.h"
-#include "game_server.h"
+#include "engine/engine.h"
+#include "engine/igame_rules.h"
+#include "engine/net/game_server.h"
 
 GameObject &game_engine::Engine::getPlayer() {
  return m_gameState.player(LAYER_IDX_CHARACTERS);
@@ -134,6 +135,43 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
   // gs.mapViewport.w = state.logW; // or state.width/state.logW
   // gs.mapViewport.h = state.logH; // or state.height/state.logH
   return initAllTiles(m_gameState);
+}
+
+void game_engine::Engine::run(eng::IGameRules& rules) {
+  if (!rules.onInit(*this)) {
+    return;
+  }
+
+  m_gameRunning.store(true);
+  uint64_t prevTime = SDL_GetTicks();
+
+  while (m_gameRunning.load()) {
+    const uint64_t nowTime = SDL_GetTicks();
+    const float deltaTime = (nowTime - prevTime) / 1000.0f;
+    prevTime = nowTime;
+
+    SDL_Event event{0};
+    while (SDL_PollEvent(&event)) {
+      ImGui_ImplSDL3_ProcessEvent(&event);
+      if (event.type == SDL_EVENT_QUIT) {
+        m_gameRunning.store(false);
+      }
+      rules.onEvent(*this, event);
+    }
+
+    rules.onUpdate(*this, deltaTime);
+    rules.onRender(*this, deltaTime);
+  }
+
+  rules.onShutdown(*this);
+
+  if (m_gameServer) {
+    m_gameServer->Stop();
+  }
+  if (m_serverLoopThd.joinable()) {
+    m_serverLoopThd.join();
+  }
+  m_gameServer.reset();
 }
 
 

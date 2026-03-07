@@ -1,6 +1,30 @@
 # game_engine
 
-2D SDL3-based game project with ImGui UI, SDL_mixer audio, SDL_ttf text, and tiled-map driven levels.
+2D SDL3-based game project split into an `engine` static library and a `game` app.
+
+## Repo Layout
+
+```text
+engine/
+  include/engine/
+    engine.h
+    igame_rules.h
+    ui_manager.h
+    net/
+  src/
+game/
+  include/game/
+    app.h
+    game_rules.h
+    ui_controller.h
+    level_manifest.h
+  src/
+    main.cpp
+    app.cpp
+    game_rules.cpp
+    ui_controller.cpp
+    level_manifest.cpp
+```
 
 ## Build
 
@@ -10,16 +34,16 @@ Configure:
 cmake --preset default
 ```
 
-Build game executable:
+Build engine + game app:
 
 ```bash
-cmake --build build --target game_engine
+cmake --build build --target game
 ```
 
 Run from build output:
 
 ```bash
-./build/game_engine
+./build/game.app/Contents/MacOS/game
 ```
 
 ## macOS App Bundle Packaging
@@ -34,23 +58,23 @@ Build the bundle:
 
 ```bash
 cmake --preset default
-cmake --build build --target bundle_game_engine
+cmake --build build --target bundle_game
 ```
 
 Bundle output:
 
 ```text
-build/game_engine.app
+build/game.app
 ```
 
 ### Bundle Layout and File Roles
 
 ```text
-build/game_engine.app/
+build/game.app/
   Contents/
     Info.plist
     MacOS/
-      game_engine
+      game
     Resources/
       data/
         maps/
@@ -74,7 +98,7 @@ build/game_engine.app/
 - `Contents/Info.plist`
   - macOS bundle metadata (name, identifier, version).
   - Generated from `cmake/MacBundle.plist.in`.
-- `Contents/MacOS/game_engine`
+- `Contents/MacOS/game`
   - Main executable built from this repo.
 - `Contents/Resources/data`
   - Full copy of the repo `data/` folder.
@@ -93,19 +117,19 @@ This keeps existing relative asset paths (for example `data/cutscenes/fonts/...`
 Check bundle exists:
 
 ```bash
-test -d build/game_engine.app && echo OK
+test -d build/game.app && echo OK
 ```
 
 Check a packaged asset:
 
 ```bash
-test -f build/game_engine.app/Contents/Resources/data/maps/level_1/level_1.tmx && echo OK
+test -f build/game.app/Contents/Resources/data/maps/level_1/level_1.tmx && echo OK
 ```
 
 Inspect dylib linkage:
 
 ```bash
-otool -L build/game_engine.app/Contents/MacOS/game_engine
+otool -L build/game.app/Contents/MacOS/game
 ```
 
 You should see SDL and related libs resolved from:
@@ -117,7 +141,7 @@ You should see SDL and related libs resolved from:
 Launch bundle:
 
 ```bash
-open "build/game_engine.app"
+open "build/game.app"
 ```
 
 ## Packaging Implementation Files
@@ -125,10 +149,10 @@ open "build/game_engine.app"
 - `CMakeLists.txt`
   - macOS bundle properties
   - resource copy step
-  - `bundle_game_engine` target
+  - `bundle_game` target
 - `cmake/MacBundle.plist.in`
   - Info.plist template
 - `cmake/FixupBundle.cmake.in`
-  - `fixup_bundle(...)` script used by `bundle_game_engine`
-- `app.cpp`
+  - `fixup_bundle(...)` script used by `bundle_game`
+- `game/src/app.cpp`
   - runtime cwd switch to `Contents/Resources` when launched from bundle
