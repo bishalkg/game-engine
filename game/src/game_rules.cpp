@@ -1,11 +1,16 @@
 #include "game/game_rules.h"
 
 #include "engine/engine.h"
+#include "game/game_resources.h"
 
 namespace game {
 
-bool GameRules::onInit(game_engine::Engine&) {
-  return true;
+bool GameRules::onInit(game_engine::Engine& engine) {
+  if (!initializeGameResources(engine)) {
+    return false;
+  }
+
+  return engine.initAllTiles(engine.getGameState());
 }
 
 void GameRules::onEvent(game_engine::Engine& engine, const SDL_Event& event) {
