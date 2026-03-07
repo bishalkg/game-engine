@@ -1,19 +1,15 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.20)
 
 project(game_engine VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# ensure doesnt use homebrew binary
-# set(CMAKE_BUILD_RPATH   "$ENV{HOME}/SDL3-3.3/lib;$ENV{HOME}/SDL3-mixer-3.1.0/lib;$ENV{HOME}/SDL3-image-3.3/lib")
-# set(CMAKE_INSTALL_RPATH "$ENV{HOME}/SDL3-3.3/lib;$ENV{HOME}/SDL3-mixer-3.1.0/lib;$ENV{HOME}/SDL3-image-3.3/lib")
-
-find_package(SDL3 REQUIRED CONFIG) # config means look for the config.make file in the CMAKE_PREFIX_PATH provided
+find_package(SDL3 REQUIRED CONFIG)
 find_package(SDL3_mixer REQUIRED CONFIG)
 find_package(SDL3_image REQUIRED CONFIG)
-find_package(glm REQUIRED CONFIG)
 find_package(SDL3_ttf REQUIRED CONFIG)
+find_package(glm REQUIRED CONFIG)
 
 # link asio as vendor
 set(ASIO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/asio)
@@ -22,17 +18,6 @@ target_include_directories(asio INTERFACE ${ASIO_DIR})
 target_compile_definitions(asio INTERFACE ASIO_STANDALONE)
 find_package(Threads REQUIRED)
 target_link_libraries(asio INTERFACE Threads::Threads)
-
-add_executable(game_engine
-  main.cpp
-  app.cpp
-  gameengine.cpp
-  ui_manager.cpp
-  game_server.cpp
-  tmx.cpp
-  vendor/tinyxml2/tinyxml2.cpp
-)
-# target_link_libraries(game_engine PRIVATE SDL3::SDL3 SDL3_image::SDL3_image glm::glm SDL3_mixer::SDL3_mixer) # add sdl3 and sdl3_image to the compiler header link paths
 
 # ImGui: core + SDL3/SDL_Renderer3 backends
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui)
@@ -48,41 +33,85 @@ set(IMGUI_SOURCES
 
 add_library(imgui STATIC ${IMGUI_SOURCES})
 target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
-target_include_directories(game_engine PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor/tinyxml2)
+target_link_libraries(imgui PUBLIC SDL3::SDL3)
 
-target_link_libraries(imgui PUBLIC SDL3::SDL3)  # backend needs SDL headers
-target_link_libraries(game_engine
-  PRIVATE SDL3::SDL3 SDL3_image::SDL3_image SDL3_mixer::SDL3_mixer SDL3_ttf::SDL3_ttf glm::glm imgui asio
+set(ENGINE_SOURCES
+  engine/src/engine.cpp
+  engine/src/ui_manager.cpp
+  engine/src/game_server.cpp
+  engine/src/tmx.cpp
+  vendor/tinyxml2/tinyxml2.cpp
 )
+
+add_library(engine STATIC ${ENGINE_SOURCES})
+target_include_directories(engine
+  PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine/include/engine
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine/include/engine/net
+    ${CMAKE_CURRENT_SOURCE_DIR}/game/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/game/include/game
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/tinyxml2
+)
+
+target_link_libraries(engine
+  PUBLIC
+    SDL3::SDL3
+    SDL3_image::SDL3_image
+    SDL3_mixer::SDL3_mixer
+    SDL3_ttf::SDL3_ttf
+    glm::glm
+    imgui
+    asio
+)
+
+target_compile_features(engine PUBLIC cxx_std_23)
+
+add_executable(game
+  game/src/main.cpp
+  game/src/app.cpp
+  game/src/game_rules.cpp
+  game/src/ui_controller.cpp
+  game/src/level_manifest.cpp
+)
+
+target_include_directories(game
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/game/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/game/include/game
+)
+
+target_link_libraries(game PRIVATE engine)
+target_compile_features(game PRIVATE cxx_std_23)
 
 add_executable(net_common_tests
   tests/net_common_tests.cpp
 )
+
 target_include_directories(net_common_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(net_common_tests
-  PRIVATE SDL3::SDL3 SDL3_image::SDL3_image SDL3_mixer::SDL3_mixer glm::glm asio
-)
-
-
-target_compile_features(game_engine PRIVATE cxx_std_23)
+target_link_libraries(net_common_tests PRIVATE engine)
 
 if(APPLE)
-  set_target_properties(game_engine PROPERTIES
+  set_target_properties(game PROPERTIES
     MACOSX_BUNDLE TRUE
-    MACOSX_BUNDLE_BUNDLE_NAME "SDL Game Engine"
-    MACOSX_BUNDLE_GUI_IDENTIFIER "com.bishalgautam.game_engine"
+    MACOSX_BUNDLE_BUNDLE_NAME "Game"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "com.bishalgautam.game"
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MacBundle.plist.in"
     MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
   )
 
-  # Keep bundle Resources/data in sync with project data/ on each app build.
-  add_custom_command(TARGET game_engine POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E remove_directory "$<TARGET_BUNDLE_DIR:game_engine>/Contents/Resources/data"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_DIR:game_engine>/Contents/Resources"
+  add_custom_command(TARGET game POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E remove_directory "$<TARGET_BUNDLE_DIR:game>/Contents/Resources/data"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_DIR:game>/Contents/Resources"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
       "${CMAKE_CURRENT_SOURCE_DIR}/data"
-      "$<TARGET_BUNDLE_DIR:game_engine>/Contents/Resources/data"
+      "$<TARGET_BUNDLE_DIR:game>/Contents/Resources/data"
     COMMENT "Copying game assets into app bundle Resources/data"
     VERBATIM
   )
@@ -101,15 +130,15 @@ if(APPLE)
     @ONLY
   )
 
-  add_custom_target(bundle_game_engine
+  add_custom_target(bundle_game
     COMMAND "${CMAKE_COMMAND}"
-      -DAPP_BUNDLE=$<TARGET_BUNDLE_DIR:game_engine>
+      -DAPP_BUNDLE=$<TARGET_BUNDLE_DIR:game>
       -P "${CMAKE_CURRENT_BINARY_DIR}/FixupBundle.cmake"
-    DEPENDS game_engine
-    COMMENT "Bundling dependent dylibs into game_engine.app/Contents/Frameworks"
+    DEPENDS game
+    COMMENT "Bundling dependent dylibs into game.app/Contents/Frameworks"
     VERBATIM
   )
 
-  install(TARGETS game_engine BUNDLE DESTINATION .)
-  install(DIRECTORY data/ DESTINATION "game_engine.app/Contents/Resources/data")
+  install(TARGETS game BUNDLE DESTINATION .)
+  install(DIRECTORY data/ DESTINATION "game.app/Contents/Resources/data")
 endif()
