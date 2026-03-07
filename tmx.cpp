@@ -11,8 +11,17 @@ std::unique_ptr<tmx::Map> tmx::loadMap(const std::string &mapFilePath) {
   tmx::Map *map = nullptr;
 
   XMLDocument doc;
-  doc.LoadFile(mapPath.string().c_str());
+  const XMLError mapLoadResult = doc.LoadFile(mapPath.string().c_str());
+  if (mapLoadResult != XML_SUCCESS) {
+    std::cerr << "tmx::loadMap failed to load '" << mapPath.string()
+              << "': " << doc.ErrorStr() << "\n";
+    return nullptr;
+  }
   XMLElement *mapDoc = doc.FirstChildElement("map");
+  if (!mapDoc) {
+    std::cerr << "tmx::loadMap missing <map> root in '" << mapPath.string() << "'\n";
+    return nullptr;
+  }
 
   using clock = std::chrono::steady_clock;
   if (mapDoc) {

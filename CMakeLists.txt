@@ -65,3 +65,51 @@ target_link_libraries(net_common_tests
 
 
 target_compile_features(game_engine PRIVATE cxx_std_23)
+
+if(APPLE)
+  set_target_properties(game_engine PROPERTIES
+    MACOSX_BUNDLE TRUE
+    MACOSX_BUNDLE_BUNDLE_NAME "SDL Game Engine"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "com.bishalgautam.game_engine"
+    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MacBundle.plist.in"
+    MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+  )
+
+  # Keep bundle Resources/data in sync with project data/ on each app build.
+  add_custom_command(TARGET game_engine POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E remove_directory "$<TARGET_BUNDLE_DIR:game_engine>/Contents/Resources/data"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_DIR:game_engine>/Contents/Resources"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+      "${CMAKE_CURRENT_SOURCE_DIR}/data"
+      "$<TARGET_BUNDLE_DIR:game_engine>/Contents/Resources/data"
+    COMMENT "Copying game assets into app bundle Resources/data"
+    VERBATIM
+  )
+
+  set(BUNDLE_FIXUP_SEARCH_DIRS
+    "$ENV{HOME}/SDL3-3.3/lib"
+    "$ENV{HOME}/SDL3-image-3.3/lib"
+    "$ENV{HOME}/SDL3-mixer-3.1.0/lib"
+    "$ENV{HOME}/SDL3_ttf-custom/lib"
+    "/opt/homebrew/lib"
+  )
+
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/FixupBundle.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/FixupBundle.cmake"
+    @ONLY
+  )
+
+  add_custom_target(bundle_game_engine
+    COMMAND "${CMAKE_COMMAND}"
+      -DAPP_BUNDLE=$<TARGET_BUNDLE_DIR:game_engine>
+      -P "${CMAKE_CURRENT_BINARY_DIR}/FixupBundle.cmake"
+    DEPENDS game_engine
+    COMMENT "Bundling dependent dylibs into game_engine.app/Contents/Frameworks"
+    VERBATIM
+  )
+
+  install(TARGETS game_engine BUNDLE DESTINATION .)
+  install(DIRECTORY data/ DESTINATION "game_engine.app/Contents/Resources/data")
+endif()
