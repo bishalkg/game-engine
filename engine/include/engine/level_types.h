@@ -75,3 +75,9 @@ struct LevelAssets {
   std::vector<SpriteType> enemyTypes;
   std::vector<CutsceneAsset> cutsceneData;
 };
+
+extern const char* DEFAULT_GAME_OVER_SOUND;
+extern const std::unordered_map<std::string, SpriteType> CHARACTER_NAME_TO_SPRITE_TYPE;
+extern const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG;
+extern const std::unordered_map<SpriteType, SpriteAssets> ENEMY_CONFIG;
+extern const std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG;

@@ -1,5 +1,5 @@
-#include "ui_manager.h"
-#include "gameengine.h"
+#include "engine/ui_manager.h"
+#include "engine/engine.h"
 #include "imgui.h"
 #include "imgui_impl_sdlrenderer3.h"
 #include "imgui_impl_sdl3.h"
@@ -7,6 +7,28 @@
 #include <iostream>
 
 namespace UIManager {
+
+  void UI_Manager::beginFrame() {
+    ImGui_ImplSDLRenderer3_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+  }
+
+  void UI_Manager::endFrame(const game_engine::SDLState& sdlState) {
+    renderPresent(sdlState);
+  }
+
+  bool UI_Manager::button(const char* label, ImVec2 size) {
+    return ImGui::Button(label, size);
+  }
+
+  bool UI_Manager::sliderFloat(const char* label, float* v, float v_min, float v_max) {
+    return ImGui::SliderFloat(label, v, v_min, v_max);
+  }
+
+  void UI_Manager::text(const char* text) {
+    ImGui::TextUnformatted(text);
+  }
 
 
   void UI_Manager::renderPresent(const game_engine::SDLState& sdlState) {

@@ -1,6 +1,6 @@
 #pragma once
 #include "net/net_client.h"
-#include "game_net_common.h"
+#include "engine/net/game_net_common.h"
 
 
 namespace game_engine {

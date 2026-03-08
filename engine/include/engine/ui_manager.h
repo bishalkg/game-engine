@@ -1,7 +1,7 @@
 #pragma once
 
 #include "imgui.h"
-#include "animation.h"
+#include "engine/animation.h"
 #include <SDL3/SDL_render.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <optional>
@@ -113,6 +113,13 @@ namespace UIManager {
     public:
       UI_Manager(game_engine::SDLState& sdl, TTF_Font& ttfFont): sdlState(sdl),  font(ttfFont){};
       ~UI_Manager() = default;
+
+      // Primitive frame lifecycle/helpers for game-side UI composition.
+      void beginFrame();
+      void endFrame(const game_engine::SDLState& sdlState);
+      bool button(const char* label, ImVec2 size = ImVec2(0, 0));
+      bool sliderFloat(const char* label, float* v, float v_min, float v_max);
+      void text(const char* text);
 
       UIActions renderView(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState);
 

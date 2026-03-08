@@ -14,13 +14,14 @@
 #include <SDL3_image/SDL_image.h>
 #include <glm/glm.hpp>
 
-#include "gameobject.h"
-#include "gameengine.h"
+#include "engine/gameobject.h"
+#include "engine/engine.h"
 
 #include "imgui.h"
 #include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_sdlrenderer3.h"
-#include "app.h"
+#include "game/app.h"
+#include "game/game_rules.h"
 
 namespace {
   std::filesystem::path resolveExecutableDir() {
@@ -91,7 +92,8 @@ void App::App::Run() {
     return;
   }
 
-  game.runGameLoop();
+  game::GameRules rules;
+  game.run(rules);
 
   game.cleanupTextures();
 
@@ -259,6 +261,4 @@ void App::App::Run() {
 //         SDL_RenderPresent(g_Renderer);
 //     }
 // }
-
-
 

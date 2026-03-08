@@ -11,11 +11,11 @@
 #include <SDL3_image/SDL_image.h>
 #include <glm/glm.hpp>
 
-#include "gameobject.h"
-#include "game_server.h" // needs complete type for unique_ptr destructor
-#include "game_client.h"
-#include "level_manifest.cpp"
-#include "ui_manager.h"
+#include "engine/gameobject.h"
+#include "engine/net/game_server.h" // needs complete type for unique_ptr destructor
+#include "engine/net/game_client.h"
+#include "engine/level_types.h"
+#include "engine/ui_manager.h"
 
 #include "imgui.h"
 #include "backends/imgui_impl_sdl3.h"
@@ -23,8 +23,12 @@
 
 #include <SDL3_mixer/SDL_mixer.h>
 
-#include "tmx.h"
+#include "engine/tmx.h"
 #include <algorithm>
+
+namespace eng {
+  class IGameRules;
+}
 
 // GameApp class
 // GameApp:start() -> creates GameEngine -> does everything thats done in the game loop rn
@@ -375,7 +379,7 @@ namespace game_engine {
 
       m_currLevelIdx = levelId;
       m_currLevel = std::make_unique<Level>(levelId);
-      LevelAssets& assets = LEVEL_CONFIG.at(levelId);
+      const LevelAssets& assets = LEVEL_CONFIG.at(levelId);
 
       m_currLevel->map = tmx::loadMap(assets.mapPath); // only the resource struct instance can hold this pointer and it will be automatically deleted when not used (eg. when we swap out maps)
       if (!m_currLevel->map) {
@@ -456,7 +460,7 @@ namespace game_engine {
 
         for (const SpriteType& character: assets.enemyTypes) {
 
-          SpriteAssets& spriteAssets = ENEMY_CONFIG.at(character);
+          const SpriteAssets& spriteAssets = ENEMY_CONFIG.at(character);
 
           m_currLevel->texCharacterMap[character].texIdle = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.idleTex);
           m_currLevel->texCharacterMap[character].texWalk = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.walkTex);
@@ -489,7 +493,7 @@ namespace game_engine {
       // load player assets. NEED TO MOVE THIS TO BE GLOBAL SO WE DONT RE CREATE EACH LEVEL
       if (!headless) {
 
-        for (auto const [character, spriteAssets]: PLAYER_CONFIG) {
+        for (auto const [character, spriteAssets]: SPRITE_CONFIG) {
 
           m_currLevel->texCharacterMap[character].texIdle = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.idleTex);
           m_currLevel->texCharacterMap[character].texWalk = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.walkTex);
@@ -724,34 +728,10 @@ namespace game_engine {
 
       // core engine/renderer
       bool init(int width, int height, int logW, int logH);
+      void run(eng::IGameRules& rules);
       bool initWindowAndRenderer(int width, int height, int logW, int logH);
-      void runGameLoop();
-      void updateGameplayState(float deltaTime, GameObject& player, UIManager::UIActions& actions);
-      void updateAllObjects(float deltaTime);
-      void updateMapViewport(GameObject& player);
-      void drawAllObjects(float deltaTime, UIManager::UIActions& actions);
-      void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime, float y);
-      void initNextLevel(LevelIndex lvl);
-      void asyncSwitchToLevel(LevelIndex lvl);
-
-      // ResourcesManager
-      void drawObject(GameObject &obj, float height, float width, float deltaTime);
-      void updateGameObject(GameObject &obj, float deltaTime);
-      bool initAllTiles(GameState &gameState);
       void cleanupTextures();
       void cleanup(); // can be ref or pointer; if using pointer, need to use -> instead of
-
-      // PhysicsManager
-      void handleCollision(GameObject &a, GameObject &b, float deltaTime);
-      void collisionResponse(const SDL_FRect &rectA, const SDL_FRect &rectB, const SDL_FRect &rectC, GameObject &objA, GameObject &objB, float deltaTime);
-
-      // InputManager
-      void runEventLoop(GameObject &player, game_engine::NetGameInput &input, UIManager::UISnapshots &snaps);
-      void handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown, game_engine::NetGameInput &input);
-
-      // UIManager
-      void applyUIActions(const UIManager::UIActions& a);
-      UIManager::UIActions updateUI(UIManager::UI_Manager& uiManager, float deltaTime, UIManager::UISnapshots &snaps);
 
       // AudioManager
       void setBackgroundSoundtrack();
@@ -775,6 +755,13 @@ namespace game_engine {
 
       // setters
       void setWindowSize(int height, int width);
+      void setRunModeSinglePlayer();
+      void setRunModeHost();
+      void setRunModeClient();
+      void requestQuit();
+      bool isRunning() const;
+      bool isHostMode() const;
+      bool isClientMode() const;
 
   };
 
