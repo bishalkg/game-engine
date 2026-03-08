@@ -91,6 +91,34 @@ void game_engine::Engine::setWindowSize(int height, int width) {
   m_sdlState.height = height;
 }
 
+void game_engine::Engine::setRunModeSinglePlayer() {
+  m_gameType = SinglePlayer;
+}
+
+void game_engine::Engine::setRunModeHost() {
+  m_gameType = Host;
+}
+
+void game_engine::Engine::setRunModeClient() {
+  m_gameType = Client;
+}
+
+void game_engine::Engine::requestQuit() {
+  m_gameRunning.store(false);
+}
+
+bool game_engine::Engine::isRunning() const {
+  return m_gameRunning.load();
+}
+
+bool game_engine::Engine::isHostMode() const {
+  return m_gameType == Host;
+}
+
+bool game_engine::Engine::isClientMode() const {
+  return m_gameType == Client;
+}
+
 bool game_engine::Engine::init(int width, int height, int logW, int logH) {
 
   // SDL, ImGUI are initialized

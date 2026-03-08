@@ -30,10 +30,6 @@ namespace eng {
   class IGameRules;
 }
 
-namespace game {
-  class GameRules;
-}
-
 // GameApp class
 // GameApp:start() -> creates GameEngine -> does everything thats done in the game loop rn
 // GameApp class also has networking and persistence, imGui. We inject these as reference to the GameEngine
@@ -702,8 +698,6 @@ namespace game_engine {
     };
 
     private:
-      friend class game::GameRules;
-
       SDLState m_sdlState;
       GameState m_gameState;
       Resources m_resources;
@@ -761,26 +755,13 @@ namespace game_engine {
 
       // setters
       void setWindowSize(int height, int width);
-
-    private:
-      // Legacy gameplay/content hooks kept internal while extraction is in progress.
-      void runGameLoop();
-      void updateGameplayState(float deltaTime, GameObject& player, UIManager::UIActions& actions);
-      void updateAllObjects(float deltaTime);
-      void updateMapViewport(GameObject& player);
-      void drawAllObjects(float deltaTime, UIManager::UIActions& actions);
-      void drawParalaxBackground(SDL_Texture *texture, float xVelocity, float &scrollPos, float scrollFactor, float deltaTime, float y);
-      void initNextLevel(LevelIndex lvl);
-      void asyncSwitchToLevel(LevelIndex lvl);
-      void drawObject(GameObject &obj, float height, float width, float deltaTime);
-      void updateGameObject(GameObject &obj, float deltaTime);
-      bool initAllTiles(GameState &gameState);
-      void handleCollision(GameObject &a, GameObject &b, float deltaTime);
-      void collisionResponse(const SDL_FRect &rectA, const SDL_FRect &rectB, const SDL_FRect &rectC, GameObject &objA, GameObject &objB, float deltaTime);
-      void runEventLoop(GameObject &player, game_engine::NetGameInput &input, UIManager::UISnapshots &snaps);
-      void handleKeyInput(GameObject &obj, SDL_Scancode key, bool keyDown, game_engine::NetGameInput &input);
-      void applyUIActions(const UIManager::UIActions& a);
-      UIManager::UIActions updateUI(UIManager::UI_Manager& uiManager, float deltaTime, UIManager::UISnapshots &snaps);
+      void setRunModeSinglePlayer();
+      void setRunModeHost();
+      void setRunModeClient();
+      void requestQuit();
+      bool isRunning() const;
+      bool isHostMode() const;
+      bool isClientMode() const;
 
   };
 

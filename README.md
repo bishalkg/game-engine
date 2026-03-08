@@ -15,16 +15,44 @@ engine/
 game/
   include/game/
     app.h
+    default_systems.h
     game_rules.h
+    interfaces/
+      i_bootstrap.h
+      i_input_system.h
+      i_ui_flow.h
+      i_simulation_system.h
+      i_render_system.h
     ui_controller.h
     level_manifest.h
   src/
     main.cpp
     app.cpp
     game_rules.cpp
+    default_bootstrap.cpp
+    default_input_system.cpp
+    default_ui_flow.cpp
+    default_simulation_system.cpp
+    default_render_system.cpp
     ui_controller.cpp
     level_manifest.cpp
 ```
+
+## Game Extension Model
+
+`engine::Engine` is runtime/services-only (SDL lifecycle, networking, audio plumbing, resource accessors).
+
+Game behavior is provided by required game interfaces implemented in `game/`:
+
+- `IBootstrap` - load assets and build initial world
+- `IInputSystem` - map SDL events to game input/snapshots
+- `IUIFlow` - update/apply UI actions
+- `ISimulationSystem` - gameplay update/collision/state
+- `IRenderSystem` - world render decisions
+
+`GameRules` composes these systems and drives them through `eng::IGameRules` hooks.
+
+To create a new game on this engine, provide new implementations for those 5 interfaces and wire them in `game/src/game_rules.cpp`.
 
 ## Build
 

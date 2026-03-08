@@ -75,13 +75,12 @@ add_executable(game
   game/src/main.cpp
   game/src/app.cpp
   game/src/game_rules.cpp
-  game/src/game_resources.cpp
   game/src/ui_controller.cpp
-  game/src/ui_flow.cpp
-  game/src/render_system.cpp
-  game/src/simulation_system.cpp
-  game/src/world_builder.cpp
-  game/src/legacy_loop.cpp
+  game/src/default_bootstrap.cpp
+  game/src/default_input_system.cpp
+  game/src/default_ui_flow.cpp
+  game/src/default_simulation_system.cpp
+  game/src/default_render_system.cpp
   game/src/level_manifest.cpp
 )
 

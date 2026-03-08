@@ -1,75 +1,51 @@
 #include "game/game_rules.h"
 
 #include "engine/engine.h"
-#include "game/game_resources.h"
 
 namespace game {
 
+GameRules::GameRules(
+  std::unique_ptr<IBootstrap> bootstrap,
+  std::unique_ptr<IInputSystem> inputSystem,
+  std::unique_ptr<IUIFlow> uiFlow,
+  std::unique_ptr<ISimulationSystem> simulationSystem,
+  std::unique_ptr<IRenderSystem> renderSystem)
+  : bootstrap_(bootstrap ? std::move(bootstrap) : createDefaultBootstrap()),
+    inputSystem_(inputSystem ? std::move(inputSystem) : createDefaultInputSystem()),
+    uiFlow_(uiFlow ? std::move(uiFlow) : createDefaultUIFlow()),
+    simulationSystem_(
+      simulationSystem ? std::move(simulationSystem) : createDefaultSimulationSystem()),
+    renderSystem_(renderSystem ? std::move(renderSystem) : createDefaultRenderSystem()) {}
+
 bool GameRules::onInit(game_engine::Engine& engine) {
-  if (!initializeGameResources(engine)) {
+  if (!bootstrap_->initialize(engine, false)) {
     return false;
   }
-
-  return engine.initAllTiles(engine.getGameState());
+  return true;
 }
 
 void GameRules::onEvent(game_engine::Engine& engine, const SDL_Event& event) {
-  auto& player = engine.getPlayer();
-  auto& gameState = engine.getGameState();
-  auto& sdlState = engine.getSDLState();
-
-  switch (event.type) {
-    case SDL_EVENT_WINDOW_RESIZED:
-      engine.setWindowSize(event.window.data2, event.window.data1);
-      break;
-    case SDL_EVENT_KEY_DOWN:
-      engine.handleKeyInput(player, event.key.scancode, true, input_);
-      break;
-    case SDL_EVENT_KEY_UP:
-      engine.handleKeyInput(player, event.key.scancode, false, input_);
-      if (event.key.scancode == SDL_SCANCODE_Q) {
-        gameState.debugMode = !gameState.debugMode;
-      } else if (event.key.scancode == SDL_SCANCODE_F11) {
-        sdlState.fullscreen = !sdlState.fullscreen;
-        SDL_SetWindowFullscreen(sdlState.window, sdlState.fullscreen);
-      } else if (event.key.scancode == SDL_SCANCODE_TAB) {
-        gameState.currentView = UIManager::GameView::InventoryMenu;
-      } else if (gameState.currentView == UIManager::GameView::CutScene &&
-                 event.key.scancode == SDL_SCANCODE_RETURN) {
-        snaps_.advanceToNextScene = true;
-      } else if ((gameState.currentView == UIManager::GameView::Playing ||
-                  gameState.currentView == UIManager::GameView::PauseMenu) &&
-                 event.key.scancode == SDL_SCANCODE_P) {
-        snaps_.togglePauseGameplay = true;
-      }
-      break;
-    default:
-      break;
-  }
+  inputSystem_->onEvent(engine, event, input_, snaps_);
 }
 
 void GameRules::onUpdate(game_engine::Engine& engine, float deltaTime) {
   auto& resources = engine.getResources();
   auto& sdlState = engine.getSDLState();
   auto& uiManager = resources.m_uiManager;
-  auto& player = engine.getPlayer();
-
-  const UIManager::UIActions engineActions = engine.updateUI(uiManager, deltaTime, snaps_);
+  const UIManager::UIActions engineActions = uiFlow_->update(engine, deltaTime, snaps_);
   const auto gameActions = uiController_.fromEngineActions(engineActions);
   lastEngineActions_ = uiController_.toEngineActions(gameActions);
-  engine.applyUIActions(lastEngineActions_);
+  uiFlow_->apply(engine, lastEngineActions_);
 
   if (!lastEngineActions_.blockMainGameDraw) {
     uiManager.clearRenderer(sdlState);
 
     if (!engine.handleMultiplayerConnections()) {
-      UIManager::UIActions quitActions{};
-      quitActions.quitGame = true;
-      engine.applyUIActions(quitActions);
+      engine.requestQuit();
       return;
     }
 
-    engine.updateGameplayState(deltaTime, player, lastEngineActions_);
+    simulationSystem_->update(engine, deltaTime, lastEngineActions_);
   }
 
   snaps_.advanceToNextScene = false;
@@ -77,6 +53,7 @@ void GameRules::onUpdate(game_engine::Engine& engine, float deltaTime) {
 }
 
 void GameRules::onRender(game_engine::Engine& engine, float) {
+  renderSystem_->render(engine, 0.0f, lastEngineActions_);
   engine.getResources().m_uiManager.renderPresent(engine.getSDLState());
 }
 
