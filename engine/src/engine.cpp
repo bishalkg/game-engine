@@ -188,6 +188,7 @@ void game_engine::Engine::run(eng::IGameRules& rules) {
   }
   m_gameServer.reset();
 }
+
 bool game_engine::Engine::handleMultiplayerConnections() {
     // create a client; need a GameClient that inherits from client_interface
     // wait for connection to the server to be made.
