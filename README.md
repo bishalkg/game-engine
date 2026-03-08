@@ -107,6 +107,59 @@ To create a new game on this engine, provide new implementations for those 5 int
                         +----------------+ +----------------+
 ```
 
+Mermaid version:
+
+```mermaid
+flowchart TB
+  app["App::Run()"]
+
+  subgraph GAME["game target (app code)"]
+    gr["game::GameRules\n(composition/orchestration)"]
+    ib["IBootstrap"]
+    iin["IInputSystem"]
+    iui["IUIFlow"]
+    isim["ISimulationSystem"]
+    ir["IRenderSystem"]
+  end
+
+  subgraph ENGINE["engine target (runtime/platform/services only)"]
+    eng["game_engine::Engine"]
+    sdl["SDL lifecycle\nwindow/events"]
+    rend["Renderer state\n+ present path"]
+    aud["Audio + Mixer"]
+    net["Net stack\nclient/server"]
+    res["Resources\ntextures/audio/fonts"]
+    uim["UIManager\nImGui + views"]
+    gs["GameState\nobjects/layers"]
+  end
+
+  igr["eng::IGameRules\n(hooks)"]
+
+  app --> eng
+  gr -. implements .-> igr
+  eng --> sdl
+  eng --> rend
+  eng --> aud
+  eng --> net
+  eng --> res
+  eng --> uim
+  eng --> gs
+  eng -->|calls hooks| igr
+  igr --> gr
+
+  gr --> ib
+  gr --> iin
+  gr --> iui
+  gr --> isim
+  gr --> ir
+
+  ib -. uses engine services .-> eng
+  iin -. uses engine services .-> eng
+  iui -. uses engine services .-> eng
+  isim -. uses engine services .-> eng
+  ir -. uses engine services .-> eng
+```
+
 ### 2) Runtime frame flow (who runs each frame)
 
 ```text
@@ -128,6 +181,39 @@ Engine::run loop:
   3) rules.onRender(deltaTime)
         -> IRenderSystem::render(...)
         -> UIManager::renderPresent(...)
+```
+
+Mermaid version:
+
+```mermaid
+sequenceDiagram
+  participant App
+  participant Engine as game_engine::Engine
+  participant SDL
+  participant Rules as game::GameRules
+  participant Input as IInputSystem
+  participant UI as IUIFlow
+  participant Sim as ISimulationSystem
+  participant Render as IRenderSystem
+  participant UIM as UIManager
+
+  App->>Engine: init(...)
+  App->>Engine: run(rules)
+
+  loop each frame
+    Engine->>SDL: SDL_PollEvent(...)
+    Engine->>Rules: onEvent(event)
+    Rules->>Input: onEvent(...)
+
+    Engine->>Rules: onUpdate(deltaTime)
+    Rules->>UI: update(...)
+    Rules->>UI: apply(...)
+    Rules->>Sim: update(...)
+
+    Engine->>Rules: onRender(deltaTime)
+    Rules->>Render: render(...)
+    Rules->>UIM: renderPresent(...)
+  end
 ```
 
 ## How To Start A New Game With This Engine
