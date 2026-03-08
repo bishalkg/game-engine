@@ -54,6 +54,129 @@ Game behavior is provided by required game interfaces implemented in `game/`:
 
 To create a new game on this engine, provide new implementations for those 5 interfaces and wire them in `game/src/game_rules.cpp`.
 
+## Architecture Diagram
+
+### 1) Static architecture (who owns what)
+
+```text
+                                 +----------------------+
+                                 |     game target      |
+                                 |      (app code)      |
+                                 +----------+-----------+
+                                            |
+                                            | links
+                                            v
++-----------------------------------------------------------------------------------+
+|                                   engine target                                    |
+|                        (runtime/platform/services only)                            |
+|                                                                                   |
+|  +------------------+   +----------------+   +----------------+   +------------+ |
+|  | SDL lifecycle    |   | Renderer state |   | Audio + Mixer  |   | Net stack  | |
+|  | window/events    |   | + present path |   | + track helpers|   | client/server|
+|  +------------------+   +----------------+   +----------------+   +------------+ |
+|                                                                                   |
+|  +------------------+   +----------------+   +----------------+                   |
+|  | Resources        |   | UIManager      |   | GameState      |                   |
+|  | textures/audio   |   | ImGui + views  |   | objects/layers |                   |
+|  +------------------+   +----------------+   +----------------+                   |
++-----------------------------------------------------------------------------------+
+                                            ^
+                                            |
+                                            | calls hooks on
+                                            |
+                              +-------------+------------------+
+                              |        eng::IGameRules         |
+                              +-------------+------------------+
+                                            ^
+                                            |
+                        +-------------------+-------------------+
+                        |           game::GameRules             |
+                        |        (composition/orchestration)    |
+                        +----+-----------+-----------+----------+
+                             |           |           |
+                             v           v           v
+                +----------------+ +----------------+ +---------------------+
+                | IBootstrap     | | IInputSystem   | | IUIFlow             |
+                +----------------+ +----------------+ +---------------------+
+                             \           |           /
+                              \          |          /
+                               v         v         v
+                        +----------------+ +----------------+
+                        | ISimulation    | | IRenderSystem  |
+                        +----------------+ +----------------+
+```
+
+### 2) Runtime frame flow (who runs each frame)
+
+```text
+App::Run()
+  -> Engine::init(...)
+  -> Engine::run(rules)
+
+Engine::run loop:
+  1) SDL_PollEvent(...)
+        -> ImGui_ImplSDL3_ProcessEvent(...)
+        -> rules.onEvent(...)
+             -> IInputSystem::onEvent(...)
+
+  2) rules.onUpdate(deltaTime)
+        -> IUIFlow::update(...)
+        -> IUIFlow::apply(...)
+        -> ISimulationSystem::update(...)
+
+  3) rules.onRender(deltaTime)
+        -> IRenderSystem::render(...)
+        -> UIManager::renderPresent(...)
+```
+
+## How To Start A New Game With This Engine
+
+### Step-by-step
+
+1. Create game systems that implement the required interfaces:
+   - `IBootstrap`
+   - `IInputSystem`
+   - `IUIFlow`
+   - `ISimulationSystem`
+   - `IRenderSystem`
+
+2. Keep your game-specific code in `game/`:
+   - world creation/spawning in your bootstrap
+   - controls and input mapping in input system
+   - menu/view transitions in UI flow
+   - combat/physics/rules in simulation
+   - sprite/tile/world rendering decisions in render system
+
+3. Wire your implementations into `GameRules` (constructor injection):
+
+```cpp
+// Example usage pattern
+game::GameRules rules(
+  std::make_unique<MyBootstrap>(),
+  std::make_unique<MyInputSystem>(),
+  std::make_unique<MyUIFlow>(),
+  std::make_unique<MySimulationSystem>(),
+  std::make_unique<MyRenderSystem>());
+```
+
+4. Run with the existing app shell:
+   - `App::Run()` creates `Engine`
+   - pass your `GameRules` instance to `engine.run(rules)`
+
+5. Build and test:
+   - `cmake --preset default`
+   - `cmake --build build --target game`
+
+### Minimal implementation order
+
+1. `IBootstrap` first (loads resources + builds initial world)
+2. `IRenderSystem` second (draw the world)
+3. `IInputSystem` third (basic movement/actions)
+4. `ISimulationSystem` fourth (state updates/collision)
+5. `IUIFlow` last (menus, pause, scene overlays)
+
+This order gets a runnable prototype quickly, then layers behavior cleanly.
+
 ## Build
 
 Configure:
