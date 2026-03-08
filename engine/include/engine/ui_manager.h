@@ -1,7 +1,7 @@
 #pragma once
 
 #include "imgui.h"
-#include "animation.h"
+#include "engine/animation.h"
 #include <SDL3/SDL_render.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <optional>

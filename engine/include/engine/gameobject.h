@@ -1,9 +1,9 @@
 #pragma once
 #include <glm/glm.hpp>
 #include <vector>
-#include "animation.h"
+#include "engine/animation.h"
 #include <SDL3/SDL.h>
-#include "level_types.h"
+#include "engine/level_types.h"
 
 enum class PlayerState: std::uint32_t {
   idle, running, jumping, swingWeapon, hurt, dead

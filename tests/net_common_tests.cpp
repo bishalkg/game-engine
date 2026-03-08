@@ -2,8 +2,8 @@
 #include <cmath>
 #include <iostream>
 
-#include "gameobject.h"
-#include "game_net_common.h"
+#include "engine/gameobject.h"
+#include "engine/net/game_net_common.h"
 
 namespace {
 

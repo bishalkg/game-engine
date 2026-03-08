@@ -1,7 +1,7 @@
 #pragma once
 
 #include "net/net_server.h"
-#include "game_net_common.h"
+#include "engine/net/game_net_common.h"
 
 
 

@@ -1,5 +1,5 @@
-#include "game_server.h"
-#include "gameengine.h"
+#include "engine/net/game_server.h"
+#include "engine/engine.h"
 
 namespace game_engine {
 

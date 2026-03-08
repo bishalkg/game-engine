@@ -11,11 +11,11 @@
 #include <SDL3_image/SDL_image.h>
 #include <glm/glm.hpp>
 
-#include "gameobject.h"
-#include "net/game_server.h" // needs complete type for unique_ptr destructor
-#include "net/game_client.h"
-#include "level_types.h"
-#include "ui_manager.h"
+#include "engine/gameobject.h"
+#include "engine/net/game_server.h" // needs complete type for unique_ptr destructor
+#include "engine/net/game_client.h"
+#include "engine/level_types.h"
+#include "engine/ui_manager.h"
 
 #include "imgui.h"
 #include "backends/imgui_impl_sdl3.h"
@@ -23,7 +23,7 @@
 
 #include <SDL3_mixer/SDL_mixer.h>
 
-#include "tmx.h"
+#include "engine/tmx.h"
 #include <algorithm>
 
 namespace eng {
