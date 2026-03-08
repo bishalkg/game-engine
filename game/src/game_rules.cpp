@@ -52,8 +52,8 @@ void GameRules::onUpdate(game_engine::Engine& engine, float deltaTime) {
   snaps_.togglePauseGameplay = false;
 }
 
-void GameRules::onRender(game_engine::Engine& engine, float) {
-  renderSystem_->render(engine, 0.0f, lastEngineActions_);
+void GameRules::onRender(game_engine::Engine& engine, float deltaTime) {
+  renderSystem_->render(engine, deltaTime, lastEngineActions_);
   engine.getResources().m_uiManager.renderPresent(engine.getSDLState());
 }
 
