@@ -153,7 +153,7 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
 }
 
 void game_engine::Engine::run(eng::IGameRules& rules) {
-  if (!rules.onInit(*this)) {
+  if (!rules.onInit(*this)) { // init the rules for particular game
     return;
   }
 

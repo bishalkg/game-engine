@@ -1,6 +1,7 @@
-# game_engine
+# 2D Game Engine
 
 2D SDL3-based game project split into an `engine` static library and a `game` app.
+It is meant to be used alongside `Tiled` to create levels and `Asperite` to create textures.
 
 ## Repo Layout
 
@@ -158,6 +159,7 @@ game::GameRules rules(
   std::make_unique<MySimulationSystem>(),
   std::make_unique<MyRenderSystem>());
 ```
+   - example: DefaultSimulationSystem is an implementation of ISimulationSystem. The impl gets used in GameRules::onUpdate ( via `simulationSystem_->update(...)` ) which is a hook into the game engine flow.
 
 4. Run with the existing app shell:
    - `App::Run()` creates `Engine`
@@ -260,7 +262,7 @@ build/game.app/
 
 ### Runtime Path Behavior
 
-At startup, `App::Run()` detects if it is running from `.app/Contents/MacOS` and changes current working directory to `.app/Contents/Resources`.  
+At startup, `App::Run()` detects if it is running from `.app/Contents/MacOS` and changes current working directory to `.app/Contents/Resources`.
 This keeps existing relative asset paths (for example `data/cutscenes/fonts/...`) working without changing all loaders.
 
 ### Verify the Bundle
