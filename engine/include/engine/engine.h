@@ -647,13 +647,13 @@ namespace game_engine {
         };
 
         texCharSelect = m_currLevel->loadTexture(state.renderer, "data/cutscenes/menu/character_select.png");
-        charSelectAnim = std::make_shared<Animation>(1, 1.0f);
+        charSelectAnim = std::make_shared<Animation>(8, 2.0f);
         characterSelectScene = {
           UIManager::Cutscene{
           .tex = texCharSelect,
           .anim = charSelectAnim,
           .scale = 1.0,
-          .numFrameColumns = 1,
+          .numFrameColumns = 3,
           .frameH = 360.0f,
           .frameW = 640.0f,
           .loopScene = false,
