@@ -65,8 +65,6 @@ struct BulletData{
   BulletData(): state(BulletState::moving), liveTimer(0.7f) {};
 };
 
-
-
 union ObjectData {
   PlayerData player;
   LevelData level;

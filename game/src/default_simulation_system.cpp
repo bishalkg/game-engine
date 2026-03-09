@@ -930,9 +930,11 @@ static void handleCollision(SimContext& ctx, GameObject &a, GameObject &b, float
 class DefaultSimulationSystem final : public game::ISimulationSystem {
 public:
   void update(game_engine::Engine& engine, float deltaTime, const UIManager::UIActions& actions) override {
+
     SimContext ctx{engine, engine.getGameState(), engine.getResources(), engine.getSDLState()};
     auto& player = engine.getPlayer();
     updateGameplayState(ctx, deltaTime, player, actions);
+
   }
 };
 

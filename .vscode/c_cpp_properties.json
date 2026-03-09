@@ -1,31 +1,10 @@
 {
     "configurations": [
         {
-            "name": "CMake",
-            "configurationProvider": "ms-vscode.cmake-tools",
+            "name": "clang-arm64",
             "compileCommands": "${workspaceFolder}/build/compile_commands.json",
             "intelliSenseMode": "macos-clang-arm64",
-            "cppStandard": "c++23",
-            "includePath": [
-                "${workspaceFolder}",
-                "${workspaceFolder}/engine/include",
-                "${workspaceFolder}/engine/include/engine",
-                "${workspaceFolder}/engine/include/engine/net",
-                "${workspaceFolder}/game/include",
-                "${workspaceFolder}/game/include/game",
-                "${workspaceFolder}/vendor/imgui",
-                "${workspaceFolder}/vendor/imgui/backends",
-                "${workspaceFolder}/vendor/asio",
-                "/opt/homebrew/include",
-                "/opt/homebrew/include/SDL3",
-                "/opt/homebrew/include/SDL3_image",
-                "/opt/homebrew/include/SDL3_mixer",
-                "/opt/homebrew/include/SDL3_ttf",
-                "/Users/bishalgautam/SDL3-3.3/include",
-                "/Users/bishalgautam/SDL3-image-3.3/include",
-                "/Users/bishalgautam/SDL3-mixer-3.1.0/include",
-                "/Users/bishalgautam/SDL3_ttf-custom/include"
-            ]
+            "cppStandard": "c++23"
         }
     ],
     "version": 4

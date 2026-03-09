@@ -302,6 +302,11 @@ namespace game_engine {
     SDL_Texture *texMainMenu;
     std::shared_ptr<Animation> mainMenuAnim;
     MIX_Track *mainMenuTrack;
+    std::vector<UIManager::Cutscene> mainMenuCutscene;
+
+    SDL_Texture *texCharSelect;
+    std::shared_ptr<Animation> charSelectAnim;
+    std::vector<UIManager::Cutscene> characterSelectScene;
 
     // ----- AudioManager
     // TODO track is for long running music. Audio is for one time sound effects.
@@ -329,7 +334,6 @@ namespace game_engine {
     UIManager::UI_Manager m_uiManager;
 
     std::unique_ptr<Level> m_currLevel;
-    std::vector<UIManager::Cutscene> mainMenuCutscene;
     LevelIndex m_currLevelIdx;
 
     // cutscenes
@@ -620,7 +624,7 @@ namespace game_engine {
         // texBulletHit = loadTexture(state.renderer, "data/bullet_hit.png");
         texBulletHit = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
         texBullet = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
-        texMainMenu = m_currLevel->loadTexture(state.renderer, "data/maps/title_screen/title_screen_3.png");
+        texMainMenu = m_currLevel->loadTexture(state.renderer, "data/maps/title_screen/title_screen.png");
 
 
 
@@ -639,6 +643,20 @@ namespace game_engine {
           .frameW = 800.0f,
           .yOffset = -50,
           .loopScene = true,
+          }
+        };
+
+        texCharSelect = m_currLevel->loadTexture(state.renderer, "data/cutscenes/menu/character_select.png");
+        charSelectAnim = std::make_shared<Animation>(8, 2.0f);
+        characterSelectScene = {
+          UIManager::Cutscene{
+          .tex = texCharSelect,
+          .anim = charSelectAnim,
+          .scale = 1.0,
+          .numFrameColumns = 3,
+          .frameH = 360.0f,
+          .frameW = 640.0f,
+          .loopScene = false,
           }
         };
 
