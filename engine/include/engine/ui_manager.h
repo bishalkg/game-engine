@@ -19,6 +19,7 @@ namespace UIManager {
       MainMenu,
       PauseMenu,
       CutScene,
+      CharacterSelect,
       LevelLoading,
       InventoryMenu,
       GameOver,
@@ -135,6 +136,7 @@ namespace UIManager {
       UIActions drawMainMenu(const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState);
       UIActions drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawPausedMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
+      UIActions drawCharacterSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       float drawCustomSlider(const std::string& label, float currVal, float v_min, float v_max);
 

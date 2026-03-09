@@ -228,7 +228,8 @@ namespace UIManager {
 
     act.stopBackgroundTrack = true;
     place("##single", [&]{
-      act.nextView = GameView::CutScene;
+      // act.nextView = GameView::CutScene;
+      act.nextView = GameView::CharacterSelect;
       // act.nextView = GameView::Playing; // need to set this one the cutscene is done
       // act.startSinglePlayer = true;
     });
@@ -360,6 +361,91 @@ namespace UIManager {
       return act;
   }
 
+    UIActions UI_Manager::drawCharacterSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags) {
+      UIActions act;
+      act.blockGameplayUpdates = true;
+      act.drawSceneOverlay = true;
+      act.dimBackground = true;
+
+      // cutscene draws the textures
+      if (snaps.cutSceneID != cutscenePlr.cutSceneID && snaps.cutscene) {
+        cutscenePlr.start(snaps.cutSceneID, snaps.cutscene);
+      }
+
+      cutscenePlr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
+
+      auto scn = cutscenePlr.currScene();
+
+      // 1) Reference = the PNG’s pixel size
+      const float refW = scn.frameW;   // texture width
+      const float refH = scn.frameH;  // texture height
+
+      // 2) Measure the button stack in the PNG (in pixels of the art)
+      const float btnOriginX = 265.0f; // left edge of the first green button in the art
+      const float btnOriginY = 40.0f; // top edge of the first button in the art
+      const float btnW_ref   = 114.0f;
+      const float btnH_ref   = 20.0f;
+      const float btnGap_ref = 12.0f;  // vertical gap between buttons
+
+      // 3) Scale & offset to current window (letterboxed)
+      int outW, outH; SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
+      float scale  = std::min(outW / refW, outH / refH);
+
+      float offX   = (outW - refW * scale) * 0.5f;
+      float offY   = (outH - refH * scale) * 0.5f;
+
+      // 4) Place buttons in that space
+      ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1,1,1,0.15f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1,1,1,0.25f));
+      ImGui::Begin("##character_select", nullptr,
+          ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
+          ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
+          ImGuiWindowFlags_NoScrollbar);
+
+      ImVec2 pos(offX + btnOriginX * scale, offY + btnOriginY * scale);
+      bool anyHovered = false;
+      auto place = [&](const char* id, auto onClick) {
+        ImGui::SetCursorScreenPos(pos);
+        if (ImGui::Button(id, ImVec2(btnW_ref * scale, btnH_ref * scale))) onClick();
+        anyHovered |= ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly);
+        pos.y += (btnH_ref + btnGap_ref) * scale;
+      };
+
+      place("##marie", [&]{
+        // act.restartLevel = true;
+        // act.stopGameOverSoundTrack = true;
+        act.nextView = GameView::Playing; // TODO hook this up to the next levels cutscene
+
+      });
+      place("##bonkfather", [&]{
+        // act.restartLevel = true;
+        // act.stopGameOverSoundTrack = true;
+        act.nextView = GameView::Playing;
+      });
+
+      if (anyHovered) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+      }
+      ImGui::PopStyleVar(2);
+      ImGui::PopStyleColor(4);
+      ImGui::End();
+
+
+      act.blockMainGameDraw = true;
+      // animated backdrop: stepped in renderView before this call
+      if (cutscenePlr.scenes && !cutscenePlr.scenes->empty()) {
+        draw(sdlState, snaps.deltaTime, false, false, 0);
+      } else {
+        ImGui::Render(); // must force render to close out imgui cycle.
+      }
+
+      return act;
+  }
+
   UIActions UI_Manager::drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags) {
       UIActions act;
       ImGui::Begin("MultiPlayer Menu", nullptr, flags);
@@ -451,6 +537,7 @@ namespace UIManager {
           cutscenePlr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
           return drawMainMenu(snaps, flags, sdlState);
         }
+        case GameView::CharacterSelect: return drawCharacterSelectScreen(snaps, flags);
         case GameView::LevelLoading: return drawLoading(snaps, flags);
         case GameView::GameOver: return drawGameOver(snaps.loading, flags);
         case GameView::Playing: return drawGameplay(snaps, flags);

@@ -37,6 +37,12 @@ public:
         snaps.cutSceneID = -3;
         break;
       }
+      case UIManager::GameView::CharacterSelect: {
+        snaps.deltaTime = deltaTime;
+        snaps.cutscene = &resources.characterSelectScene;
+        snaps.cutSceneID = -4;
+        break;
+      }
       case UIManager::GameView::PauseMenu: {
         snaps.deltaTime = deltaTime;
         snaps.cutscene = &resources.pauseMenuScene;
