@@ -21,6 +21,7 @@ public:
     snaps.playerHP = player.data.player.healthPoints;
     snaps.playerMana = player.data.player.manaPoints;
     snaps.winDims = ImVec2(static_cast<float>(sdlState.logW), static_cast<float>(sdlState.logH));
+    snaps.debugMode = gameState.debugMode;
 
     switch (gameState.currentView) {
       case UIManager::GameView::LevelLoading: {

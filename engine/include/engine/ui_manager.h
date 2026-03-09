@@ -71,6 +71,7 @@ namespace UIManager {
     Animation* mainMenuAnim{nullptr};
     SDL_Texture* mainMenuTex{nullptr};
 
+    bool debugMode = false;
     bool advanceToNextScene = false;
     bool togglePauseGameplay = false;
     const std::vector<Cutscene>* cutscene{nullptr};
@@ -149,6 +150,8 @@ namespace UIManager {
       CutscenePlayer cutscenePlr;
       game_engine::SDLState& sdlState;
       TTF_Font& font;
+      bool wantsHandCursor = false;
+      bool debugMode = false;
   };
 
 

@@ -4,6 +4,7 @@
 #include "imgui_impl_sdlrenderer3.h"
 #include "imgui_impl_sdl3.h"
 
+#include <cstdio>
 #include <iostream>
 
 namespace UIManager {
@@ -35,9 +36,32 @@ namespace UIManager {
 
     SDL_SetRenderLogicalPresentation(sdlState.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
 
+    // Always use ImGui software cursor and let backend hide the OS cursor.
+    ImGuiIO& io = ImGui::GetIO();
+    io.MouseDrawCursor = true;
+    ImGui::SetMouseCursor(wantsHandCursor ? ImGuiMouseCursor_Hand : ImGuiMouseCursor_None);
+
     // ui.render()
     ImGui::Render();
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), sdlState.renderer);
+
+    // Cursor-state probe for debugging hover/cursor behavior.
+    // constexpr bool kShowCursorDebug = false;
+    if (debugMode) {
+      char cursorDebug[128];
+      std::snprintf(
+        cursorDebug,
+        sizeof(cursorDebug),
+        "wantsHand=%d mouseDraw=%d imguiCursor=%d osVisible=%d noCurChange=%d",
+        wantsHandCursor ? 1 : 0,
+        io.MouseDrawCursor ? 1 : 0,
+        static_cast<int>(ImGui::GetMouseCursor()),
+        SDL_CursorVisible() ? 1 : 0,
+        (io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange) ? 1 : 0);
+      SDL_SetRenderDrawColor(sdlState.renderer, 255, 255, 0, 255);
+      SDL_RenderDebugText(sdlState.renderer, 8.0f, 8.0f, cursorDebug);
+    }
+
     SDL_SetRenderLogicalPresentation(sdlState.renderer, sdlState.logW, sdlState.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
     // renderer.present()
@@ -224,13 +248,9 @@ namespace UIManager {
     auto place = [&](const char* id, auto onClick) {
         ImGui::SetCursorScreenPos(pos);
         if (ImGui::Button(id, ImVec2(btnW, btnH))) onClick();
-        anyHovered |= ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly);
+        anyHovered |= ImGui::IsItemHovered();
         pos.y += btnH + spacing;
     };
-    if (anyHovered) {
-      ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-    }
-
     act.stopBackgroundTrack = true;
     place("##single", [&]{
       // act.nextView = GameView::CutScene;
@@ -245,7 +265,7 @@ namespace UIManager {
     ImGui::PopStyleColor(3);
     ImGui::End();
     if (anyHovered) {
-      ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+      wantsHandCursor = true;
     }
 
     act.blockMainGameDraw = true;
@@ -324,6 +344,8 @@ namespace UIManager {
       ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
       ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1,1,1,0.15f));
       ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1,1,1,0.25f));
+      ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+      ImGui::SetNextWindowSize(ImVec2(static_cast<float>(outW), static_cast<float>(outH)));
       ImGui::Begin("##pause_hitboxes", nullptr,
           ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
           ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
@@ -334,7 +356,7 @@ namespace UIManager {
       auto place = [&](const char* id, auto onClick) {
         ImGui::SetCursorScreenPos(pos);
         if (ImGui::Button(id, ImVec2(btnW_ref * scale, btnH_ref * scale))) onClick();
-        anyHovered |= ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly);
+        anyHovered |= ImGui::IsItemHovered();
         pos.y += (btnH_ref + btnGap_ref) * scale;
       };
 
@@ -351,12 +373,12 @@ namespace UIManager {
       place("##shop",   [&]{ });
       place("##craft",   [&]{ });
       place("##quit",   [&]{ act.nextView = UIManager::GameView::MainMenu; act.stopBackgroundTrack = true; });
-      if (anyHovered) {
-        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-      }
       ImGui::PopStyleVar(2);
       ImGui::PopStyleColor(4);
       ImGui::End();
+      if (anyHovered) {
+        wantsHandCursor = true;
+      }
 
 
       if (snaps.togglePauseGameplay) {
@@ -406,6 +428,8 @@ namespace UIManager {
       ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
       ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1,1,1,0.15f));
       ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1,1,1,0.25f));
+      ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+      ImGui::SetNextWindowSize(ImVec2(static_cast<float>(outW), static_cast<float>(outH)));
       ImGui::Begin("##character_select", nullptr,
           ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
           ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
@@ -416,7 +440,7 @@ namespace UIManager {
       auto place = [&](const char* id, auto onClick) {
         ImGui::SetCursorScreenPos(pos);
         if (ImGui::Button(id, ImVec2(btnW_ref * scale, btnH_ref * scale))) onClick();
-        anyHovered |= ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly);
+        anyHovered |= ImGui::IsItemHovered();
         pos.x += (btnH_ref + btnGap_ref) * scale;
       };
 
@@ -432,12 +456,12 @@ namespace UIManager {
         act.nextView = GameView::Playing;
       });
 
-      if (anyHovered) {
-        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-      }
       ImGui::PopStyleVar(2);
       ImGui::PopStyleColor(4);
       ImGui::End();
+      if (anyHovered) {
+        wantsHandCursor = true;
+      }
 
 
       act.blockMainGameDraw = true;
@@ -496,7 +520,9 @@ namespace UIManager {
       if (ImGui::Button("Pause Game", defaultButtonSize) || snaps.togglePauseGameplay) {
         act.nextView = UIManager::GameView::PauseMenu;
       }
-      if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+      if (ImGui::IsItemHovered()) {
+        wantsHandCursor = true;
+      }
       ImGui::PopItemFlag();
       ImGui::PopStyleVar(2);
       ImGui::End();
@@ -525,13 +551,16 @@ namespace UIManager {
   }
 
   UIActions UI_Manager::renderView(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState) {
+      ImGuiIO& io = ImGui::GetIO();
+      io.MouseDrawCursor = true;
       ImGui_ImplSDLRenderer3_NewFrame();
       ImGui_ImplSDL3_NewFrame();
       ImGui::NewFrame();
+      wantsHandCursor = false;
 
-      ImGuiIO& io = ImGui::GetIO();
       ImGui::SetNextWindowPos(ImVec2(0, 0));
       ImGui::SetNextWindowSize(io.DisplaySize);
+      debugMode = snaps.debugMode;
 
       switch (view) {
         case GameView::MainMenu: return drawMainMenu(snaps, flags, sdlState);
