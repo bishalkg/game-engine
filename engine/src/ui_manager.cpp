@@ -174,6 +174,11 @@ namespace UIManager {
   // Local helper for the main menu (not a member).
   UIActions UI_Manager::drawMainMenu(const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState) {
 
+    if (cutscenePlr.cutSceneID != snaps.cutSceneID && snaps.cutscene) {
+      cutscenePlr.start(snaps.cutSceneID, snaps.cutscene);
+    }
+    cutscenePlr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
+
     UIActions act;
 
     ImGui::Begin("##menu_hitboxes", nullptr, ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
@@ -381,11 +386,11 @@ namespace UIManager {
       const float refH = scn.frameH;  // texture height
 
       // 2) Measure the button stack in the PNG (in pixels of the art)
-      const float btnOriginX = 265.0f; // left edge of the first green button in the art
-      const float btnOriginY = 40.0f; // top edge of the first button in the art
-      const float btnW_ref   = 114.0f;
-      const float btnH_ref   = 20.0f;
-      const float btnGap_ref = 12.0f;  // vertical gap between buttons
+      const float btnOriginX = 130.0f; // left edge of the first green button in the art
+      const float btnOriginY = 100.0f; // top edge of the first button in the art
+      const float btnW_ref   = 140.0f;
+      const float btnH_ref   = 150.0f;
+      const float btnGap_ref = 90.0f;  // vertical gap between buttons
 
       // 3) Scale & offset to current window (letterboxed)
       int outW, outH; SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
@@ -412,7 +417,7 @@ namespace UIManager {
         ImGui::SetCursorScreenPos(pos);
         if (ImGui::Button(id, ImVec2(btnW_ref * scale, btnH_ref * scale))) onClick();
         anyHovered |= ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly);
-        pos.y += (btnH_ref + btnGap_ref) * scale;
+        pos.x += (btnH_ref + btnGap_ref) * scale;
       };
 
       place("##marie", [&]{
@@ -529,14 +534,7 @@ namespace UIManager {
       ImGui::SetNextWindowSize(io.DisplaySize);
 
       switch (view) {
-        case GameView::MainMenu:
-        {
-          if (cutscenePlr.cutSceneID != snaps.cutSceneID && snaps.cutscene) {
-            cutscenePlr.start(snaps.cutSceneID, snaps.cutscene);
-          }
-          cutscenePlr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
-          return drawMainMenu(snaps, flags, sdlState);
-        }
+        case GameView::MainMenu: return drawMainMenu(snaps, flags, sdlState);
         case GameView::CharacterSelect: return drawCharacterSelectScreen(snaps, flags);
         case GameView::LevelLoading: return drawLoading(snaps, flags);
         case GameView::GameOver: return drawGameOver(snaps.loading, flags);
