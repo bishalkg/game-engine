@@ -39,7 +39,7 @@ namespace UIManager {
     // Always use ImGui software cursor and let backend hide the OS cursor.
     ImGuiIO& io = ImGui::GetIO();
     io.MouseDrawCursor = true;
-    ImGui::SetMouseCursor(wantsHandCursor ? ImGuiMouseCursor_Hand : ImGuiMouseCursor_None);
+    ImGui::SetMouseCursor(wantsHandCursor ? ImGuiMouseCursor_Hand : ImGuiMouseCursor_Arrow);
 
     // ui.render()
     ImGui::Render();
