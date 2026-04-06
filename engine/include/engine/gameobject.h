@@ -9,6 +9,12 @@ enum class PlayerState: std::uint32_t {
   idle, running, jumping, swingWeapon, hurt, dead
 };
 
+enum class PlayerSwingStage: std::uint32_t {
+  None,
+  Attack1,
+  Attack2,
+};
+
 enum class BulletState: std::uint32_t {
   moving, colliding, inactive
 };
@@ -30,6 +36,10 @@ struct PlayerData {
   Timer jumpWindupTimer;
   bool jumpImpulseApplied;
   bool playLandingFrame = false;
+  PlayerSwingStage swingStage = PlayerSwingStage::None;
+  bool queuedFollowupSwing = false;
+  bool meleePressedThisFrame = false;
+  int meleeDamage = 50;
 
   PlayerData(): weaponTimer(0.1f), damageTimer(0.5f), jumpWindupTimer(0.00f), manaRecoveryTimer(0.2f), healthRecoveryTimer(0.2f) { state = PlayerState::idle; healthPoints = maxHealthPoints = manaPoints = maxManaPoints = 100;};
 };

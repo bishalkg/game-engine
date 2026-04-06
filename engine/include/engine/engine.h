@@ -231,7 +231,7 @@ namespace game_engine {
 
   struct EntityResources {
     SDL_Texture *texIdle, *texWalk, *texRun, *texSlide, *texAttack, *texJump, *texHit, *texDie,
-          *texShoot, *texRunShoot, *texSlideShoot, *texRunAttack;
+          *texShoot, *texRunShoot, *texSlideShoot, *texRunAttack, *texAttack2;
     std::vector<Animation> anims;
   };
 
@@ -292,6 +292,7 @@ namespace game_engine {
     const int ANIM_HIT = 8;
     const int ANIM_DIE = 9;
     const int ANIM_RUN_ATTACK = 10;
+    const int ANIM_SWING_2 = 11;
 
     const int ANIM_MAIN_MENU = 0;
 
@@ -508,6 +509,10 @@ namespace game_engine {
           m_currLevel->texCharacterMap[character].texRun = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.runTex);
           m_currLevel->texCharacterMap[character].texAttack = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.attackTex);
           m_currLevel->texCharacterMap[character].texRunAttack = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.runAttackTex);
+          m_currLevel->texCharacterMap[character].texAttack2 =
+            spriteAssets.paths.attackTex2.empty()
+              ? nullptr
+              : m_currLevel->loadTexture(state.renderer, spriteAssets.paths.attackTex2);
           m_currLevel->texCharacterMap[character].texHit = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.hitTex);
           m_currLevel->texCharacterMap[character].texDie = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.dieTex);
           m_currLevel->texCharacterMap[character].texShoot = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.shootTex);
@@ -517,7 +522,7 @@ namespace game_engine {
           m_currLevel->texCharacterMap[character].texJump = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.jumpTex);
 
           // TODO THIS IS SIZE OF ANIMS
-          m_currLevel->texCharacterMap[character].anims.resize(11);
+          m_currLevel->texCharacterMap[character].anims.resize(12);
           auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
           m_currLevel->texCharacterMap[character].anims[ANIM_IDLE] = Animation(idleFrames, idleSeconds);
 
@@ -544,6 +549,11 @@ namespace game_engine {
 
           auto [attackFrames, attackSeconds] = spriteAssets.animSettings.at(ANIM_SWING);
           m_currLevel->texCharacterMap[character].anims[ANIM_SWING] = Animation(attackFrames, attackSeconds);
+
+          if (spriteAssets.animSettings.contains(ANIM_SWING_2)) {
+            auto [attack2Frames, attack2Seconds] = spriteAssets.animSettings.at(ANIM_SWING_2);
+            m_currLevel->texCharacterMap[character].anims[ANIM_SWING_2] = Animation(attack2Frames, attack2Seconds);
+          }
 
           auto [jumpFrames, jumpSeconds] = spriteAssets.animSettings.at(ANIM_JUMP);
           m_currLevel->texCharacterMap[character].anims[ANIM_JUMP] = Animation(jumpFrames, jumpSeconds, 2);
