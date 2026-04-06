@@ -241,7 +241,7 @@ bool initAllTiles(Engine& engine, GameState& newGameState) {
         }
 
         if (obj.type == "Player") {
-          SpriteType spriteType = CHARACTER_NAME_TO_SPRITE_TYPE.at(obj.name);
+          SpriteType spriteType = gs.selectedPlayerSprite;
           int texDim = 128;
 
           GameObject player = createObject(
@@ -267,6 +267,7 @@ bool initAllTiles(Engine& engine, GameState& newGameState) {
               player.colliderNorm = {.x = 0.30f, .y = 0.5f, .w = wFrac, .h = 0.5f};
               break;
             case SpriteType::Player_Marie:
+            case SpriteType::Player_Bonkfather:
               player.colliderNorm = {.x = 0.30f, .y = 0.5f, .w = wFrac, .h = 0.5f};
               player.drawScale = 2.0f;
               break;
@@ -343,6 +344,7 @@ bool switchToLevel(game_engine::Engine& engine, LevelIndex levelId) {
   }
 
   GameState newGameState(sdlState);
+  newGameState.selectedPlayerSprite = gameState.selectedPlayerSprite;
   newGameState.currentView = UIManager::GameView::LevelLoading;
   if (!initAllTiles(engine, newGameState)) {
     return false;

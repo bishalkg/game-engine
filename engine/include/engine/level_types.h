@@ -24,7 +24,7 @@ const int ANIM_DIE = 9;
 const int ANIM_RUN_ATTACK = 10;
 
 enum class SpriteType: std::uint32_t {
-  Player_Knight, Player_Mage, Minotaur_1, Skeleton_Warrior, Red_Werewolf, Player_Marie, Skeleton_Pikeman
+  Player_Knight, Player_Mage, Minotaur_1, Skeleton_Warrior, Red_Werewolf, Player_Marie, Skeleton_Pikeman, Player_Bonkfather
 };
 
 struct SpriteAssetPaths {

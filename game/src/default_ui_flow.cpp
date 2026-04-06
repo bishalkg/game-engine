@@ -94,6 +94,12 @@ public:
     if (actions.quitGame) {
       engine.requestQuit();
     }
+    if (actions.selectedPlayerSprite) {
+      gameState.selectedPlayerSprite = *actions.selectedPlayerSprite;
+      if (resources.m_currLevel) {
+        (void)game::switchToLevel(engine, resources.m_currLevelIdx);
+      }
+    }
     if (actions.nextView) {
       gameState.currentView = *actions.nextView;
     }

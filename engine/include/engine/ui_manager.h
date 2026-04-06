@@ -1,10 +1,13 @@
 #pragma once
 
+#include "engine/level_types.h"
 #include "imgui.h"
 #include "engine/animation.h"
 #include <SDL3/SDL_render.h>
 #include <SDL3_ttf/SDL_ttf.h>
+#include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 
@@ -42,6 +45,7 @@ namespace UIManager {
     std::optional<bool> startSinglePlayer;
     std::optional<bool> startMultiPlayerHost;
     std::optional<bool> startMultiPlayerClient;
+    std::optional<SpriteType> selectedPlayerSprite;
     std::optional<GameView> nextView;
     bool quitGame = false;
   };

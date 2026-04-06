@@ -4,6 +4,7 @@
 
 namespace game {
 
+// defaults when GameRules gamerules; (without passing in any components)
 GameRules::GameRules(
   std::unique_ptr<IBootstrap> bootstrap,
   std::unique_ptr<IInputSystem> inputSystem,

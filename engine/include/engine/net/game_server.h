@@ -3,6 +3,7 @@
 #include "net/net_server.h"
 #include "engine/net/game_net_common.h"
 
+#include <memory>
 
 
 namespace game_engine {

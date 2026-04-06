@@ -1,10 +1,11 @@
 #pragma once
 #include <iostream>
-#include <vector>
-#include <string>
-#include <format>
 #include <array>
 #include <filesystem>
+#include <format>
+#include <memory>
+#include <string>
+#include <vector>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -100,6 +101,7 @@ namespace game_engine {
         layers(std::move(other.layers)),
         bullets(std::move(other.bullets)),
         debugMode(other.debugMode),
+        selectedPlayerSprite(other.selectedPlayerSprite),
         playerLayer(other.playerLayer),
         playerIndex(other.playerIndex),
         mapViewport(other.mapViewport),
@@ -116,6 +118,7 @@ namespace game_engine {
         layers              = std::move(other.layers);
         bullets             = std::move(other.bullets);
         debugMode           = other.debugMode;
+        selectedPlayerSprite= other.selectedPlayerSprite;
         playerLayer         = other.playerLayer;
         playerIndex         = other.playerIndex;
         mapViewport         = other.mapViewport;
@@ -137,6 +140,7 @@ namespace game_engine {
       // std::vector<GameObject> foregroundTiles;
       std::vector<GameObject> bullets;
       bool debugMode;
+      SpriteType selectedPlayerSprite{SpriteType::Player_Marie};
 
       int playerLayer, playerIndex;
       SDL_FRect mapViewport; // viewable part of map

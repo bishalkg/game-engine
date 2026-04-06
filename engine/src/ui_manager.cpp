@@ -445,14 +445,12 @@ namespace UIManager {
       };
 
       place("##marie", [&]{
-        // act.restartLevel = true;
-        // act.stopGameOverSoundTrack = true;
+        act.selectedPlayerSprite = SpriteType::Player_Marie;
         act.nextView = GameView::CutScene; // TODO hook this up to the next levels cutscene
 
       });
       place("##bonkfather", [&]{
-        // act.restartLevel = true;
-        // act.stopGameOverSoundTrack = true;
+        act.selectedPlayerSprite = SpriteType::Player_Bonkfather;
         act.nextView = GameView::CutScene;
       });
 
