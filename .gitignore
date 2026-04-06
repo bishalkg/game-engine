@@ -72,3 +72,5 @@
 /data/move*
 /data/*
 *notes.txt
+
+/.DS_Store

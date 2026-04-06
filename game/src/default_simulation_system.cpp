@@ -199,18 +199,62 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
       obj.data.player.maxManaPoints);
     }
 
+    const bool hasSwingFollowup =
+      entityRes.texAttack2 != nullptr &&
+      static_cast<int>(obj.animations.size()) > ctx.resources.ANIM_SWING_2 &&
+      obj.animations[ctx.resources.ANIM_SWING_2].getFrameCount() > 0;
+
+    const auto resetSwingState = [&obj]() {
+      obj.data.player.swingStage = PlayerSwingStage::None;
+      obj.data.player.queuedFollowupSwing = false;
+      obj.data.player.meleeDamage = 50;
+    };
+
+    const auto exitSwingState = [&obj, &entityRes, &ctx, &currDirection, baseFacing, resetSwingState]() {
+      resetSwingState();
+      obj.collider = baseFacing(obj);
+
+      if (!obj.grounded) {
+        obj.data.player.state = PlayerState::jumping;
+        obj.texture = entityRes.texJump;
+        obj.currentAnimation = ctx.resources.ANIM_JUMP;
+        obj.animations[ctx.resources.ANIM_JUMP].reset();
+        return;
+      }
+
+      if (currDirection != 0) {
+        obj.data.player.state = PlayerState::running;
+        obj.texture = entityRes.texRun;
+        obj.currentAnimation = ctx.resources.ANIM_RUN;
+        obj.animations[ctx.resources.ANIM_RUN].reset();
+        return;
+      }
+
+      obj.data.player.state = PlayerState::idle;
+      obj.texture = entityRes.texIdle;
+      obj.currentAnimation = ctx.resources.ANIM_IDLE;
+      obj.animations[ctx.resources.ANIM_IDLE].reset();
+    };
+
+    const auto startAttack1 = [&obj, &ctx, widenColliderForSwing, resetSwingState](
+      SDL_Texture* attackTex,
+      int attackAnimIndex) {
+      resetSwingState();
+      obj.texture = attackTex;
+      obj.currentAnimation = attackAnimIndex;
+      obj.animations[attackAnimIndex].reset();
+      obj.data.player.state = PlayerState::swingWeapon;
+      obj.data.player.swingStage = PlayerSwingStage::Attack1;
+      widenColliderForSwing(obj);
+      MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioSword1);
+    };
+
     const auto handleAttacking = [&obj, &entityRes, &weaponTimer, &currDirection, deltaTime, widenColliderForSwing, &ctx](
-      SDL_Texture *tex, SDL_Texture *attackTex, int animIndex, int attackAnimIndex, bool handleJump){
+      SDL_Texture *tex, SDL_Texture *attackTex, int animIndex, int attackAnimIndex, bool handleJump, auto startAttack1){
 
 
         if (ctx.sdlState.keys[SDL_SCANCODE_S] && obj.data.player.state != PlayerState::swingWeapon) {
-
-          obj.texture = attackTex;
-          obj.currentAnimation = attackAnimIndex;
-          obj.animations[attackAnimIndex].reset();
-          obj.data.player.state = PlayerState::swingWeapon;
-          widenColliderForSwing(obj);
-          MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioSword1);
+          startAttack1(attackTex, attackAnimIndex);
 
         } else if (ctx.sdlState.keys[SDL_SCANCODE_A]) {
 
@@ -336,14 +380,16 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
         }
 
         if (wantSwing && canSwing) {
-            handleAttacking(entityRes.texRun, entityRes.texRunAttack, ctx.resources.ANIM_RUN, ctx.resources.ANIM_RUN_ATTACK, false);
+            handleAttacking(entityRes.texRun, entityRes.texRunAttack, ctx.resources.ANIM_RUN, ctx.resources.ANIM_RUN_ATTACK, false, startAttack1);
         } else {
-            handleAttacking(entityRes.texIdle, entityRes.texShoot, ctx.resources.ANIM_IDLE, ctx.resources.ANIM_SHOOT, false);
+            handleAttacking(entityRes.texIdle, entityRes.texShoot, ctx.resources.ANIM_IDLE, ctx.resources.ANIM_SHOOT, false, startAttack1);
         }
 
         break;
       }
       case PlayerState::hurt: {
+        resetSwingState();
+        obj.collider = baseFacing(obj);
         if (obj.data.player.damageTimer.step(deltaTime)) {
           obj.data.player.state = PlayerState::idle;
           obj.texture = entityRes.texIdle;
@@ -353,6 +399,8 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
       }
       case PlayerState::dead:
       {
+        resetSwingState();
+        obj.collider = baseFacing(obj);
         if (obj.currentAnimation != -1 && obj.animations[obj.currentAnimation].isDone()) {
           obj.currentAnimation = -1; // prevent animation from looping after death
           obj.spriteFrame = 4;
@@ -376,12 +424,12 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
 
         // move in opposite dir of velocity, sliding
         if (obj.velocity.x * obj.direction < 0 && obj.grounded) {
-          handleAttacking(entityRes.texSlide, entityRes.texSlideShoot, ctx.resources.ANIM_SLIDE, ctx.resources.ANIM_SLIDE_SHOOT, false);
+          handleAttacking(entityRes.texSlide, entityRes.texSlideShoot, ctx.resources.ANIM_SLIDE, ctx.resources.ANIM_SLIDE_SHOOT, false, startAttack1);
         } else {
           if (wantSwing && canSwing) {
-            handleAttacking(entityRes.texRun, entityRes.texRunAttack, ctx.resources.ANIM_RUN, ctx.resources.ANIM_RUN_ATTACK, false);
+            handleAttacking(entityRes.texRun, entityRes.texRunAttack, ctx.resources.ANIM_RUN, ctx.resources.ANIM_RUN_ATTACK, false, startAttack1);
           } else {
-            handleAttacking(entityRes.texRun, entityRes.texRunShoot, ctx.resources.ANIM_RUN, ctx.resources.ANIM_RUN, false);
+            handleAttacking(entityRes.texRun, entityRes.texRunShoot, ctx.resources.ANIM_RUN, ctx.resources.ANIM_RUN, false, startAttack1);
           }
         }
 
@@ -424,37 +472,64 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
         }
 
         if (wantSwing && canSwing) {
-          handleAttacking(entityRes.texRun, entityRes.texRunAttack, ctx.resources.ANIM_RUN, ctx.resources.ANIM_RUN_ATTACK, false);
+          handleAttacking(entityRes.texRun, entityRes.texRunAttack, ctx.resources.ANIM_RUN, ctx.resources.ANIM_RUN_ATTACK, false, startAttack1);
         } else {
-          handleAttacking(entityRes.texJump, entityRes.texRunShoot, ctx.resources.ANIM_JUMP, ctx.resources.ANIM_JUMP, true);
+          handleAttacking(entityRes.texJump, entityRes.texRunShoot, ctx.resources.ANIM_JUMP, ctx.resources.ANIM_JUMP, true, startAttack1);
         }
         break;
       }
       case PlayerState::swingWeapon: { // handle swinging weapon like handleShooting
-        // sets to idle immediately in next loop even when currentAnimation=10
-        if (obj.currentAnimation == ctx.resources.ANIM_RUN_ATTACK &&
-            obj.animations[ctx.resources.ANIM_RUN_ATTACK].isDone()) {
+        const bool attack1Done =
+          (obj.currentAnimation == ctx.resources.ANIM_RUN_ATTACK &&
+           obj.animations[ctx.resources.ANIM_RUN_ATTACK].isDone()) ||
+          (obj.currentAnimation == ctx.resources.ANIM_SWING &&
+           obj.animations[ctx.resources.ANIM_SWING].isDone());
+        const bool attack2Done =
+          obj.currentAnimation == ctx.resources.ANIM_SWING_2 &&
+          obj.animations[ctx.resources.ANIM_SWING_2].isDone();
 
-            obj.collider = baseFacing(obj);
+        if (obj.data.player.swingStage == PlayerSwingStage::Attack1 &&
+            hasSwingFollowup &&
+            obj.currentAnimation != -1) {
+          Animation& openerAnim = obj.animations[obj.currentAnimation];
+          if (obj.data.player.meleePressedThisFrame &&
+              openerAnim.currentFrame() >= openerAnim.getFrameCount() / 2) {
+            obj.data.player.queuedFollowupSwing = true;
+          }
+        }
 
-            obj.data.player.state = PlayerState::idle;
-            obj.texture = entityRes.texIdle;
-            obj.currentAnimation = ctx.resources.ANIM_IDLE;
+        if (attack1Done && obj.data.player.queuedFollowupSwing && hasSwingFollowup) {
+          if (obj.currentAnimation == ctx.resources.ANIM_RUN_ATTACK) {
             obj.animations[ctx.resources.ANIM_RUN_ATTACK].reset();
-            obj.animations[ctx.resources.ANIM_IDLE].reset();
-        } else if (obj.currentAnimation == ctx.resources.ANIM_SWING &&
-                  obj.animations[ctx.resources.ANIM_SWING].isDone()) {
-            obj.data.player.state = PlayerState::idle;
-            obj.collider = baseFacing(obj);
-            obj.texture = entityRes.texIdle;
-            obj.currentAnimation = ctx.resources.ANIM_IDLE;
+          } else if (obj.currentAnimation == ctx.resources.ANIM_SWING) {
             obj.animations[ctx.resources.ANIM_SWING].reset();
-            obj.animations[ctx.resources.ANIM_IDLE].reset();
+          }
+
+          obj.texture = entityRes.texAttack2;
+          obj.currentAnimation = ctx.resources.ANIM_SWING_2;
+          obj.animations[ctx.resources.ANIM_SWING_2].reset();
+          obj.data.player.swingStage = PlayerSwingStage::Attack2;
+          obj.data.player.queuedFollowupSwing = false;
+          obj.data.player.meleeDamage = 75;
+          widenColliderForSwing(obj);
+          MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioSword1);
+        } else if (attack1Done) {
+          if (obj.currentAnimation == ctx.resources.ANIM_RUN_ATTACK) {
+            obj.animations[ctx.resources.ANIM_RUN_ATTACK].reset();
+          } else if (obj.currentAnimation == ctx.resources.ANIM_SWING) {
+            obj.animations[ctx.resources.ANIM_SWING].reset();
+          }
+          exitSwingState();
+        } else if (attack2Done) {
+          obj.animations[ctx.resources.ANIM_SWING_2].reset();
+          exitSwingState();
         }
 
         break;
       }
     }
+
+    obj.data.player.meleePressedThisFrame = false;
   } else if (obj.objClass == ObjectClass::Projectile) {
 
     obj.data.bullet.liveTimer.step(deltaTime);
@@ -717,7 +792,7 @@ static void collisionResponse(SimContext& ctx, const SDL_FRect &rectA, const SDL
               d.state = EnemyState::hurt;
 
               if (d.damageTimer.isTimedOut()) {
-                d.healthPoints -= 50;
+                d.healthPoints -= objA.data.player.meleeDamage;
                 d.damageTimer.reset();
               }
 
@@ -930,9 +1005,11 @@ static void handleCollision(SimContext& ctx, GameObject &a, GameObject &b, float
 class DefaultSimulationSystem final : public game::ISimulationSystem {
 public:
   void update(game_engine::Engine& engine, float deltaTime, const UIManager::UIActions& actions) override {
+
     SimContext ctx{engine, engine.getGameState(), engine.getResources(), engine.getSDLState()};
     auto& player = engine.getPlayer();
     updateGameplayState(ctx, deltaTime, player, actions);
+
   }
 };
 

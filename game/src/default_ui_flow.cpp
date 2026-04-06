@@ -21,6 +21,7 @@ public:
     snaps.playerHP = player.data.player.healthPoints;
     snaps.playerMana = player.data.player.manaPoints;
     snaps.winDims = ImVec2(static_cast<float>(sdlState.logW), static_cast<float>(sdlState.logH));
+    snaps.debugMode = gameState.debugMode;
 
     switch (gameState.currentView) {
       case UIManager::GameView::LevelLoading: {
@@ -35,6 +36,12 @@ public:
         engine.setAudioSoundtrack(resources.mainMenuTrack);
         snaps.cutscene = &resources.mainMenuCutscene;
         snaps.cutSceneID = -3;
+        break;
+      }
+      case UIManager::GameView::CharacterSelect: {
+        snaps.deltaTime = deltaTime;
+        snaps.cutscene = &resources.characterSelectScene;
+        snaps.cutSceneID = -4;
         break;
       }
       case UIManager::GameView::PauseMenu: {
@@ -86,6 +93,12 @@ public:
     }
     if (actions.quitGame) {
       engine.requestQuit();
+    }
+    if (actions.selectedPlayerSprite) {
+      gameState.selectedPlayerSprite = *actions.selectedPlayerSprite;
+      if (resources.m_currLevel) {
+        (void)game::switchToLevel(engine, resources.m_currLevelIdx);
+      }
     }
     if (actions.nextView) {
       gameState.currentView = *actions.nextView;

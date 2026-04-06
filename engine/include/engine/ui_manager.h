@@ -1,10 +1,13 @@
 #pragma once
 
+#include "engine/level_types.h"
 #include "imgui.h"
 #include "engine/animation.h"
 #include <SDL3/SDL_render.h>
 #include <SDL3_ttf/SDL_ttf.h>
+#include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 
@@ -19,6 +22,7 @@ namespace UIManager {
       MainMenu,
       PauseMenu,
       CutScene,
+      CharacterSelect,
       LevelLoading,
       InventoryMenu,
       GameOver,
@@ -41,6 +45,7 @@ namespace UIManager {
     std::optional<bool> startSinglePlayer;
     std::optional<bool> startMultiPlayerHost;
     std::optional<bool> startMultiPlayerClient;
+    std::optional<SpriteType> selectedPlayerSprite;
     std::optional<GameView> nextView;
     bool quitGame = false;
   };
@@ -70,6 +75,7 @@ namespace UIManager {
     Animation* mainMenuAnim{nullptr};
     SDL_Texture* mainMenuTex{nullptr};
 
+    bool debugMode = false;
     bool advanceToNextScene = false;
     bool togglePauseGameplay = false;
     const std::vector<Cutscene>* cutscene{nullptr};
@@ -135,6 +141,7 @@ namespace UIManager {
       UIActions drawMainMenu(const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState);
       UIActions drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawPausedMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
+      UIActions drawCharacterSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       float drawCustomSlider(const std::string& label, float currVal, float v_min, float v_max);
 
@@ -147,6 +154,8 @@ namespace UIManager {
       CutscenePlayer cutscenePlr;
       game_engine::SDLState& sdlState;
       TTF_Font& font;
+      bool wantsHandCursor = false;
+      bool debugMode = false;
   };
 
 

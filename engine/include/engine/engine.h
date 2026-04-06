@@ -1,10 +1,11 @@
 #pragma once
 #include <iostream>
-#include <vector>
-#include <string>
-#include <format>
 #include <array>
 #include <filesystem>
+#include <format>
+#include <memory>
+#include <string>
+#include <vector>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -100,6 +101,7 @@ namespace game_engine {
         layers(std::move(other.layers)),
         bullets(std::move(other.bullets)),
         debugMode(other.debugMode),
+        selectedPlayerSprite(other.selectedPlayerSprite),
         playerLayer(other.playerLayer),
         playerIndex(other.playerIndex),
         mapViewport(other.mapViewport),
@@ -116,6 +118,7 @@ namespace game_engine {
         layers              = std::move(other.layers);
         bullets             = std::move(other.bullets);
         debugMode           = other.debugMode;
+        selectedPlayerSprite= other.selectedPlayerSprite;
         playerLayer         = other.playerLayer;
         playerIndex         = other.playerIndex;
         mapViewport         = other.mapViewport;
@@ -137,6 +140,7 @@ namespace game_engine {
       // std::vector<GameObject> foregroundTiles;
       std::vector<GameObject> bullets;
       bool debugMode;
+      SpriteType selectedPlayerSprite{SpriteType::Player_Marie};
 
       int playerLayer, playerIndex;
       SDL_FRect mapViewport; // viewable part of map
@@ -227,7 +231,7 @@ namespace game_engine {
 
   struct EntityResources {
     SDL_Texture *texIdle, *texWalk, *texRun, *texSlide, *texAttack, *texJump, *texHit, *texDie,
-          *texShoot, *texRunShoot, *texSlideShoot, *texRunAttack;
+          *texShoot, *texRunShoot, *texSlideShoot, *texRunAttack, *texAttack2;
     std::vector<Animation> anims;
   };
 
@@ -288,6 +292,7 @@ namespace game_engine {
     const int ANIM_HIT = 8;
     const int ANIM_DIE = 9;
     const int ANIM_RUN_ATTACK = 10;
+    const int ANIM_SWING_2 = 11;
 
     const int ANIM_MAIN_MENU = 0;
 
@@ -302,6 +307,11 @@ namespace game_engine {
     SDL_Texture *texMainMenu;
     std::shared_ptr<Animation> mainMenuAnim;
     MIX_Track *mainMenuTrack;
+    std::vector<UIManager::Cutscene> mainMenuCutscene;
+
+    SDL_Texture *texCharSelect;
+    std::shared_ptr<Animation> charSelectAnim;
+    std::vector<UIManager::Cutscene> characterSelectScene;
 
     // ----- AudioManager
     // TODO track is for long running music. Audio is for one time sound effects.
@@ -329,7 +339,6 @@ namespace game_engine {
     UIManager::UI_Manager m_uiManager;
 
     std::unique_ptr<Level> m_currLevel;
-    std::vector<UIManager::Cutscene> mainMenuCutscene;
     LevelIndex m_currLevelIdx;
 
     // cutscenes
@@ -500,6 +509,10 @@ namespace game_engine {
           m_currLevel->texCharacterMap[character].texRun = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.runTex);
           m_currLevel->texCharacterMap[character].texAttack = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.attackTex);
           m_currLevel->texCharacterMap[character].texRunAttack = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.runAttackTex);
+          m_currLevel->texCharacterMap[character].texAttack2 =
+            spriteAssets.paths.attackTex2.empty()
+              ? nullptr
+              : m_currLevel->loadTexture(state.renderer, spriteAssets.paths.attackTex2);
           m_currLevel->texCharacterMap[character].texHit = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.hitTex);
           m_currLevel->texCharacterMap[character].texDie = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.dieTex);
           m_currLevel->texCharacterMap[character].texShoot = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.shootTex);
@@ -509,7 +522,7 @@ namespace game_engine {
           m_currLevel->texCharacterMap[character].texJump = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.jumpTex);
 
           // TODO THIS IS SIZE OF ANIMS
-          m_currLevel->texCharacterMap[character].anims.resize(11);
+          m_currLevel->texCharacterMap[character].anims.resize(12);
           auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
           m_currLevel->texCharacterMap[character].anims[ANIM_IDLE] = Animation(idleFrames, idleSeconds);
 
@@ -536,6 +549,11 @@ namespace game_engine {
 
           auto [attackFrames, attackSeconds] = spriteAssets.animSettings.at(ANIM_SWING);
           m_currLevel->texCharacterMap[character].anims[ANIM_SWING] = Animation(attackFrames, attackSeconds);
+
+          if (spriteAssets.animSettings.contains(ANIM_SWING_2)) {
+            auto [attack2Frames, attack2Seconds] = spriteAssets.animSettings.at(ANIM_SWING_2);
+            m_currLevel->texCharacterMap[character].anims[ANIM_SWING_2] = Animation(attack2Frames, attack2Seconds);
+          }
 
           auto [jumpFrames, jumpSeconds] = spriteAssets.animSettings.at(ANIM_JUMP);
           m_currLevel->texCharacterMap[character].anims[ANIM_JUMP] = Animation(jumpFrames, jumpSeconds, 2);
@@ -620,7 +638,7 @@ namespace game_engine {
         // texBulletHit = loadTexture(state.renderer, "data/bullet_hit.png");
         texBulletHit = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
         texBullet = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
-        texMainMenu = m_currLevel->loadTexture(state.renderer, "data/maps/title_screen/title_screen_3.png");
+        texMainMenu = m_currLevel->loadTexture(state.renderer, "data/maps/title_screen/title_screen.png");
 
 
 
@@ -639,6 +657,20 @@ namespace game_engine {
           .frameW = 800.0f,
           .yOffset = -50,
           .loopScene = true,
+          }
+        };
+
+        texCharSelect = m_currLevel->loadTexture(state.renderer, "data/cutscenes/menu/character_select.png");
+        charSelectAnim = std::make_shared<Animation>(8, 2.0f);
+        characterSelectScene = {
+          UIManager::Cutscene{
+          .tex = texCharSelect,
+          .anim = charSelectAnim,
+          .scale = 1.0,
+          .numFrameColumns = 3,
+          .frameH = 360.0f,
+          .frameW = 640.0f,
+          .loopScene = false,
           }
         };
 

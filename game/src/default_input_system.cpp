@@ -89,6 +89,9 @@ public:
         engine.setWindowSize(event.window.data2, event.window.data1);
         break;
       case SDL_EVENT_KEY_DOWN:
+        if (event.key.scancode == SDL_SCANCODE_S && !event.key.repeat) {
+          player.data.player.meleePressedThisFrame = true;
+        }
         handleKeyInput(engine, player, event.key.scancode, true, input);
         break;
       case SDL_EVENT_KEY_UP:

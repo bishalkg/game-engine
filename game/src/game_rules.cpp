@@ -4,6 +4,7 @@
 
 namespace game {
 
+// defaults when GameRules gamerules; (without passing in any components)
 GameRules::GameRules(
   std::unique_ptr<IBootstrap> bootstrap,
   std::unique_ptr<IInputSystem> inputSystem,
@@ -32,6 +33,7 @@ void GameRules::onUpdate(game_engine::Engine& engine, float deltaTime) {
   auto& resources = engine.getResources();
   auto& sdlState = engine.getSDLState();
   auto& uiManager = resources.m_uiManager;
+
   const UIManager::UIActions engineActions = uiFlow_->update(engine, deltaTime, snaps_);
   const auto gameActions = uiController_.fromEngineActions(engineActions);
   lastEngineActions_ = uiController_.toEngineActions(gameActions);
