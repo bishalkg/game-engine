@@ -479,6 +479,11 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
         break;
       }
       case PlayerState::swingWeapon: { // handle swinging weapon like handleShooting
+        const bool isAttack1Anim =
+          obj.currentAnimation == ctx.resources.ANIM_RUN_ATTACK ||
+          obj.currentAnimation == ctx.resources.ANIM_SWING;
+        const bool isAttack2Anim =
+          obj.currentAnimation == ctx.resources.ANIM_SWING_2;
         const bool attack1Done =
           (obj.currentAnimation == ctx.resources.ANIM_RUN_ATTACK &&
            obj.animations[ctx.resources.ANIM_RUN_ATTACK].isDone()) ||
@@ -487,6 +492,14 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
         const bool attack2Done =
           obj.currentAnimation == ctx.resources.ANIM_SWING_2 &&
           obj.animations[ctx.resources.ANIM_SWING_2].isDone();
+
+        // If the swing state ever gets out of sync with its animation, fail safe back to locomotion.
+        if (obj.currentAnimation == -1 ||
+            (obj.data.player.swingStage == PlayerSwingStage::Attack1 && !isAttack1Anim) ||
+            (obj.data.player.swingStage == PlayerSwingStage::Attack2 && !isAttack2Anim)) {
+          exitSwingState();
+          break;
+        }
 
         if (obj.data.player.swingStage == PlayerSwingStage::Attack1 &&
             hasSwingFollowup &&
@@ -861,7 +874,7 @@ static void collisionResponse(SimContext& ctx, const SDL_FRect &rectA, const SDL
 
               // damage and flag dead
               if (d.damageTimer.isTimedOut()) {
-                d.healthPoints -= 50;
+                d.healthPoints -= 10;
                 d.damageTimer.reset();
               }
 
