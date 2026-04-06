@@ -123,7 +123,7 @@ const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
         .shootTex = "data/players/Bonkfather/Fireball.png",
         .slideTex = "data/players/Bonkfather/Run.png",
         .runShootTex = "data/players/Bonkfather/Fireball.png",
-        .runAttackTex = "data/players/Bonkfather/Attack_1.png", // TODO
+        .runAttackTex = "data/players/Bonkfather/Attack_1.png",
         .slideShootTex = "data/players/Bonkfather/Attack_1.png",
         .jumpTex = "data/players/Bonkfather/Jump.png",
       },

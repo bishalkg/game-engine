@@ -253,7 +253,7 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
       SDL_Texture *tex, SDL_Texture *attackTex, int animIndex, int attackAnimIndex, bool handleJump, auto startAttack1){
 
 
-        if (ctx.sdlState.keys[SDL_SCANCODE_S] && obj.data.player.state != PlayerState::swingWeapon) {
+        if (obj.data.player.meleePressedThisFrame && obj.data.player.state != PlayerState::swingWeapon) {
           startAttack1(attackTex, attackAnimIndex);
 
         } else if (ctx.sdlState.keys[SDL_SCANCODE_A]) {
@@ -282,7 +282,7 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
               ctx.resources.whooshCooldown.reset();
               MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioShoot);
             }
-            obj.data.player.manaPoints = std::clamp(obj.data.player.manaPoints -10, 0,
+            obj.data.player.manaPoints = std::clamp(obj.data.player.manaPoints -2, 0,
             obj.data.player.maxManaPoints);
             // create bullets
             GameObject bullet(128, 128);
@@ -355,7 +355,7 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
       }
     };
 
-    const bool wantSwing = ctx.sdlState.keys[SDL_SCANCODE_S];
+    const bool wantSwing = obj.data.player.meleePressedThisFrame;
     const bool canSwing  = (obj.data.player.state != PlayerState::swingWeapon);
     // update animation state
     switch (obj.data.player.state) {
