@@ -11,6 +11,7 @@ class DefaultRenderSystem final : public game::IRenderSystem {
 public:
   void render(
     game_engine::Engine& engine,
+    game::GameResources& resources,
     float deltaTime,
     const UIManager::UIActions& actions) override {
     auto& gameState = engine.getGameState();
@@ -22,7 +23,7 @@ public:
 
     if (gameState.currentView == UIManager::GameView::Playing ||
         gameState.currentView == UIManager::GameView::PauseMenu) {
-      drawAllObjects(engine, deltaTime, actions);
+      drawAllObjects(engine, resources, deltaTime, actions);
 
       auto& player = engine.getPlayer();
       if (gameState.debugMode) {
@@ -148,10 +149,10 @@ private:
 
   void drawAllObjects(
     game_engine::Engine& engine,
+    game::GameResources& resources,
     float deltaTime,
     const UIManager::UIActions& actions) {
     auto& gameState = engine.getGameState();
-    auto& resources = engine.getResources();
     auto& sdlState = engine.getSDLState();
 
     for (auto& layer : gameState.layers) {

@@ -9,20 +9,19 @@ namespace {
 
 using game_engine::Engine;
 using game_engine::GameState;
-using game_engine::Resources;
 using game_engine::SDLState;
+using game::GameResources;
 
-bool initAllTiles(Engine& engine, GameState& newGameState) {
+bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameState) {
   SDLState& sdlState = engine.getSDLState();
-  Resources& res = engine.getResources();
 
   struct LayerVisitor {
     const SDLState& state;
     GameState& gs;
-    Resources& res;
+    GameResources& res;
     int countModColliders = 0;
 
-    LayerVisitor(const SDLState& state, GameState& gs, Resources& res)
+    LayerVisitor(const SDLState& state, GameState& gs, GameResources& res)
       : state(state), gs(gs), res(res) {}
 
     const tmx::TileSet* pickTileset(uint32_t gid) {
@@ -301,8 +300,8 @@ bool initAllTiles(Engine& engine, GameState& newGameState) {
     }
   };
 
-  LayerVisitor visitor(sdlState, newGameState, res);
-  for (std::variant<tmx::Layer, tmx::ObjectGroup>& layer : res.m_currLevel->map->layers) {
+  LayerVisitor visitor(sdlState, newGameState, resources);
+  for (std::variant<tmx::Layer, tmx::ObjectGroup>& layer : resources.m_currLevel->map->layers) {
     std::visit(visitor, layer);
   }
 
@@ -311,8 +310,7 @@ bool initAllTiles(Engine& engine, GameState& newGameState) {
 
 class DefaultBootstrap final : public game::IBootstrap {
 public:
-  bool initialize(Engine& engine, bool headless) override {
-    auto& resources = engine.getResources();
+  bool initialize(Engine& engine, GameResources& resources, bool headless) override {
     auto& sdlState = engine.getSDLState();
     auto& gameState = engine.getGameState();
 
@@ -322,7 +320,7 @@ public:
       return false;
     }
 
-    return initAllTiles(engine, gameState);
+    return initAllTiles(engine, resources, gameState);
   }
 };
 
@@ -330,9 +328,8 @@ public:
 
 namespace game {
 
-bool switchToLevel(game_engine::Engine& engine, LevelIndex levelId) {
+bool switchToLevel(game_engine::Engine& engine, GameResources& resources, LevelIndex levelId) {
   auto& gameState = engine.getGameState();
-  auto& resources = engine.getResources();
   auto& sdlState = engine.getSDLState();
 
   gameState.currentView = UIManager::GameView::LevelLoading;
@@ -346,7 +343,7 @@ bool switchToLevel(game_engine::Engine& engine, LevelIndex levelId) {
   GameState newGameState(sdlState);
   newGameState.selectedPlayerSprite = gameState.selectedPlayerSprite;
   newGameState.currentView = UIManager::GameView::LevelLoading;
-  if (!initAllTiles(engine, newGameState)) {
+  if (!initAllTiles(engine, resources, newGameState)) {
     return false;
   }
 

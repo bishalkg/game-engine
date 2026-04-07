@@ -25,25 +25,14 @@ game_engine::GameState &game_engine::Engine::getGameState() {
   return m_gameState;
 };
 
-game_engine::Resources &game_engine::Engine::getResources() {
-  return m_resources;
+MIX_Mixer* game_engine::Engine::getMixer() {
+  return m_mixer;
 };
 
-void game_engine::Engine::setBackgroundSoundtrack() {
-  if (!MIX_TrackPlaying(m_resources.m_currLevel->backgroundTrack)) {
+void game_engine::Engine::setAudioSoundtrack(MIX_Track* track, int loops) {
+  if (track && !MIX_TrackPlaying(track)) {
     SDL_PropertiesID opts = SDL_CreateProperties();
-    SDL_SetNumberProperty(opts, MIX_PROP_PLAY_LOOPS_NUMBER, -1); // loop forever
-    if (!MIX_PlayTrack(m_resources.m_currLevel->backgroundTrack, opts)) {
-        SDL_Log("Background Music Play failed: %s", SDL_GetError());
-    }
-    SDL_DestroyProperties(opts); // destory internal resources
-  }
-};
-
-void game_engine::Engine::setAudioSoundtrack(MIX_Track* track) {
-  if (!MIX_TrackPlaying(track)) {
-    SDL_PropertiesID opts = SDL_CreateProperties();
-    SDL_SetNumberProperty(opts, MIX_PROP_PLAY_LOOPS_NUMBER, -1); // loop forever
+    SDL_SetNumberProperty(opts, MIX_PROP_PLAY_LOOPS_NUMBER, loops);
     if (!MIX_PlayTrack(track, opts)) {
         SDL_Log("Music Play failed: %s", SDL_GetError());
     }
@@ -52,36 +41,9 @@ void game_engine::Engine::setAudioSoundtrack(MIX_Track* track) {
 };
 
 void game_engine::Engine::stopAudioSoundtrack(MIX_Track* track) {
-  if (MIX_TrackPlaying(track)) {
+  if (track && MIX_TrackPlaying(track)) {
     if (!MIX_StopTrack(track, 10)) {
         SDL_Log("stopping Background Music Play failed: %s", SDL_GetError());
-    }
-  }
-};
-
-void game_engine::Engine::stopBackgroundSoundtrack() {
-  if (MIX_TrackPlaying(m_resources.m_currLevel->backgroundTrack)) {
-    if (!MIX_StopTrack(m_resources.m_currLevel->backgroundTrack, 10)) {
-        SDL_Log("stopping Background Music Play failed: %s", SDL_GetError());
-    }
-  }
-};
-
-void game_engine::Engine::setGameOverSoundtrack() {
-  if (!MIX_TrackPlaying(m_resources.m_currLevel->gameOverAudioTrack)) {
-    SDL_PropertiesID opts = SDL_CreateProperties();
-    SDL_SetNumberProperty(opts, MIX_PROP_PLAY_LOOPS_NUMBER, 0);
-    if (!MIX_PlayTrack(m_resources.m_currLevel->gameOverAudioTrack, opts)) {
-        SDL_Log("Game Over Music Play failed: %s", SDL_GetError());
-    }
-    SDL_DestroyProperties(opts); // destory internal resources
-  }
-};
-
-void game_engine::Engine::stopGameOverSoundtrack() {
-  if (MIX_TrackPlaying(m_resources.m_currLevel->gameOverAudioTrack)) {
-    if (!MIX_StopTrack(m_resources.m_currLevel->gameOverAudioTrack, 10)) {
-        SDL_Log("stopping Game Over Music Play failed: %s", SDL_GetError());
     }
   }
 };
@@ -139,14 +101,14 @@ bool game_engine::Engine::init(int width, int height, int logW, int logH) {
   };
 
   // one global mixer
-  m_resources.mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
-  if (!m_resources.mixer) {
+  m_mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
+  if (!m_mixer) {
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Global Mixer Failed to create", "Failed to create audio mixer", nullptr);
     cleanup();
     return false;
   }
 
-  MIX_SetMasterGain(m_resources.mixer, 0.5f);  // 50% master
+  MIX_SetMasterGain(m_mixer, 0.5f);  // 50% master
 
   m_gameState = std::move(GameState(m_sdlState));
   return true;
@@ -195,8 +157,7 @@ bool game_engine::Engine::handleMultiplayerConnections() {
     // non-host client should be able to join and exit at any time.
   if (m_gameType == game_engine::Engine::Host && !m_gameServer) {
     std::cout << "starting server" << std::endl;
-    // TODO buildAuthoritativeState() -> { gameState, headlessResources }
-    m_gameServer = std::make_unique<GameServer>(9000, m_gameState, m_resources);
+    m_gameServer = std::make_unique<GameServer>(9000, m_gameState);
     bool successStart = m_gameServer->Start();
     if (!successStart) {
       return false;
@@ -306,17 +267,14 @@ bool game_engine::Engine::initWindowAndRenderer(int width, int height, int logW,
 }
 
 void game_engine::Engine::cleanupTextures() {
-  this->m_resources.unload();
 }
 
 void game_engine::Engine::cleanup() {
-  if (m_resources.mixer) { MIX_DestroyMixer(m_resources.mixer); m_resources.mixer = nullptr; }
+  if (m_mixer) { MIX_DestroyMixer(m_mixer); m_mixer = nullptr; }
   MIX_Quit();
   ImGui_ImplSDLRenderer3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
   ImGui::DestroyContext();
-  TTF_CloseFont(m_resources.font);
-  TTF_Quit();
   // if (state.renderer) { SDL_DestroyRenderer(state.renderer); state.renderer = nullptr; }
   // if (state.window) { SDL_DestroyWindow(state.window); state.window = nullptr; }
   // SDL_Quit();

@@ -74,6 +74,7 @@ target_compile_features(engine PUBLIC cxx_std_23)
 add_executable(game
   game/src/main.cpp
   game/src/app.cpp
+  game/src/game_resources.cpp
   game/src/game_rules.cpp
   game/src/ui_controller.cpp
   game/src/default_bootstrap.cpp

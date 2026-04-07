@@ -8,12 +8,12 @@ namespace {
 
 void handleKeyInput(
   game_engine::Engine& engine,
+  game::GameResources& resources,
   GameObject& obj,
   SDL_Scancode key,
   bool keyDown,
   game_engine::NetGameInput& input) {
   (void)keyDown;
-  auto& resources = engine.getResources();
 
   if (obj.objClass != ObjectClass::Player) {
     return;
@@ -74,6 +74,7 @@ class DefaultInputSystem final : public game::IInputSystem {
 public:
   void onEvent(
     game_engine::Engine& engine,
+    game::GameResources& resources,
     const SDL_Event& event,
     game_engine::NetGameInput& input,
     UIManager::UISnapshots& snaps) override {
@@ -92,10 +93,10 @@ public:
         if (event.key.scancode == SDL_SCANCODE_S && !event.key.repeat) {
           player.data.player.meleePressedThisFrame = true;
         }
-        handleKeyInput(engine, player, event.key.scancode, true, input);
+        handleKeyInput(engine, resources, player, event.key.scancode, true, input);
         break;
       case SDL_EVENT_KEY_UP:
-        handleKeyInput(engine, player, event.key.scancode, false, input);
+        handleKeyInput(engine, resources, player, event.key.scancode, false, input);
         if (event.key.scancode == SDL_SCANCODE_Q) {
           gameState.debugMode = !gameState.debugMode;
         } else if (event.key.scancode == SDL_SCANCODE_F11) {

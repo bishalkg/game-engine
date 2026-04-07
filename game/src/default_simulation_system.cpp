@@ -8,12 +8,12 @@
 
 namespace {
 
-using game_engine::EntityResources;
+using game::EntityResources;
 
 struct SimContext {
   game_engine::Engine& engine;
   game_engine::GameState& gameState;
-  game_engine::Resources& resources;
+  game::GameResources& resources;
   game_engine::SDLState& sdlState;
 };
 
@@ -32,7 +32,9 @@ static void collisionResponse(
 static void updateAllObjects(SimContext& ctx, float deltaTime) {
 
   if (ctx.gameState.evaluateGameOver()) {
-    ctx.engine.setGameOverSoundtrack();
+    ctx.engine.setAudioSoundtrack(
+      ctx.resources.m_currLevel ? ctx.resources.m_currLevel->gameOverAudioTrack : nullptr,
+      0);
   }
 
   // if singleplayer let is pass through normal logic
@@ -90,7 +92,8 @@ if (ctx.gameState.currentView == UIManager::GameView::LevelLoading) return;
   if (ctx.gameState.currentView == UIManager::GameView::Playing ||
       ctx.gameState.currentView == UIManager::GameView::PauseMenu
   ) {
-      ctx.engine.setBackgroundSoundtrack(); // TODO we will want to set background track per level
+      ctx.engine.setAudioSoundtrack(
+        ctx.resources.m_currLevel ? ctx.resources.m_currLevel->backgroundTrack : nullptr);
 
       // update & draw game world to sdl.renderer here (before ImGui::Render)
       if (!actions.blockGameplayUpdates) {
@@ -406,7 +409,9 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
           obj.spriteFrame = 4;
 
           ctx.gameState.currentView = UIManager::GameView::GameOver;
-          ctx.engine.setGameOverSoundtrack();
+          ctx.engine.setAudioSoundtrack(
+            ctx.resources.m_currLevel ? ctx.resources.m_currLevel->gameOverAudioTrack : nullptr,
+            0);
         }
         break;
       }
@@ -831,7 +836,7 @@ static void collisionResponse(SimContext& ctx, const SDL_FRect &rectA, const SDL
       }
       case ObjectClass::Portal:
       {
-        game::switchToLevel(ctx.engine, objB.data.portal.nextLevel);
+        game::switchToLevel(ctx.engine, ctx.resources, objB.data.portal.nextLevel);
         break;
       }
       case ObjectClass::Player:
@@ -1017,10 +1022,17 @@ static void handleCollision(SimContext& ctx, GameObject &a, GameObject &b, float
 
 class DefaultSimulationSystem final : public game::ISimulationSystem {
 public:
-  void update(game_engine::Engine& engine, float deltaTime, const UIManager::UIActions& actions) override {
+  void update(
+    game_engine::Engine& engine,
+    game::GameResources& resources,
+    float deltaTime,
+    const UIManager::UIActions& actions) override {
 
-    SimContext ctx{engine, engine.getGameState(), engine.getResources(), engine.getSDLState()};
-    auto& player = engine.getPlayer();
+    // instead of passing down many params
+    SimContext ctx{engine, engine.getGameState(), resources, engine.getSDLState()};
+
+    auto& player = engine.getPlayer(); // TODO player should not live on engine?
+
     updateGameplayState(ctx, deltaTime, player, actions);
 
   }

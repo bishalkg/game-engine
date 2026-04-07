@@ -83,21 +83,26 @@ void App::App::Run() {
   TTF_Font* font = TTF_OpenFont("data/cutscenes/fonts/to_the_point_regular.ttf", 24);
   if (!font) {
       SDL_Log("TTF_OpenFont failed: %s", SDL_GetError());
-      // handle error...
+      TTF_Quit();
+      return;
   }
 
-  game_engine::Engine game(font);
+  game_engine::Engine game;
   if (!game.init(1280, 720, 640, 360)) { // 1600, 900, 640, 320
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Game Init Failed", "Failed to init Game", nullptr);
+    TTF_CloseFont(font);
+    TTF_Quit();
     return;
   }
 
-  game::GameRules rules;
-  game.run(rules);
-
-  game.cleanupTextures();
+  {
+    game::GameRules rules(font);
+    game.run(rules);
+  }
 
   game.cleanup(); // Clean up SDL; TODO there is a segfault on destory of SDL objects..
+  TTF_CloseFont(font);
+  TTF_Quit();
 
   return;
 };
@@ -261,4 +266,3 @@ void App::App::Run() {
 //         SDL_RenderPresent(g_Renderer);
 //     }
 // }
-

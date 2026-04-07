@@ -6,20 +6,35 @@ std::vector<UIAction> UIController::fromEngineActions(const UIManager::UIActions
   std::vector<UIAction> out;
 
   if (actions.finishLoading) out.push_back({UIActionType::FinishLoading});
+
   if (actions.blockMainGameDraw) out.push_back({UIActionType::BlockMainGameDraw});
+
   if (actions.blockGameplayUpdates) out.push_back({UIActionType::BlockGameplayUpdates});
+
   if (actions.drawSceneOverlay) out.push_back({UIActionType::DrawSceneOverlay});
+
   if (actions.dimBackground) out.push_back({UIActionType::DimBackground});
+
   if (actions.drawText) out.push_back({UIActionType::DrawText});
+
   if (actions.stopBackgroundTrack) out.push_back({UIActionType::StopBackgroundTrack});
+
   if (actions.stopGameOverSoundTrack) out.push_back({UIActionType::StopGameOverSoundTrack});
+
   if (actions.restartLevel) out.push_back({UIActionType::RestartLevel});
+
   if (actions.adjustVolume) out.push_back({UIActionType::AdjustVolume, actions.newVolume});
+
   if (actions.startSinglePlayer.has_value() && *actions.startSinglePlayer) out.push_back({UIActionType::StartSinglePlayer});
+
   if (actions.startMultiPlayerHost.has_value() && *actions.startMultiPlayerHost) out.push_back({UIActionType::StartMultiPlayerHost});
+
   if (actions.startMultiPlayerClient.has_value() && *actions.startMultiPlayerClient) out.push_back({UIActionType::StartMultiPlayerClient});
+
   if (actions.selectedPlayerSprite.has_value()) out.push_back({UIActionType::SelectPlayerCharacter, 0.0f, actions.selectedPlayerSprite, std::nullopt});
+
   if (actions.nextView.has_value()) out.push_back({UIActionType::NextView, 0.0f, std::nullopt, actions.nextView});
+
   if (actions.quitGame) out.push_back({UIActionType::QuitGame});
 
   return out;
