@@ -127,7 +127,7 @@ namespace UIManager {
       bool sliderFloat(const char* label, float* v, float v_min, float v_max);
       void text(const char* text);
 
-      UIActions renderView(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState);
+      UIActions getRenderViewActions(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState);
 
       void renderPresent(const game_engine::SDLState& sdlState);
       void clearRenderer(const game_engine::SDLState& sdlState);

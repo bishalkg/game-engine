@@ -3,10 +3,9 @@
 
 namespace game_engine {
 
-  GameServer::GameServer(uint16_t nPort, GameState& gs, Resources& res)
+  GameServer::GameServer(uint16_t nPort, GameState& gs)
       : net::server_interface<GameMsgHeaders>(nPort),
-        m_currGameState(gs),
-        m_headlessResources(res) {}
+        m_currGameState(gs) {}
 
 
   bool GameServer::OnClientConnect(std::shared_ptr<net::connection<GameMsgHeaders>> client)

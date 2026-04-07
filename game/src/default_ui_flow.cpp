@@ -10,11 +10,11 @@ class DefaultUIFlow final : public game::IUIFlow {
 public:
   UIManager::UIActions update(
     game_engine::Engine& engine,
+    game::GameResources& resources,
     float deltaTime,
     UIManager::UISnapshots& snaps) override {
     auto& gameState = engine.getGameState();
     auto& sdlState = engine.getSDLState();
-    auto& resources = engine.getResources();
     auto& uiManager = resources.m_uiManager;
 
     auto& player = engine.getPlayer();
@@ -65,22 +65,26 @@ public:
         break;
     }
 
-    return uiManager.renderView(
+    return uiManager.getRenderViewActions(
       gameState.currentView,
       snaps,
       sdlState.ImGuiWindowFlags,
       sdlState);
   }
 
-  void apply(game_engine::Engine& engine, const UIManager::UIActions& actions) override {
+  void apply(
+    game_engine::Engine& engine,
+    game::GameResources& resources,
+    const UIManager::UIActions& actions) override {
     auto& gameState = engine.getGameState();
-    auto& resources = engine.getResources();
 
     if (actions.stopBackgroundTrack) {
-      engine.stopBackgroundSoundtrack();
+      engine.stopAudioSoundtrack(
+        resources.m_currLevel ? resources.m_currLevel->backgroundTrack : nullptr);
     }
     if (actions.stopGameOverSoundTrack) {
-      engine.stopGameOverSoundtrack();
+      engine.stopAudioSoundtrack(
+        resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr);
     }
     if (actions.startSinglePlayer) {
       engine.setRunModeSinglePlayer();
@@ -97,7 +101,7 @@ public:
     if (actions.selectedPlayerSprite) {
       gameState.selectedPlayerSprite = *actions.selectedPlayerSprite;
       if (resources.m_currLevel) {
-        (void)game::switchToLevel(engine, resources.m_currLevelIdx);
+        (void)game::switchToLevel(engine, resources, resources.m_currLevelIdx);
       }
     }
     if (actions.nextView) {
@@ -110,7 +114,7 @@ public:
       }
     }
     if (actions.restartLevel && resources.m_currLevel) {
-      (void)game::switchToLevel(engine, resources.m_currLevelIdx);
+      (void)game::switchToLevel(engine, resources, resources.m_currLevelIdx);
     }
   }
 };

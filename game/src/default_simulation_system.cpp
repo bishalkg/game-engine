@@ -8,12 +8,12 @@
 
 namespace {
 
-using game_engine::EntityResources;
+using game::EntityResources;
 
 struct SimContext {
   game_engine::Engine& engine;
   game_engine::GameState& gameState;
-  game_engine::Resources& resources;
+  game::GameResources& resources;
   game_engine::SDLState& sdlState;
 };
 
@@ -32,7 +32,9 @@ static void collisionResponse(
 static void updateAllObjects(SimContext& ctx, float deltaTime) {
 
   if (ctx.gameState.evaluateGameOver()) {
-    ctx.engine.setGameOverSoundtrack();
+    ctx.engine.setAudioSoundtrack(
+      ctx.resources.m_currLevel ? ctx.resources.m_currLevel->gameOverAudioTrack : nullptr,
+      0);
   }
 
   // if singleplayer let is pass through normal logic
@@ -90,7 +92,8 @@ if (ctx.gameState.currentView == UIManager::GameView::LevelLoading) return;
   if (ctx.gameState.currentView == UIManager::GameView::Playing ||
       ctx.gameState.currentView == UIManager::GameView::PauseMenu
   ) {
-      ctx.engine.setBackgroundSoundtrack(); // TODO we will want to set background track per level
+      ctx.engine.setAudioSoundtrack(
+        ctx.resources.m_currLevel ? ctx.resources.m_currLevel->backgroundTrack : nullptr);
 
       // update & draw game world to sdl.renderer here (before ImGui::Render)
       if (!actions.blockGameplayUpdates) {
@@ -253,7 +256,7 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
       SDL_Texture *tex, SDL_Texture *attackTex, int animIndex, int attackAnimIndex, bool handleJump, auto startAttack1){
 
 
-        if (ctx.sdlState.keys[SDL_SCANCODE_S] && obj.data.player.state != PlayerState::swingWeapon) {
+        if (obj.data.player.meleePressedThisFrame && obj.data.player.state != PlayerState::swingWeapon) {
           startAttack1(attackTex, attackAnimIndex);
 
         } else if (ctx.sdlState.keys[SDL_SCANCODE_A]) {
@@ -282,7 +285,7 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
               ctx.resources.whooshCooldown.reset();
               MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioShoot);
             }
-            obj.data.player.manaPoints = std::clamp(obj.data.player.manaPoints -10, 0,
+            obj.data.player.manaPoints = std::clamp(obj.data.player.manaPoints -2, 0,
             obj.data.player.maxManaPoints);
             // create bullets
             GameObject bullet(128, 128);
@@ -355,7 +358,7 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
       }
     };
 
-    const bool wantSwing = ctx.sdlState.keys[SDL_SCANCODE_S];
+    const bool wantSwing = obj.data.player.meleePressedThisFrame;
     const bool canSwing  = (obj.data.player.state != PlayerState::swingWeapon);
     // update animation state
     switch (obj.data.player.state) {
@@ -406,7 +409,9 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
           obj.spriteFrame = 4;
 
           ctx.gameState.currentView = UIManager::GameView::GameOver;
-          ctx.engine.setGameOverSoundtrack();
+          ctx.engine.setAudioSoundtrack(
+            ctx.resources.m_currLevel ? ctx.resources.m_currLevel->gameOverAudioTrack : nullptr,
+            0);
         }
         break;
       }
@@ -479,6 +484,11 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
         break;
       }
       case PlayerState::swingWeapon: { // handle swinging weapon like handleShooting
+        const bool isAttack1Anim =
+          obj.currentAnimation == ctx.resources.ANIM_RUN_ATTACK ||
+          obj.currentAnimation == ctx.resources.ANIM_SWING;
+        const bool isAttack2Anim =
+          obj.currentAnimation == ctx.resources.ANIM_SWING_2;
         const bool attack1Done =
           (obj.currentAnimation == ctx.resources.ANIM_RUN_ATTACK &&
            obj.animations[ctx.resources.ANIM_RUN_ATTACK].isDone()) ||
@@ -487,6 +497,14 @@ static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) 
         const bool attack2Done =
           obj.currentAnimation == ctx.resources.ANIM_SWING_2 &&
           obj.animations[ctx.resources.ANIM_SWING_2].isDone();
+
+        // If the swing state ever gets out of sync with its animation, fail safe back to locomotion.
+        if (obj.currentAnimation == -1 ||
+            (obj.data.player.swingStage == PlayerSwingStage::Attack1 && !isAttack1Anim) ||
+            (obj.data.player.swingStage == PlayerSwingStage::Attack2 && !isAttack2Anim)) {
+          exitSwingState();
+          break;
+        }
 
         if (obj.data.player.swingStage == PlayerSwingStage::Attack1 &&
             hasSwingFollowup &&
@@ -818,7 +836,7 @@ static void collisionResponse(SimContext& ctx, const SDL_FRect &rectA, const SDL
       }
       case ObjectClass::Portal:
       {
-        game::switchToLevel(ctx.engine, objB.data.portal.nextLevel);
+        game::switchToLevel(ctx.engine, ctx.resources, objB.data.portal.nextLevel);
         break;
       }
       case ObjectClass::Player:
@@ -861,7 +879,7 @@ static void collisionResponse(SimContext& ctx, const SDL_FRect &rectA, const SDL
 
               // damage and flag dead
               if (d.damageTimer.isTimedOut()) {
-                d.healthPoints -= 50;
+                d.healthPoints -= 10;
                 d.damageTimer.reset();
               }
 
@@ -1004,10 +1022,17 @@ static void handleCollision(SimContext& ctx, GameObject &a, GameObject &b, float
 
 class DefaultSimulationSystem final : public game::ISimulationSystem {
 public:
-  void update(game_engine::Engine& engine, float deltaTime, const UIManager::UIActions& actions) override {
+  void update(
+    game_engine::Engine& engine,
+    game::GameResources& resources,
+    float deltaTime,
+    const UIManager::UIActions& actions) override {
 
-    SimContext ctx{engine, engine.getGameState(), engine.getResources(), engine.getSDLState()};
-    auto& player = engine.getPlayer();
+    // instead of passing down many params
+    SimContext ctx{engine, engine.getGameState(), resources, engine.getSDLState()};
+
+    auto& player = engine.getPlayer(); // TODO player should not live on engine?
+
     updateGameplayState(ctx, deltaTime, player, actions);
 
   }

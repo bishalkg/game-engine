@@ -123,7 +123,7 @@ const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
         .shootTex = "data/players/Bonkfather/Fireball.png",
         .slideTex = "data/players/Bonkfather/Run.png",
         .runShootTex = "data/players/Bonkfather/Fireball.png",
-        .runAttackTex = "data/players/Bonkfather/Attack_1.png", // TODO
+        .runAttackTex = "data/players/Bonkfather/Attack_1.png",
         .slideShootTex = "data/players/Bonkfather/Attack_1.png",
         .jumpTex = "data/players/Bonkfather/Jump.png",
       },
@@ -135,7 +135,7 @@ const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
         { ANIM_HIT, { 9, 0.4f } },
         { ANIM_DIE, { 9, 0.6f } },
         { ANIM_SLIDE_SHOOT, { 10, 0.4f } },
-        { ANIM_JUMP , { 11, 0.5f } },
+        { ANIM_JUMP , { 9, 0.5f } },
         { ANIM_SWING , { 10, 0.4f } },
         { ANIM_SWING_2 , { 17, 0.8f } },
         { ANIM_RUN_ATTACK , { 10, 0.4f } },

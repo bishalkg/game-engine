@@ -10,11 +10,10 @@ namespace game_engine {
 
   // forward declar
   struct GameState;
-  struct Resources;
 
   class GameServer : public net::server_interface<GameMsgHeaders> {
     public:
-      GameServer(uint16_t nPort, game_engine::GameState& gs, game_engine::Resources& res);
+      GameServer(uint16_t nPort, game_engine::GameState& gs);
 
       std::unordered_map<uint32_t, NetGameObjectSnapshot> m_mapPlayerRoster;
       std::vector<uint32_t> m_vGarbageIDs;
@@ -24,7 +23,6 @@ namespace game_engine {
       net::tsqueue<NetGameInput> m_playerInputQueue;
 
       GameState& m_currGameState;
-      Resources& m_headlessResources;
 
     protected:
       bool OnClientConnect(std::shared_ptr<net::connection<GameMsgHeaders>> client) override;

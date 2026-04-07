@@ -1,21 +1,33 @@
 #pragma once
 
+#include <memory>
+
+#include <SDL3_ttf/SDL_ttf.h>
+
 #include "engine/igame_rules.h"
 #include "engine/net/game_net_common.h"
-#include "engine/ui_manager.h"
 #include "game/default_systems.h"
+#include "game/game_resources.h"
 #include "game/ui_controller.h"
 
 namespace game {
 
 class GameRules : public eng::IGameRules {
 public:
-  GameRules(
+  explicit GameRules(
+    TTF_Font* font,
     std::unique_ptr<IBootstrap> bootstrap = nullptr,
     std::unique_ptr<IInputSystem> inputSystem = nullptr,
     std::unique_ptr<IUIFlow> uiFlow = nullptr,
     std::unique_ptr<ISimulationSystem> simulationSystem = nullptr,
     std::unique_ptr<IRenderSystem> renderSystem = nullptr);
+
+  GameRules(
+    std::unique_ptr<IBootstrap>,
+    std::unique_ptr<IInputSystem>,
+    std::unique_ptr<IUIFlow>,
+    std::unique_ptr<ISimulationSystem>,
+    std::unique_ptr<IRenderSystem>) = delete;
 
   bool onInit(game_engine::Engine& engine) override;
   void onEvent(game_engine::Engine& engine, const SDL_Event& event) override;
@@ -29,6 +41,8 @@ private:
   std::unique_ptr<IUIFlow> uiFlow_;
   std::unique_ptr<ISimulationSystem> simulationSystem_;
   std::unique_ptr<IRenderSystem> renderSystem_;
+  std::unique_ptr<GameResources> resources_;
+  TTF_Font* font_;
 
   game_engine::NetGameInput input_{};
   UIManager::UISnapshots snaps_{};

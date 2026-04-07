@@ -11,10 +11,13 @@ class Engine;
 
 namespace game {
 
+struct GameResources;
+
 struct IInputSystem {
   virtual ~IInputSystem() = default;
   virtual void onEvent(
     game_engine::Engine& engine,
+    GameResources& resources,
     const SDL_Event& event,
     game_engine::NetGameInput& input,
     UIManager::UISnapshots& snaps) = 0;

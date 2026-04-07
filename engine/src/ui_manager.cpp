@@ -548,7 +548,7 @@ namespace UIManager {
       ImGui::End();
   }
 
-  UIActions UI_Manager::renderView(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState) {
+  UIActions UI_Manager::getRenderViewActions(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState) {
       ImGuiIO& io = ImGui::GetIO();
       io.MouseDrawCursor = true;
       ImGui_ImplSDLRenderer3_NewFrame();

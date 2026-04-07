@@ -8,16 +8,20 @@ class Engine;
 
 namespace game {
 
+struct GameResources;
+
 struct IUIFlow {
   virtual ~IUIFlow() = default;
 
   virtual UIManager::UIActions update(
     game_engine::Engine& engine,
+    GameResources& resources,
     float deltaTime,
     UIManager::UISnapshots& snaps) = 0;
 
   virtual void apply(
     game_engine::Engine& engine,
+    GameResources& resources,
     const UIManager::UIActions& actions) = 0;
 };
 

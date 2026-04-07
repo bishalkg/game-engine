@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "engine/level_types.h"
+#include "game/game_resources.h"
 #include "game/interfaces/i_bootstrap.h"
 #include "game/interfaces/i_input_system.h"
 #include "game/interfaces/i_ui_flow.h"
@@ -18,6 +19,6 @@ std::unique_ptr<ISimulationSystem> createDefaultSimulationSystem();
 std::unique_ptr<IRenderSystem> createDefaultRenderSystem();
 
 // Shared helper for UI flow and bootstrap-level transitions.
-bool switchToLevel(game_engine::Engine& engine, LevelIndex levelId);
+bool switchToLevel(game_engine::Engine& engine, GameResources& resources, LevelIndex levelId);
 
 } // namespace game

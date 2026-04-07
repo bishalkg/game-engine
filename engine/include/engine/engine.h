@@ -1,15 +1,14 @@
 #pragma once
+#include <atomic>
 #include <iostream>
 #include <array>
-#include <filesystem>
-#include <format>
 #include <memory>
-#include <string>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
-#include <SDL3_image/SDL_image.h>
 #include <glm/glm.hpp>
 
 #include "engine/gameobject.h"
@@ -25,7 +24,6 @@
 #include <SDL3_mixer/SDL_mixer.h>
 
 #include "engine/tmx.h"
-#include <algorithm>
 
 namespace eng {
   class IGameRules;
@@ -224,499 +222,6 @@ namespace game_engine {
 
   };
 
-  // struct TileSetTextures {
-  //   int firstGid;
-  //   std::vector<SDL_Texture *> textures;
-  // };
-
-  struct EntityResources {
-    SDL_Texture *texIdle, *texWalk, *texRun, *texSlide, *texAttack, *texJump, *texHit, *texDie,
-          *texShoot, *texRunShoot, *texSlideShoot, *texRunAttack, *texAttack2;
-    std::vector<Animation> anims;
-  };
-
-  struct Level {
-    LevelIndex lvlIdx;
-    // std::string name;
-    // std::string mapPath;
-    // std::string backgroundMusicPath;
-    std::unique_ptr<tmx::Map> map;
-    std::unordered_map<SpriteType, EntityResources> texCharacterMap;
-    int bg1Idx, bg2Idx, bg3Idx, bg4Idx; // indexes of where in the map are the bg tilsets
-    std::vector<SDL_Texture*> textures; // store textures to cleanup later
-
-    std::vector<UIManager::Cutscene> cutscenes;
-
-    MIX_Audio *backgroundAudio{nullptr};
-    MIX_Track *backgroundTrack{nullptr};
-    MIX_Audio *gameOverAudio{nullptr};
-    MIX_Track *gameOverAudioTrack{nullptr};
-    MIX_Audio *audioStep;
-    MIX_Track *stepTrack;
-
-    Level(LevelIndex lvl): lvlIdx(lvl) {};
-
-    SDL_Texture *loadTexture(SDL_Renderer *renderer, const std::string &filepath){
-      SDL_Texture *tex = IMG_LoadTexture(renderer, filepath.c_str()); // textures on gpu, surface in cpu memory (we can access)
-      if (!tex) {
-        SDL_Log("loadTexture failed for '%s': %s", filepath.c_str(), SDL_GetError());
-        return nullptr;
-    }
-      SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST); // scale so pixels aren't blended;
-      textures.push_back(tex);
-      return tex;
-    }
-  };
-
-  struct Resources {
-
-
-    Resources(game_engine::SDLState& sdl, TTF_Font* font) : m_uiManager(sdl, *font), font(font) {};
-
-    // const int ANIM_PLAYER_IDLE = 0;
-    // const int ANIM_PLAYER_RUN = 1;
-    // const int ANIM_PLAYER_SLIDE = 2;
-    // const int ANIM_PLAYER_SHOOT = 3;
-    // const int ANIM_PLAYER_SLIDE_SHOOT = 4;
-    // const int ANIM_PLAYER_SWING = 5;
-    // const int ANIM_PLAYER_JUMP = 6;
-    // std::vector<Animation> playerAnims;
-    const int ANIM_IDLE = 0;
-    const int ANIM_RUN = 1;
-    const int ANIM_SLIDE = 2;
-    const int ANIM_SHOOT = 3;
-    const int ANIM_SLIDE_SHOOT = 4;
-    const int ANIM_SWING = 5;
-    const int ANIM_JUMP = 6;
-    const int ANIM_WALK = 7;
-    const int ANIM_HIT = 8;
-    const int ANIM_DIE = 9;
-    const int ANIM_RUN_ATTACK = 10;
-    const int ANIM_SWING_2 = 11;
-
-    const int ANIM_MAIN_MENU = 0;
-
-    const int ANIM_BULLET_MOVING = 0;
-    const int ANIM_BULLET_HIT = 1;
-    std::vector<Animation> bulletAnims;
-
-    std::vector<SDL_Texture*> textures; // store vector of pointers so we can delete later
-
-    SDL_Texture  *texBullet, *texBulletHit; // tex of bullets
-
-    SDL_Texture *texMainMenu;
-    std::shared_ptr<Animation> mainMenuAnim;
-    MIX_Track *mainMenuTrack;
-    std::vector<UIManager::Cutscene> mainMenuCutscene;
-
-    SDL_Texture *texCharSelect;
-    std::shared_ptr<Animation> charSelectAnim;
-    std::vector<UIManager::Cutscene> characterSelectScene;
-
-    // ----- AudioManager
-    // TODO track is for long running music. Audio is for one time sound effects.
-    // but track can be set to not replay. audio is fire and forget, no state kept.
-    // Create an AudioManager to handle all the below...
-    MIX_Audio *audioShoot, *audioSword1, *audioShootHit, *audioBoneImpact, *audioProjectileEnemyHit, *audioEnemyDie;
-    MIX_Track *shootTrack, *sword1Track, *hitTrack, *boneImpactHitTrack, *enemyProjectileHitTrack, *enemyDieTrack;
-
-    // MIX_Audio *audioStepGrass;
-    // MIX_Track *stepGrassTrack;
-    MIX_Audio *audioJump;
-    MIX_Track *jumpTrack;
-
-    // std::vector<MIX_Track*> audioTracks;
-    float m_masterAudioGain = 0;
-    MIX_Mixer* mixer;
-    size_t projectileTrackIdx = 0; // initialize once
-    Timer whooshCooldown{0.25f};  // 100 ms. needs to be here and not on each projectile entity
-    Timer stepAudioCooldown{0.25f};  // 100 ms. needs to be here and not on each projectile entity
-
-    // ------- AudioManager^
-
-
-    TTF_Font* font;
-    UIManager::UI_Manager m_uiManager;
-
-    std::unique_ptr<Level> m_currLevel;
-    LevelIndex m_currLevelIdx;
-
-    // cutscenes
-    std::vector<UIManager::Cutscene> testCutscene;
-    SDL_Texture *texTestCutscene;
-    Animation testCusceneAnim;
-    SDL_Texture *texTestCutscene2;
-    Animation testCusceneAnim2;
-
-    // cutscenes
-    std::vector<UIManager::Cutscene> pauseMenuScene;
-    SDL_Texture *texPauseMenu;
-    std::shared_ptr<Animation> pauseMenuAnim;
-
-    // Resources() {
-    //   m_uiManager = std::make_unique<UIManager::UI_Manager>();
-    // };
-
-    std::pair<MIX_Audio*, MIX_Track*> loadAudioChunk(const std::string& filepath, float gain = 1.0f) {
-
-      if (!mixer) return {nullptr, nullptr};
-
-      // then in this func load the audio
-      MIX_Audio* audio = MIX_LoadAudio(mixer, filepath.c_str(), false);
-      if (!audio) return {nullptr, nullptr};
-      // audioBuff.push_back(audio);
-
-      // need one for EACH sound that will be played; TODO might not need track for one time sounds?
-      MIX_Track* track = MIX_CreateTrack(mixer);
-      if (!track) return {nullptr, nullptr};
-      // audioTracks.push_back(track);
-
-      MIX_SetTrackAudio(track, audio);
-
-      MIX_SetTrackGain(track, gain);
-
-      // return the audio, and the track to set
-      return {audio, track};
-
-    };
-
-
-    bool loadLevel(const LevelIndex levelId, SDLState &state, GameState &gs, float masterAudioGain, bool headless) {
-
-      unloadLevel();
-      gs.setLevelLoadProgress(20);
-
-      m_currLevelIdx = levelId;
-      m_currLevel = std::make_unique<Level>(levelId);
-      const LevelAssets& assets = LEVEL_CONFIG.at(levelId);
-
-      m_currLevel->map = tmx::loadMap(assets.mapPath); // only the resource struct instance can hold this pointer and it will be automatically deleted when not used (eg. when we swap out maps)
-      if (!m_currLevel->map) {
-        // Bundle fallback: resolve from <App>.app/Contents/Resources when launched via Finder/open.
-        const char* basePathRaw = SDL_GetBasePath();
-        if (basePathRaw && *basePathRaw) {
-          std::filesystem::path basePath(basePathRaw);
-          basePath = basePath.lexically_normal();
-          if (basePath.filename().empty()) {
-            basePath = basePath.parent_path();
-          }
-          const std::filesystem::path resourcesPath =
-            (basePath.filename() == "MacOS" ? basePath.parent_path() : basePath.parent_path().parent_path()) / "Resources";
-          const std::filesystem::path fallbackMapPath = resourcesPath / assets.mapPath;
-          if (std::filesystem::exists(fallbackMapPath)) {
-            m_currLevel->map = tmx::loadMap(fallbackMapPath.string());
-          }
-        }
-      }
-      if (!m_currLevel->map) {
-        std::error_code ec;
-        const std::string cwd = std::filesystem::current_path(ec).string();
-        SDL_Log("Failed to load map: '%s' (cwd: '%s')", assets.mapPath.c_str(), cwd.c_str());
-        return false;
-      }
-      gs.setLevelLoadProgress(40);
-
-      if (!headless) {
-        // load cutscene assets for the level
-        for (auto csa: assets.cutsceneData) {
-          m_currLevel->cutscenes.emplace_back(UIManager::Cutscene{
-              .tex = m_currLevel->loadTexture(state.renderer, csa.texPath),
-              .anim = std::make_shared<Animation>(csa.animSetting.first, csa.animSetting.second, 0, true),
-              .scale = csa.scale,
-              .numFrameColumns = csa.numFrameColumns,
-              .frameH = csa.frameH,
-              .frameW = csa.frameW,
-              .loopScene = csa.loopScene,
-              .dialogue = csa.dialogue,
-              .yOffset = csa.yOffset,
-              .xOffset = csa.xOffset
-          });
-        }
-      }
-
-
-
-      if (!headless) {
-        int i = 0;
-        for (tmx::TileSet &tileSet: m_currLevel->map->tileSets)
-        {
-          // each tileSet already loads in each texture, including the background textures we need; need to set onto *texBg1, *texBg2, *texBg3, *texBg4
-          const std::string imagePath = "data/tiles/" + std::filesystem::path(tileSet.image.source).filename().string();
-          tileSet.texture = m_currLevel->loadTexture(state.renderer, imagePath);
-          // tilesetTextures.push_back(&tileSet); // need to fix for shutdown
-          // Skyx32 (3) , Flora1x32 (2), Flora2x32 (1)
-          if (imagePath.find(assets.background4PathName) != std::string::npos) {
-            m_currLevel->bg4Idx = i;
-          } else if (imagePath.find(assets.background3PathName) != std::string::npos) {
-            m_currLevel->bg3Idx = i;
-          } else if (imagePath.find(assets.background2PathName) != std::string::npos) {
-            m_currLevel->bg2Idx = i;
-          } else if (imagePath.find(assets.background1PathName) != std::string::npos) {
-            m_currLevel->bg1Idx = i;
-          }
-          i++;
-        }
-      }
-
-      gs.setLevelLoadProgress(50);
-      std::sort(m_currLevel->map->tileSets.begin(), m_currLevel->map->tileSets.end(),
-      [](const tmx::TileSet& a, const tmx::TileSet& b) {
-          return a.firstgid < b.firstgid;
-      });
-
-      // load enemies for this level
-      if (!headless) {
-
-        for (const SpriteType& character: assets.enemyTypes) {
-
-          const SpriteAssets& spriteAssets = ENEMY_CONFIG.at(character);
-
-          m_currLevel->texCharacterMap[character].texIdle = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.idleTex);
-          m_currLevel->texCharacterMap[character].texWalk = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.walkTex);
-          m_currLevel->texCharacterMap[character].texRun = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.runTex);
-          m_currLevel->texCharacterMap[character].texAttack = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.attackTex);
-          m_currLevel->texCharacterMap[character].texHit = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.hitTex);
-          m_currLevel->texCharacterMap[character].texDie = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.dieTex);
-
-          m_currLevel->texCharacterMap[character].anims.resize(10);
-          auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
-          m_currLevel->texCharacterMap[character].anims[ANIM_IDLE] = Animation(idleFrames, idleSeconds);
-
-          auto [runFrames, runSeconds] = spriteAssets.animSettings.at(ANIM_RUN);
-          m_currLevel->texCharacterMap[character].anims[ANIM_RUN] = Animation(runFrames, runSeconds);
-
-          auto [hitFrames, hitSeconds] = spriteAssets.animSettings.at(ANIM_HIT);
-          m_currLevel->texCharacterMap[character].anims[ANIM_HIT] = Animation(hitFrames, hitSeconds);
-
-          auto [dieFrames, dieSeconds] = spriteAssets.animSettings.at(ANIM_DIE);
-          m_currLevel->texCharacterMap[character].anims[ANIM_DIE] = Animation(dieFrames, dieSeconds);
-
-          auto [attackFrames, attackSeconds] = spriteAssets.animSettings.at(ANIM_SWING);
-          m_currLevel->texCharacterMap[character].anims[ANIM_SWING] = Animation(attackFrames, attackSeconds);
-          // texCharacterMap[SpriteType::Minotaur_1].anims[ANIM_JUMP] = Animation(6, 0.5f);
-
-        }
-      }
-
-      gs.setLevelLoadProgress(60);
-      // load player assets. NEED TO MOVE THIS TO BE GLOBAL SO WE DONT RE CREATE EACH LEVEL
-      if (!headless) {
-
-        for (auto const [character, spriteAssets]: SPRITE_CONFIG) {
-
-          m_currLevel->texCharacterMap[character].texIdle = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.idleTex);
-          m_currLevel->texCharacterMap[character].texWalk = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.walkTex);
-          m_currLevel->texCharacterMap[character].texRun = m_currLevel->loadTexture(state.renderer, spriteAssets.paths.runTex);
-          m_currLevel->texCharacterMap[character].texAttack = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.attackTex);
-          m_currLevel->texCharacterMap[character].texRunAttack = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.runAttackTex);
-          m_currLevel->texCharacterMap[character].texAttack2 =
-            spriteAssets.paths.attackTex2.empty()
-              ? nullptr
-              : m_currLevel->loadTexture(state.renderer, spriteAssets.paths.attackTex2);
-          m_currLevel->texCharacterMap[character].texHit = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.hitTex);
-          m_currLevel->texCharacterMap[character].texDie = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.dieTex);
-          m_currLevel->texCharacterMap[character].texShoot = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.shootTex);
-          m_currLevel->texCharacterMap[character].texSlide = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.slideTex);
-          m_currLevel->texCharacterMap[character].texRunShoot = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.runShootTex);
-          m_currLevel->texCharacterMap[character].texSlideShoot = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.slideShootTex);
-          m_currLevel->texCharacterMap[character].texJump = m_currLevel->loadTexture(state.renderer,  spriteAssets.paths.jumpTex);
-
-          // TODO THIS IS SIZE OF ANIMS
-          m_currLevel->texCharacterMap[character].anims.resize(12);
-          auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
-          m_currLevel->texCharacterMap[character].anims[ANIM_IDLE] = Animation(idleFrames, idleSeconds);
-
-          auto [runFrames, runSeconds] = spriteAssets.animSettings.at(ANIM_RUN);
-          m_currLevel->texCharacterMap[character].anims[ANIM_RUN] = Animation(runFrames, runSeconds);
-
-          auto [runAttackFrames, runAttackSeconds] = spriteAssets.animSettings.at(ANIM_RUN_ATTACK);
-          m_currLevel->texCharacterMap[character].anims[ANIM_RUN_ATTACK] = Animation(runAttackFrames, runAttackSeconds);
-
-          auto [slideFrames, slideSeconds] = spriteAssets.animSettings.at(ANIM_SLIDE);
-          m_currLevel->texCharacterMap[character].anims[ANIM_SLIDE] = Animation(slideFrames, slideSeconds);
-
-          auto [shootFrames, shootSeconds] = spriteAssets.animSettings.at(ANIM_SHOOT);
-          m_currLevel->texCharacterMap[character].anims[ANIM_SHOOT] = Animation(shootFrames, shootSeconds, 0, true);
-
-          auto [slideShootFrames, slideShootSeconds] = spriteAssets.animSettings.at(ANIM_SLIDE_SHOOT);
-          m_currLevel->texCharacterMap[character].anims[ANIM_SLIDE_SHOOT] = Animation(slideShootFrames, slideShootSeconds, 0, true);
-
-          auto [hitFrames, hitSeconds] = spriteAssets.animSettings.at(ANIM_HIT);
-          m_currLevel->texCharacterMap[character].anims[ANIM_HIT] = Animation(hitFrames, hitSeconds);
-
-          auto [dieFrames, dieSeconds] = spriteAssets.animSettings.at(ANIM_DIE);
-          m_currLevel->texCharacterMap[character].anims[ANIM_DIE] = Animation(dieFrames, dieSeconds);
-
-          auto [attackFrames, attackSeconds] = spriteAssets.animSettings.at(ANIM_SWING);
-          m_currLevel->texCharacterMap[character].anims[ANIM_SWING] = Animation(attackFrames, attackSeconds);
-
-          if (spriteAssets.animSettings.contains(ANIM_SWING_2)) {
-            auto [attack2Frames, attack2Seconds] = spriteAssets.animSettings.at(ANIM_SWING_2);
-            m_currLevel->texCharacterMap[character].anims[ANIM_SWING_2] = Animation(attack2Frames, attack2Seconds);
-          }
-
-          auto [jumpFrames, jumpSeconds] = spriteAssets.animSettings.at(ANIM_JUMP);
-          m_currLevel->texCharacterMap[character].anims[ANIM_JUMP] = Animation(jumpFrames, jumpSeconds, 2);
-
-        }
-      }
-
-      auto [backgroundAudio, backgroundTrack] = loadAudioChunk(assets.backgroundAudioPath, masterAudioGain);
-
-      auto [gameOverAudio, gameOverAudioTrack] = loadAudioChunk(assets.gameOverAudioPath, masterAudioGain);
-
-      auto [stepAudio, stepTrack] = loadAudioChunk(assets.stepAudioPath, masterAudioGain);
-
-      m_currLevel->backgroundAudio = backgroundAudio;
-      m_currLevel->backgroundTrack = backgroundTrack;
-      m_currLevel->gameOverAudio = gameOverAudio;
-      m_currLevel->gameOverAudioTrack = gameOverAudioTrack;
-      m_currLevel->stepTrack = stepTrack;
-      m_currLevel->audioStep = stepAudio;
-
-      // this->lvl = std::move(lvl);
-      return true;
-    };
-
-    void unloadLevel() {
-
-      if (!m_currLevel) {
-        return;
-      }
-
-      if (m_currLevel->backgroundTrack && MIX_TrackPlaying(m_currLevel->backgroundTrack)) {
-        MIX_StopTrack(m_currLevel->backgroundTrack, 0);
-      }
-
-      if (m_currLevel->backgroundTrack) { MIX_DestroyTrack(m_currLevel->backgroundTrack); }
-      if (m_currLevel->backgroundAudio) { MIX_DestroyAudio(m_currLevel->backgroundAudio); }
-
-      for (SDL_Texture *tex : textures) {
-        if (tex) {
-          SDL_DestroyTexture(tex);
-        }
-      }
-      m_currLevel->textures.clear();
-
-      // deletes the owned obj and sets to nullptr
-      m_currLevel->map.reset();
-      m_currLevel.reset();
-
-
-    };
-
-    // headless is for server resources state
-    void loadAllAssets(SDLState &state, GameState &gs, bool headless){
-
-      m_masterAudioGain = MIX_GetMasterGain(mixer);
-      float chunkAudioGain = m_masterAudioGain * 3;
-
-      std::tie(audioShoot, shootTrack) = loadAudioChunk("data/audio/fireball_whoosh.mp3", chunkAudioGain);
-      std::tie(audioSword1, sword1Track) = loadAudioChunk("data/audio/sword/sword_swing_1.mp3", chunkAudioGain);
-      std::tie(audioShootHit, hitTrack) = loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
-      std::tie(audioBoneImpact, boneImpactHitTrack) = loadAudioChunk("data/audio/impact/bone_impact.mp3", chunkAudioGain);
-      std::tie(audioProjectileEnemyHit, enemyProjectileHitTrack) = loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
-      std::tie(audioEnemyDie, enemyDieTrack) = loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
-      std::tie(audioJump, jumpTrack) = loadAudioChunk("data/audio/movement/jump.wav", chunkAudioGain);
-
-
-
-      // load level specific assets
-      bool lvlLoaded = loadLevel(LevelIndex::LEVEL_1, state, gs, m_masterAudioGain, headless);
-
-      if (!lvlLoaded) {
-        static_assert("level failed to load");
-        return;
-      }
-
-      // load global assets, need to more players as globalResources
-      bulletAnims.resize(2);
-      bulletAnims[ANIM_BULLET_MOVING] = Animation(9, 1.0f);
-      bulletAnims[ANIM_BULLET_HIT] = Animation(4, 0.15f);
-      if (!headless) {
-        // texBullet = loadTexture(state.renderer, "data/bullet.png");
-        // texBulletHit = loadTexture(state.renderer, "data/bullet_hit.png");
-        texBulletHit = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
-        texBullet = m_currLevel->loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
-        texMainMenu = m_currLevel->loadTexture(state.renderer, "data/maps/title_screen/title_screen.png");
-
-
-
-        // TODO make scene from level manifest for main menu and and pause menu
-        mainMenuAnim = std::make_shared<Animation>(58, 7.0f);
-        // auto [mainMenuAudio, mainMenuTrack] = loadAudioChunk("data/audio/22. Banners in the Wind.wav", chunkAudioGain);
-        auto [mainMenuAudio, mainMenuTrack] = loadAudioChunk("data/audio/Final_Boss_Battle.wav", chunkAudioGain);
-        this->mainMenuTrack = mainMenuTrack;
-        mainMenuCutscene = {
-          UIManager::Cutscene{
-          .tex = texMainMenu,
-          .anim = mainMenuAnim,
-          .scale = 1.2,
-          .numFrameColumns = 8,
-          .frameH = 540.0f,
-          .frameW = 800.0f,
-          .yOffset = -50,
-          .loopScene = true,
-          }
-        };
-
-        texCharSelect = m_currLevel->loadTexture(state.renderer, "data/cutscenes/menu/character_select.png");
-        charSelectAnim = std::make_shared<Animation>(8, 2.0f);
-        characterSelectScene = {
-          UIManager::Cutscene{
-          .tex = texCharSelect,
-          .anim = charSelectAnim,
-          .scale = 1.0,
-          .numFrameColumns = 3,
-          .frameH = 360.0f,
-          .frameW = 640.0f,
-          .loopScene = false,
-          }
-        };
-
-        texPauseMenu = m_currLevel->loadTexture(state.renderer, "data/cutscenes/menu/pause_menu.png");
-        pauseMenuAnim = std::make_shared<Animation>(1, 1.0f, 0, true);
-        pauseMenuScene = {
-          UIManager::Cutscene{
-          .tex = texPauseMenu,
-          .anim = pauseMenuAnim,
-          .scale = 1.0,
-          .numFrameColumns = 1,
-          .frameH = 360.0f,
-          .frameW = 640.0f,
-          .loopScene = false,
-          }
-        };
-      }
-
-
-
-    }
-
-    // TODO: unload global resources and currLevel resources
-    void unload() {
-      // for (SDL_Texture *tex : textures) {
-      //   SDL_DestroyTexture(tex);
-      // }
-
-
-      unloadLevel(); // todo need to fix
-      // // cleanup audio
-      // for (MIX_Audio* chunk: audioBuff) {
-
-      // // destroy chunks
-      //   MIX_DestroyAudio(chunk);
-      // };
-
-      // for (MIX_Track* track: audioTracks) {
-      //   MIX_DestroyTrack(track);
-      // }
-
-    };
-
-  };
-
-
   /*
   Engine is the main class that provides all the functionality to run our game
   TODO: Must refactor this with Template pattern to make it a standalone reusable 2D game engine interface
@@ -732,7 +237,7 @@ namespace game_engine {
     private:
       SDLState m_sdlState;
       GameState m_gameState;
-      Resources m_resources;
+      MIX_Mixer* m_mixer{nullptr};
       std::atomic<bool> m_gameRunning{false};
       std::mutex m_levelMutex;
       GameRunMode m_gameType;
@@ -746,7 +251,7 @@ namespace game_engine {
 
     public:
     // TODO later will need to pass gameConfig to constructor
-      Engine(TTF_Font* font) : m_sdlState{}, m_gameState(m_sdlState), m_resources(m_sdlState, font), m_gameType(SinglePlayer) {
+      Engine() : m_sdlState{}, m_gameState(m_sdlState), m_gameType(SinglePlayer) {
       }
       ~Engine();
 
@@ -766,11 +271,7 @@ namespace game_engine {
       void cleanup(); // can be ref or pointer; if using pointer, need to use -> instead of
 
       // AudioManager
-      void setBackgroundSoundtrack();
-      void stopBackgroundSoundtrack();
-      void setGameOverSoundtrack();
-      void stopGameOverSoundtrack();
-      void setAudioSoundtrack(MIX_Track* track); // generics
+      void setAudioSoundtrack(MIX_Track* track, int loops = -1); // generic soundtrack play
       void stopAudioSoundtrack(MIX_Track* track);
 
       // Networking
@@ -783,7 +284,7 @@ namespace game_engine {
       GameObject &getPlayer();
       SDLState &getSDLState();
       GameState &getGameState();
-      Resources &getResources();
+      MIX_Mixer* getMixer();
 
       // setters
       void setWindowSize(int height, int width);
