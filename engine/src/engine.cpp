@@ -277,5 +277,5 @@ void game_engine::Engine::cleanup() {
   ImGui::DestroyContext();
   // if (state.renderer) { SDL_DestroyRenderer(state.renderer); state.renderer = nullptr; }
   // if (state.window) { SDL_DestroyWindow(state.window); state.window = nullptr; }
-  // SDL_Quit();
+  SDL_Quit();
 }

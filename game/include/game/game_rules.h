@@ -12,8 +12,16 @@
 
 namespace game {
 
+// IGameRules is defined in the engine and requires us to implement its methods (onInit, onEvent, onUpdate, onRender, onShutdown) which are called at appropriate places in the game engines game loop
 class GameRules : public eng::IGameRules {
 public:
+  // With explicit, only direct construction is allowed:
+
+  // GameRules rules(font);      // OK
+  // GameRules rules{font};      // OK
+
+  // GameRules rules = font;     // not allowed
+  // f(font);                    // not allowed
   explicit GameRules(
     TTF_Font* font,
     std::unique_ptr<IBootstrap> bootstrap = nullptr,
