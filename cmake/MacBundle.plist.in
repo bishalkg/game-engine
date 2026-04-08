@@ -9,7 +9,7 @@
   <key>CFBundleIdentifier</key>
   <string>@MACOSX_BUNDLE_GUI_IDENTIFIER@</string>
   <key>CFBundleExecutable</key>
-  <string>game</string>
+  <string>@APP_EXECUTABLE_NAME@</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleVersion</key>

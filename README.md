@@ -239,6 +239,7 @@ sequenceDiagram
 ```cpp
 // Example usage pattern
 game::GameRules rules(
+  font,
   std::make_unique<MyBootstrap>(),
   std::make_unique<MyInputSystem>(),
   std::make_unique<MyUIFlow>(),
@@ -253,7 +254,7 @@ game::GameRules rules(
 
 5. Build and test:
    - `cmake --preset default`
-   - `cmake --build build --target game`
+   - `cmake --build build --target game -j2`
 
 ### Minimal implementation order
 
@@ -276,13 +277,13 @@ cmake --preset default
 Build engine + game app:
 
 ```bash
-cmake --build build --target game
+cmake --build build --target game -j2
 ```
 
 Run from build output:
 
 ```bash
-./build/game.app/Contents/MacOS/game
+./build/JeetersCastle.app/Contents/MacOS/JeetersCastle
 ```
 
 ## macOS App Bundle Packaging
@@ -297,23 +298,29 @@ Build the bundle:
 
 ```bash
 cmake --preset default
+cmake --build build --target game -j2
 cmake --build build --target bundle_game
 ```
+
+Notes:
+
+- `game` builds the actual `JeetersCastle.app` executable target.
+- `bundle_game` runs the extra macOS bundle fixup step so the app is easier to move to another Mac.
 
 Bundle output:
 
 ```text
-build/game.app
+build/JeetersCastle.app
 ```
 
 ### Bundle Layout and File Roles
 
 ```text
-build/game.app/
+build/JeetersCastle.app/
   Contents/
     Info.plist
     MacOS/
-      game
+      JeetersCastle
     Resources/
       data/
         maps/
@@ -337,7 +344,7 @@ build/game.app/
 - `Contents/Info.plist`
   - macOS bundle metadata (name, identifier, version).
   - Generated from `cmake/MacBundle.plist.in`.
-- `Contents/MacOS/game`
+- `Contents/MacOS/JeetersCastle`
   - Main executable built from this repo.
 - `Contents/Resources/data`
   - Full copy of the repo `data/` folder.
@@ -356,19 +363,19 @@ This keeps existing relative asset paths (for example `data/cutscenes/fonts/...`
 Check bundle exists:
 
 ```bash
-test -d build/game.app && echo OK
+test -d build/JeetersCastle.app && echo OK
 ```
 
 Check a packaged asset:
 
 ```bash
-test -f build/game.app/Contents/Resources/data/maps/level_1/level_1.tmx && echo OK
+test -f build/JeetersCastle.app/Contents/Resources/data/maps/level_1/level_1.tmx && echo OK
 ```
 
 Inspect dylib linkage:
 
 ```bash
-otool -L build/game.app/Contents/MacOS/game
+otool -L build/JeetersCastle.app/Contents/MacOS/JeetersCastle
 ```
 
 You should see SDL and related libs resolved from:
@@ -380,7 +387,7 @@ You should see SDL and related libs resolved from:
 Launch bundle:
 
 ```bash
-open "build/game.app"
+open "build/JeetersCastle.app"
 ```
 
 ## Packaging Implementation Files

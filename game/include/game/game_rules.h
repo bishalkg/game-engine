@@ -30,6 +30,7 @@ public:
     std::unique_ptr<ISimulationSystem> simulationSystem = nullptr,
     std::unique_ptr<IRenderSystem> renderSystem = nullptr);
 
+  // “there is no valid GameRules constructor with exactly these 5 arguments.” = delete is a C++ way to explicitly ban a function or overload.
   GameRules(
     std::unique_ptr<IBootstrap>,
     std::unique_ptr<IInputSystem>,

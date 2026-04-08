@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <format>
 
 #include "engine/engine.h"
 
@@ -104,12 +103,20 @@ if (ctx.gameState.currentView == UIManager::GameView::LevelLoading) return;
 
       // debugging
       if (ctx.gameState.debugMode) {
+        char debugText[256];
+        SDL_snprintf(
+          debugText,
+          sizeof(debugText),
+          "State: %d  Direction: %.2f B: %zu, G: %d, Px: %.2f, Py: %.2f, VPx: %.2f",
+          static_cast<int>(player.data.player.state),
+          player.direction,
+          ctx.gameState.bullets.size(),
+          player.grounded ? 1 : 0,
+          player.position.x,
+          player.position.y,
+          ctx.gameState.mapViewport.x);
         SDL_SetRenderDrawColor(ctx.sdlState.renderer, 255, 255, 255, 255);
-        SDL_RenderDebugText(
-            ctx.sdlState.renderer,
-            5,
-            5,
-            std::format("State: {}  Direction: {} B: {}, G: {}, Px: {}, Py:{}, VPx: {}", static_cast<int>(player.data.player.state), player.direction, ctx.gameState.bullets.size(), player.grounded, player.position.x, player.position.y, ctx.gameState.mapViewport.x).c_str());
+        SDL_RenderDebugText(ctx.sdlState.renderer, 5, 5, debugText);
       }
     }
 

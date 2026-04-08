@@ -1,7 +1,6 @@
 #include "game/default_systems.h"
 
 #include <cmath>
-#include <format>
 
 #include "engine/engine.h"
 
@@ -27,21 +26,20 @@ public:
 
       auto& player = engine.getPlayer();
       if (gameState.debugMode) {
+        char debugText[256];
+        SDL_snprintf(
+          debugText,
+          sizeof(debugText),
+          "State: %d  Direction: %.2f B: %zu, G: %d, Px: %.2f, Py: %.2f, VPx: %.2f",
+          static_cast<int>(player.data.player.state),
+          player.direction,
+          gameState.bullets.size(),
+          player.grounded ? 1 : 0,
+          player.position.x,
+          player.position.y,
+          gameState.mapViewport.x);
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_RenderDebugText(
-          renderer,
-          5,
-          5,
-          std::format(
-            "State: {}  Direction: {} B: {}, G: {}, Px: {}, Py:{}, VPx: {}",
-            static_cast<int>(player.data.player.state),
-            player.direction,
-            gameState.bullets.size(),
-            player.grounded,
-            player.position.x,
-            player.position.y,
-            gameState.mapViewport.x)
-            .c_str());
+        SDL_RenderDebugText(renderer, 5, 5, debugText);
       }
     }
   }
