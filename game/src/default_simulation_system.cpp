@@ -1,9 +1,11 @@
 #include "game/default_systems.h"
 
 #include <algorithm>
-#include <cmath>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "engine/engine.h"
+#include "engine/gameplay_simulation.h"
 
 namespace {
 
@@ -13,1019 +15,473 @@ struct SimContext {
   game_engine::Engine& engine;
   game_engine::GameState& gameState;
   game::GameResources& resources;
-  game_engine::SDLState& sdlState;
 };
 
-static void updateGameObject(SimContext& ctx, GameObject& obj, float deltaTime);
-static void handleCollision(SimContext& ctx, GameObject& a, GameObject& b, float deltaTime);
-static void collisionResponse(
-  SimContext& ctx,
-  const SDL_FRect& rectA,
-  const SDL_FRect& rectB,
-  const SDL_FRect& rectC,
-  GameObject& objA,
-  GameObject& objB,
-  float deltaTime);
+struct AudioObjectState {
+  ObjectClass objClass = ObjectClass::Level;
+  int currentAnimation = -1;
+  PlayerState playerState = PlayerState::idle;
+  EnemyState enemyState = EnemyState::idle;
+  BulletState bulletState = BulletState::inactive;
+  int healthPoints = 0;
+  int manaPoints = 0;
+  bool jumpImpulseApplied = false;
+};
 
+using AudioStateMap =
+  std::unordered_map<game_engine::GameObjectKey, AudioObjectState, game_engine::GameObjectKeyHash>;
 
-static void updateAllObjects(SimContext& ctx, float deltaTime) {
-
-  if (ctx.gameState.evaluateGameOver()) {
-    ctx.engine.setAudioSoundtrack(
-      ctx.resources.m_currLevel ? ctx.resources.m_currLevel->gameOverAudioTrack : nullptr,
-      0);
+SDL_Texture* pickEntityTexture(
+  const EntityResources& entityRes,
+  ObjectClass objClass,
+  const ObjectData& data,
+  int currentAnimation) {
+  if (objClass == ObjectClass::Projectile) {
+    return nullptr;
   }
 
-  // if singleplayer let is pass through normal logic
-  for (auto &layer : ctx.gameState.layers) {
-    for (GameObject &obj : layer) { // for each obj in layer
-      // optimization to avoid n*m comparisions
-      if (obj.dynamic) {
-        updateGameObject(ctx, obj, deltaTime);
-      }
-      // if (obj.type == ObjectType::player) {
-      //   bool left  = state.keys ? state.keys[SDL_SCANCODE_LEFT]  : false;
-      //   bool right = state.keys ? state.keys[SDL_SCANCODE_RIGHT] : false;
-      //   SDL_Log("pos=(%.2f,%.2f) vel=(%.2f,%.2f) left=%d right=%d", obj.position.x, obj.position.y, obj.velocity.x, obj.velocity.y, int(left), int(right));
-      // }
+  switch (currentAnimation) {
+    case ANIM_RUN:
+      return entityRes.texRun ? entityRes.texRun : entityRes.texWalk;
+    case ANIM_SHOOT:
+      return entityRes.texShoot ? entityRes.texShoot : entityRes.texIdle;
+    case ANIM_SLIDE:
+      return entityRes.texSlide ? entityRes.texSlide : entityRes.texRun;
+    case ANIM_SLIDE_SHOOT:
+      return entityRes.texSlideShoot ? entityRes.texSlideShoot : entityRes.texSlide;
+    case ANIM_SWING:
+      return entityRes.texAttack ? entityRes.texAttack : entityRes.texIdle;
+    case ANIM_JUMP:
+      return entityRes.texJump ? entityRes.texJump : entityRes.texRun;
+    case ANIM_HIT:
+      return entityRes.texHit ? entityRes.texHit : entityRes.texIdle;
+    case ANIM_DIE:
+      return entityRes.texDie ? entityRes.texDie : entityRes.texIdle;
+    case ANIM_RUN_ATTACK:
+      return entityRes.texRunAttack ? entityRes.texRunAttack : entityRes.texRun;
+    case ANIM_SWING_2:
+      return entityRes.texAttack2 ? entityRes.texAttack2 : entityRes.texAttack;
+    case ANIM_IDLE:
+    default:
+      break;
+  }
+
+  if (objClass == ObjectClass::Player) {
+    switch (data.player.state) {
+      case PlayerState::jumping:
+        return entityRes.texJump ? entityRes.texJump : entityRes.texRun;
+      case PlayerState::hurt:
+        return entityRes.texHit ? entityRes.texHit : entityRes.texIdle;
+      case PlayerState::dead:
+        return entityRes.texDie ? entityRes.texDie : entityRes.texIdle;
+      default:
+        return entityRes.texIdle;
     }
   }
 
-  // update bullet physics
-  for (GameObject &bullet : ctx.gameState.bullets) {
-    updateGameObject(ctx, bullet, deltaTime);
+  switch (data.enemy.state) {
+    case EnemyState::hurt:
+      return entityRes.texHit ? entityRes.texHit : entityRes.texIdle;
+    case EnemyState::dead:
+      return entityRes.texDie ? entityRes.texDie : entityRes.texIdle;
+    case EnemyState::attack:
+      return entityRes.texAttack ? entityRes.texAttack : entityRes.texRun;
+    default:
+      return entityRes.texIdle;
   }
-
-
-  // if multiplayer, we need to use the latest GameSnapshot to update the objects
-  if (ctx.engine.isClientMode() || ctx.engine.isHostMode()) {
-    // m_gameClient will have the latest snapshot so use a getter to get the data
-
-
-
-  }
-
 }
 
-static void updateMapViewport(SimContext& ctx, GameObject& player) {
-  if (!ctx.resources.m_currLevel || !ctx.resources.m_currLevel->map) return;
+void applyReplicatedAnimation(GameObject& obj, const game_engine::NetGameObjectSnapshot& snap) {
+  if (snap.currentAnimation == UINT32_MAX) {
+    obj.currentAnimation = -1;
+    obj.spriteFrame = static_cast<int>(snap.spriteFrame);
+    return;
+  }
 
-  int mapWpx = ctx.resources.m_currLevel->map->mapWidth * ctx.resources.m_currLevel->map->tileWidth;
-  int mapHpx = ctx.resources.m_currLevel->map->mapHeight * ctx.resources.m_currLevel->map->tileHeight;
+  obj.currentAnimation = static_cast<int>(snap.currentAnimation);
+  obj.spriteFrame = static_cast<int>(snap.spriteFrame);
+  if (obj.currentAnimation >= 0 && obj.currentAnimation < static_cast<int>(obj.animations.size())) {
+    obj.animations[obj.currentAnimation].setElapsed(snap.animElapsed);
+  }
+}
+
+void applyPresentation(game::GameResources& resources, GameObject& obj) {
+  if (obj.objClass == ObjectClass::Projectile) {
+    obj.texture = obj.currentAnimation == ANIM_RUN ? resources.texBulletHit : resources.texBullet;
+    return;
+  }
+
+  const auto it = resources.m_currLevel->texCharacterMap.find(obj.spriteType);
+  if (it == resources.m_currLevel->texCharacterMap.end()) {
+    obj.texture = nullptr;
+    return;
+  }
+
+  obj.texture = pickEntityTexture(
+    it->second,
+    obj.objClass,
+    obj.data,
+    obj.currentAnimation >= 0 ? obj.currentAnimation : ANIM_IDLE);
+}
+
+GameObject buildReplicatedObject(SimContext& ctx, const game_engine::NetGameObjectSnapshot& snap) {
+  GameObject obj(128, 128);
+  obj.id = snap.id;
+  obj.objClass = snap.type;
+  obj.spriteType = snap.spriteType;
+  obj.position = snap.position;
+  obj.velocity = snap.velocity;
+  obj.acceleration = snap.acceleration;
+  obj.direction = snap.direction;
+  obj.maxSpeedX = snap.maxSpeedX;
+  obj.grounded = snap.grounded;
+  obj.shouldFlash = snap.shouldFlash;
+  obj.dynamic = true;
+
+  if (snap.type == ObjectClass::Projectile) {
+    obj.drawScale = 2.0f;
+    obj.colliderNorm = {.x = 0.0f, .y = 0.40f, .w = 0.5f, .h = 0.1f};
+    obj.applyScale();
+    obj.animations = ctx.resources.bulletAnims;
+    obj.data.bullet = snap.data.bullet;
+  } else {
+    const auto& entityRes = ctx.resources.m_currLevel->texCharacterMap.at(snap.spriteType);
+    obj.animations = entityRes.anims;
+
+    if (snap.type == ObjectClass::Player) {
+      obj.data.player = snap.data.player;
+      obj.drawScale = 1.5f;
+      float wFrac = 0.30f;
+      float hFrac = 0.40f;
+      obj.colliderNorm = {.x = 0.10f, .y = 0.9f - hFrac, .w = wFrac, .h = hFrac};
+      switch (snap.spriteType) {
+        case SpriteType::Player_Knight:
+          obj.colliderNorm = {.x = 0.1f, .y = 0.5f, .w = wFrac, .h = 0.5f};
+          break;
+        case SpriteType::Player_Mage:
+          obj.colliderNorm = {.x = 0.30f, .y = 0.5f, .w = wFrac, .h = 0.5f};
+          break;
+        case SpriteType::Player_Marie:
+        case SpriteType::Player_Bonkfather:
+          obj.colliderNorm = {.x = 0.30f, .y = 0.5f, .w = wFrac, .h = 0.5f};
+          obj.drawScale = 2.0f;
+          break;
+        default:
+          break;
+      }
+    } else {
+      obj.data.enemy = snap.data.enemy;
+      switch (snap.spriteType) {
+        case SpriteType::Minotaur_1:
+          obj.drawScale = 2.0f;
+          break;
+        case SpriteType::Skeleton_Warrior:
+        case SpriteType::Red_Werewolf:
+        case SpriteType::Skeleton_Pikeman:
+          obj.drawScale = 1.5f;
+          break;
+        default:
+          break;
+      }
+      obj.colliderNorm = {.x = 0.35f, .y = 0.4f, .w = 0.30f, .h = 0.6f};
+    }
+    obj.applyScale();
+  }
+
+  applyReplicatedAnimation(obj, snap);
+  applyPresentation(ctx.resources, obj);
+  return obj;
+}
+
+void updateReplicatedObject(
+  SimContext& ctx,
+  GameObject& obj,
+  const game_engine::NetGameObjectSnapshot& snap) {
+  obj.spriteType = snap.spriteType;
+  obj.position = snap.position;
+  obj.velocity = snap.velocity;
+  obj.acceleration = snap.acceleration;
+  obj.direction = snap.direction;
+  obj.maxSpeedX = snap.maxSpeedX;
+  obj.grounded = snap.grounded;
+  obj.shouldFlash = snap.shouldFlash;
+
+  if (obj.objClass == ObjectClass::Projectile) {
+    obj.data.bullet = snap.data.bullet;
+  } else if (obj.objClass == ObjectClass::Player) {
+    obj.data.player = snap.data.player;
+  } else if (obj.objClass == ObjectClass::Enemy) {
+    obj.data.enemy = snap.data.enemy;
+  }
+
+  applyReplicatedAnimation(obj, snap);
+  applyPresentation(ctx.resources, obj);
+}
+
+void reconcileReplicatedLayer(
+  SimContext& ctx,
+  const game_engine::NetGameStateSnapshot& snapshot) {
+  auto& layer = ctx.gameState.layers[ctx.gameState.playerLayer];
+  std::unordered_map<game_engine::GameObjectKey, std::size_t, game_engine::GameObjectKeyHash> existing;
+  for (std::size_t idx = 0; idx < layer.size(); ++idx) {
+    const auto& obj = layer[idx];
+    if (obj.dynamic && (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy)) {
+      existing[{obj.objClass, obj.id}] = idx;
+    }
+  }
+
+  std::unordered_set<game_engine::GameObjectKey, game_engine::GameObjectKeyHash> seen;
+  for (const auto& [key, snap] : snapshot.m_gameObjects) {
+    if (snap.type != ObjectClass::Player && snap.type != ObjectClass::Enemy) {
+      continue;
+    }
+    seen.insert(key);
+    const auto it = existing.find(key);
+    if (it == existing.end()) {
+      layer.push_back(buildReplicatedObject(ctx, snap));
+      existing[key] = layer.size() - 1;
+    } else {
+      updateReplicatedObject(ctx, layer[it->second], snap);
+    }
+  }
+
+  layer.erase(
+    std::remove_if(
+      layer.begin(),
+      layer.end(),
+      [&seen](const GameObject& obj) {
+        return obj.dynamic &&
+               (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy) &&
+               !seen.contains({obj.objClass, obj.id});
+      }),
+    layer.end());
+}
+
+void reconcileReplicatedBullets(
+  SimContext& ctx,
+  const game_engine::NetGameStateSnapshot& snapshot) {
+  std::unordered_map<uint32_t, std::size_t> existing;
+  for (std::size_t idx = 0; idx < ctx.gameState.bullets.size(); ++idx) {
+    existing[ctx.gameState.bullets[idx].id] = idx;
+  }
+
+  std::unordered_set<uint32_t> seen;
+  for (const auto& [key, snap] : snapshot.m_gameObjects) {
+    if (snap.type != ObjectClass::Projectile) {
+      continue;
+    }
+    seen.insert(key.second);
+    const auto it = existing.find(key.second);
+    if (it == existing.end()) {
+      ctx.gameState.bullets.push_back(buildReplicatedObject(ctx, snap));
+      existing[key.second] = ctx.gameState.bullets.size() - 1;
+    } else {
+      updateReplicatedObject(ctx, ctx.gameState.bullets[it->second], snap);
+    }
+  }
+
+  ctx.gameState.bullets.erase(
+    std::remove_if(
+      ctx.gameState.bullets.begin(),
+      ctx.gameState.bullets.end(),
+      [&seen](const GameObject& obj) { return !seen.contains(obj.id); }),
+    ctx.gameState.bullets.end());
+}
+
+void applyAuthoritativeSnapshot(
+  SimContext& ctx,
+  const game_engine::NetGameStateSnapshot& snapshot,
+  uint32_t localPlayerID) {
+  if (!ctx.resources.m_currLevel || ctx.gameState.playerLayer < 0 ||
+      ctx.gameState.playerLayer >= static_cast<int>(ctx.gameState.layers.size())) {
+    return;
+  }
+
+  ctx.gameState.m_stateLastUpdatedAt = snapshot.m_stateLastUpdatedAt;
+  ctx.gameState.currentLevelId = snapshot.levelId;
+
+  reconcileReplicatedLayer(ctx, snapshot);
+  reconcileReplicatedBullets(ctx, snapshot);
+
+  ctx.gameState.playerIndex = -1;
+  for (int idx = 0; idx < static_cast<int>(ctx.gameState.layers[ctx.gameState.playerLayer].size()); ++idx) {
+    const auto& obj = ctx.gameState.layers[ctx.gameState.playerLayer][idx];
+    if (obj.objClass == ObjectClass::Player && obj.id == localPlayerID) {
+      ctx.gameState.playerIndex = idx;
+      break;
+    }
+  }
+  if (ctx.gameState.playerIndex == -1) {
+    for (int idx = 0; idx < static_cast<int>(ctx.gameState.layers[ctx.gameState.playerLayer].size()); ++idx) {
+      if (ctx.gameState.layers[ctx.gameState.playerLayer][idx].objClass == ObjectClass::Player) {
+        ctx.gameState.playerIndex = idx;
+        break;
+      }
+    }
+  }
+}
+
+void updateMapViewport(SimContext& ctx, GameObject& player) {
+  if (!ctx.resources.m_currLevel || !ctx.resources.m_currLevel->map) {
+    return;
+  }
+
+  const int mapWpx = ctx.resources.m_currLevel->map->mapWidth * ctx.resources.m_currLevel->map->tileWidth;
+  const int mapHpx = ctx.resources.m_currLevel->map->mapHeight * ctx.resources.m_currLevel->map->tileHeight;
 
   ctx.gameState.mapViewport.x = std::clamp(
-      (player.position.x + player.spritePixelW * 0.5f) - ctx.gameState.mapViewport.w * 0.5f,
-      0.0f,
-      std::max(0.0f, float(mapWpx - ctx.gameState.mapViewport.w)));
+    (player.position.x + player.spritePixelW * 0.5f) - ctx.gameState.mapViewport.w * 0.5f,
+    0.0f,
+    std::max(0.0f, float(mapWpx - ctx.gameState.mapViewport.w)));
 
   ctx.gameState.mapViewport.y = std::clamp(
-      (player.position.y + player.spritePixelH * 0.5f) - ctx.gameState.mapViewport.h * 0.5f,
-      0.0f,
-      std::max(0.0f, float(mapHpx - ctx.gameState.mapViewport.h)));
+    (player.position.y + player.spritePixelH * 0.5f) - ctx.gameState.mapViewport.h * 0.5f,
+    0.0f,
+    std::max(0.0f, float(mapHpx - ctx.gameState.mapViewport.h)));
 }
 
-static void updateGameplayState(SimContext& ctx, float deltaTime, GameObject& player, const UIManager::UIActions& actions) {
-if (ctx.gameState.currentView == UIManager::GameView::LevelLoading) return;
-
-
-  if (ctx.gameState.currentView == UIManager::GameView::Playing ||
-      ctx.gameState.currentView == UIManager::GameView::PauseMenu
-  ) {
-      ctx.engine.setAudioSoundtrack(
-        ctx.resources.m_currLevel ? ctx.resources.m_currLevel->backgroundTrack : nullptr);
-
-      // update & draw game world to sdl.renderer here (before ImGui::Render)
-      if (!actions.blockGameplayUpdates) {
-        updateAllObjects(ctx, deltaTime);
-        updateMapViewport(ctx, player);
+AudioStateMap captureAudioState(const game_engine::GameState& gameState) {
+  AudioStateMap states;
+  for (const auto& layer : gameState.layers) {
+    for (const auto& obj : layer) {
+      if (!obj.dynamic) {
+        continue;
       }
 
-
-      // debugging
-      if (ctx.gameState.debugMode) {
-        char debugText[256];
-        SDL_snprintf(
-          debugText,
-          sizeof(debugText),
-          "State: %d  Direction: %.2f B: %zu, G: %d, Px: %.2f, Py: %.2f, VPx: %.2f",
-          static_cast<int>(player.data.player.state),
-          player.direction,
-          ctx.gameState.bullets.size(),
-          player.grounded ? 1 : 0,
-          player.position.x,
-          player.position.y,
-          ctx.gameState.mapViewport.x);
-        SDL_SetRenderDrawColor(ctx.sdlState.renderer, 255, 255, 255, 255);
-        SDL_RenderDebugText(ctx.sdlState.renderer, 5, 5, debugText);
+      AudioObjectState state;
+      state.objClass = obj.objClass;
+      state.currentAnimation = obj.currentAnimation;
+      if (obj.objClass == ObjectClass::Player) {
+        state.playerState = obj.data.player.state;
+        state.healthPoints = obj.data.player.healthPoints;
+        state.manaPoints = obj.data.player.manaPoints;
+        state.jumpImpulseApplied = obj.data.player.jumpImpulseApplied;
+      } else if (obj.objClass == ObjectClass::Enemy) {
+        state.enemyState = obj.data.enemy.state;
+        state.healthPoints = obj.data.enemy.healthPoints;
       }
+      states[{obj.objClass, obj.id}] = state;
     }
+  }
 
+  for (const auto& bullet : gameState.bullets) {
+    AudioObjectState state;
+    state.objClass = ObjectClass::Projectile;
+    state.currentAnimation = bullet.currentAnimation;
+    state.bulletState = bullet.data.bullet.state;
+    states[{bullet.objClass, bullet.id}] = state;
+  }
+  return states;
 }
 
-static void updateGameObject(SimContext& ctx, GameObject &obj, float deltaTime) {
+GameObject* findPlayerById(game_engine::GameState& gameState, uint32_t playerID) {
+  if (gameState.playerLayer < 0 || gameState.playerLayer >= static_cast<int>(gameState.layers.size())) {
+    return nullptr;
+  }
+  for (auto& obj : gameState.layers[gameState.playerLayer]) {
+    if (obj.objClass == ObjectClass::Player && obj.id == playerID) {
+      return &obj;
+    }
+  }
+  return nullptr;
+}
 
-  EntityResources entityRes = ctx.resources.m_currLevel->texCharacterMap[obj.spriteType];
+void playSimulationAudio(
+  game::GameResources& resources,
+  const AudioStateMap& before,
+  game_engine::GameState& gameState,
+  uint32_t localPlayerID,
+  float deltaTime) {
+  resources.stepAudioCooldown.step(deltaTime);
+  resources.whooshCooldown.step(deltaTime);
 
-  if (obj.currentAnimation != -1) {
-    obj.animations[obj.currentAnimation].step(deltaTime);
+  GameObject* localPlayer = findPlayerById(gameState, localPlayerID);
+  if (localPlayer) {
+    const auto beforeIt = before.find({ObjectClass::Player, localPlayerID});
+    if (beforeIt != before.end()) {
+      const auto& prev = beforeIt->second;
+      if (!prev.jumpImpulseApplied && localPlayer->data.player.jumpImpulseApplied && resources.audioJump) {
+        MIX_PlayAudio(resources.mixer, resources.audioJump);
+      }
+
+      const bool startedSwing =
+        localPlayer->currentAnimation != prev.currentAnimation &&
+        (localPlayer->currentAnimation == ANIM_SWING ||
+         localPlayer->currentAnimation == ANIM_RUN_ATTACK ||
+         localPlayer->currentAnimation == ANIM_SWING_2);
+      if (startedSwing && resources.audioSword1) {
+        MIX_PlayAudio(resources.mixer, resources.audioSword1);
+      }
+
+      if (localPlayer->data.player.manaPoints < prev.manaPoints &&
+          resources.audioShoot &&
+          resources.whooshCooldown.isTimedOut()) {
+        resources.whooshCooldown.reset();
+        MIX_PlayAudio(resources.mixer, resources.audioShoot);
+      }
+
+      if (localPlayer->data.player.healthPoints < prev.healthPoints && resources.boneImpactHitTrack) {
+        MIX_PlayTrack(resources.boneImpactHitTrack, 0);
+      }
+    }
+
+    if (localPlayer->data.player.state == PlayerState::running &&
+        localPlayer->grounded &&
+        resources.m_currLevel &&
+        resources.m_currLevel->audioStep &&
+        resources.stepAudioCooldown.isTimedOut()) {
+      resources.stepAudioCooldown.reset();
+      MIX_PlayAudio(resources.mixer, resources.m_currLevel->audioStep);
+    }
   }
 
-  // gravity applied globally; downward y force when not grounded
-  if (obj.dynamic && !obj.grounded) {
-    // increase downward velocity = acc*deltaTime every frame
-    obj.velocity += game_engine::Engine::GRAVITY * deltaTime;
-  }
+  bool bulletCollided = false;
+  bool enemyDamaged = false;
+  bool enemyDied = false;
 
-  // const auto widenColliderForSwing = [&](GameObject& o, float currDirection) {
-  //   if (obj.objClass == ObjectClass::Player && obj.data.player.state == PlayerState::swingWeapon) {
-
-  //     // const float drawW = o.spritePixelW / o.drawScale;
-  //     // const float extra  = 0.2f * drawW;
-
-  //     // SDL_FRect c = baseFacing(o);
-  //     // c.w += extra;
-  //     // if (currDirection < 0) c.x -= extra; // extend to the left
-  //     // o.collider = c;
-
-  //     const float drawW = o.spritePixelW / o.drawScale;
-  //     const float extra  = 0.2f * drawW;           // how much to extend the sword
-  //     const auto& base   = o.baseCollider;
-
-  //     o.collider = base;
-  //     o.collider.w = base.w + extra;
-  //     if (currDirection < 0) {
-  //         // facing left: shift left so the leading edge moves outward
-  //         o.collider.x = base.x + extra;
-  //     } else {
-  //         // facing right: leave x as base; extension goes to the right
-  //         o.collider.x = base.x;
-  //     }
-  //   }
-  // };
-  const auto baseFacing = [&](const GameObject& o) {
-      SDL_FRect c = o.baseCollider;
-      if (o.direction < 0) {
-          float drawW = o.spritePixelW / o.drawScale;
-          c.x = drawW - (c.x + c.w); // mirror the base for left
-      }
-      return c;
-  };
-
-  const auto widenColliderForSwing = [&](GameObject& o) {
-      const float drawW = o.spritePixelW / o.drawScale;
-      const float extra = 0.2f * drawW;
-
-      SDL_FRect c = baseFacing(o);
-      c.w += extra;
-      if (o.direction < 0) c.x -= extra; // extend left
-      o.collider = c;
-  };
-
-  float currDirection = 0;
-  if (obj.objClass == ObjectClass::Player) {
-
-    // update direction
-    if (ctx.sdlState.keys[SDL_SCANCODE_LEFT]) {
-      currDirection += -1;
-    }
-    if (ctx.sdlState.keys[SDL_SCANCODE_RIGHT]) {
-      currDirection += 1;
+  AudioStateMap after = captureAudioState(gameState);
+  for (const auto& [key, prev] : before) {
+    const auto afterIt = after.find(key);
+    if (afterIt == after.end()) {
+      continue;
     }
 
-    Timer &weaponTimer = obj.data.player.weaponTimer;
-    weaponTimer.step(deltaTime);
-
-    obj.data.player.healthRecoveryTimer.step(deltaTime);
-    obj.data.player.manaRecoveryTimer.step(deltaTime);
-
-    if (obj.data.player.healthRecoveryTimer.isTimedOut()) {
-      obj.data.player.healthRecoveryTimer.reset();
-      obj.data.player.healthPoints = std::clamp(obj.data.player.healthPoints + 1, 0,
-      obj.data.player.maxHealthPoints);
+    const auto& curr = afterIt->second;
+    if (key.first == ObjectClass::Projectile &&
+        prev.bulletState != BulletState::colliding &&
+        curr.bulletState == BulletState::colliding) {
+      bulletCollided = true;
     }
-    if (obj.data.player.manaRecoveryTimer.isTimedOut()) {
-      obj.data.player.manaRecoveryTimer.reset();
-      obj.data.player.manaPoints = std::clamp(obj.data.player.manaPoints + 1, 0,
-      obj.data.player.maxManaPoints);
-    }
-
-    const bool hasSwingFollowup =
-      entityRes.texAttack2 != nullptr &&
-      static_cast<int>(obj.animations.size()) > ctx.resources.ANIM_SWING_2 &&
-      obj.animations[ctx.resources.ANIM_SWING_2].getFrameCount() > 0;
-
-    const auto resetSwingState = [&obj]() {
-      obj.data.player.swingStage = PlayerSwingStage::None;
-      obj.data.player.queuedFollowupSwing = false;
-      obj.data.player.meleeDamage = 50;
-    };
-
-    const auto exitSwingState = [&obj, &entityRes, &ctx, &currDirection, baseFacing, resetSwingState]() {
-      resetSwingState();
-      obj.collider = baseFacing(obj);
-
-      if (!obj.grounded) {
-        obj.data.player.state = PlayerState::jumping;
-        obj.texture = entityRes.texJump;
-        obj.currentAnimation = ctx.resources.ANIM_JUMP;
-        obj.animations[ctx.resources.ANIM_JUMP].reset();
-        return;
-      }
-
-      if (currDirection != 0) {
-        obj.data.player.state = PlayerState::running;
-        obj.texture = entityRes.texRun;
-        obj.currentAnimation = ctx.resources.ANIM_RUN;
-        obj.animations[ctx.resources.ANIM_RUN].reset();
-        return;
-      }
-
-      obj.data.player.state = PlayerState::idle;
-      obj.texture = entityRes.texIdle;
-      obj.currentAnimation = ctx.resources.ANIM_IDLE;
-      obj.animations[ctx.resources.ANIM_IDLE].reset();
-    };
-
-    const auto startAttack1 = [&obj, &ctx, widenColliderForSwing, resetSwingState](
-      SDL_Texture* attackTex,
-      int attackAnimIndex) {
-      resetSwingState();
-      obj.texture = attackTex;
-      obj.currentAnimation = attackAnimIndex;
-      obj.animations[attackAnimIndex].reset();
-      obj.data.player.state = PlayerState::swingWeapon;
-      obj.data.player.swingStage = PlayerSwingStage::Attack1;
-      widenColliderForSwing(obj);
-      MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioSword1);
-    };
-
-    const auto handleAttacking = [&obj, &entityRes, &weaponTimer, &currDirection, deltaTime, widenColliderForSwing, &ctx](
-      SDL_Texture *tex, SDL_Texture *attackTex, int animIndex, int attackAnimIndex, bool handleJump, auto startAttack1){
-
-
-        if (obj.data.player.meleePressedThisFrame && obj.data.player.state != PlayerState::swingWeapon) {
-          startAttack1(attackTex, attackAnimIndex);
-
-        } else if (ctx.sdlState.keys[SDL_SCANCODE_A]) {
-
-          obj.texture = attackTex;
-          obj.currentAnimation = attackAnimIndex;
-
-          if (obj.animations[attackAnimIndex].currentFrame() == 4) {
-            // obj.animations[shootAnimIndex].freezeAtFrame();
-            // obj.currentAnimation = -1;   // use spriteFrame path
-            // obj.spriteFrame      = 4;
-
-          } else {
-            obj.currentAnimation = attackAnimIndex;
-          }
-
-
-          ctx.resources.whooshCooldown.step(deltaTime); // whooshCooldown should have same length as bullet weaponTimer
-          // When you shoot (no loops, no track index needed):
-
-          if (weaponTimer.isTimedOut() && obj.data.player.manaPoints > 10) {
-
-            weaponTimer.reset();
-
-            if (ctx.resources.whooshCooldown.isTimedOut()) {
-              ctx.resources.whooshCooldown.reset();
-              MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioShoot);
-            }
-            obj.data.player.manaPoints = std::clamp(obj.data.player.manaPoints -2, 0,
-            obj.data.player.maxManaPoints);
-            // create bullets
-            GameObject bullet(128, 128);
-            bullet.drawScale = 2.0f;
-            bullet.colliderNorm = { .x=0.0, .y=0.40, .w=0.5, .h=0.1 };
-            bullet.applyScale();
-
-            bullet.data.bullet = BulletData();
-            bullet.objClass = ObjectClass::Projectile;
-            bullet.direction = obj.direction;
-            bullet.texture = ctx.resources.texBullet;
-            bullet.currentAnimation = ctx.resources.ANIM_BULLET_MOVING;
-            const int yJitter = 50;
-            const float yVelocity = SDL_rand(yJitter) - yJitter / 1.5f;
-
-            const float baseSpeed = 200.0f;
-            const float inherit   = obj.velocity.x * 0.2f; // optional
-            bullet.velocity.x = baseSpeed * obj.direction + inherit;
-            bullet.velocity.y = yVelocity;
-
-            bullet.maxSpeedX = 1000.0f;
-            bullet.animations = ctx.resources.bulletAnims;
-
-            // adjust depending on direction faced; lerp
-            const float left = -20;
-            const float right = 20;
-            const float t = (obj.direction + 1) / 1.0f; // 0 or 1 taking into account neg sign
-            const float xOffset = left + right * t;
-            bullet.position = glm::vec2(
-              obj.position.x + xOffset,
-              obj.position.y + (obj.spritePixelH/bullet.drawScale) / 8.0
-            );
-
-            bool foundInactive = false;
-            for (int i = 0; i < ctx.gameState.bullets.size() && !foundInactive; i++) {
-              if (ctx.gameState.bullets[i].data.bullet.state == BulletState::inactive) {
-                foundInactive = true;
-                ctx.gameState.bullets[i] = bullet;
-              }
-            }
-
-            // only add new if no inactive found
-            if (!foundInactive) {
-              ctx.gameState.bullets.push_back(bullet); // push bullets so we can draw them
-            }
-          }
-
-
-        } else if (handleJump) {
-          if (obj.currentAnimation != ctx.resources.ANIM_JUMP &&
-              obj.currentAnimation != -1) {
-              obj.currentAnimation = ctx.resources.ANIM_JUMP;
-              obj.animations[ctx.resources.ANIM_JUMP].reset();
-              obj.texture = entityRes.texJump;
-          }
-
-          if (obj.currentAnimation == ctx.resources.ANIM_JUMP &&
-              obj.animations[ctx.resources.ANIM_JUMP].isDone()) {
-              obj.currentAnimation = -1;              // mark as finished so it won’t restart
-          }
-
-        } else {
-          obj.animations[ctx.resources.ANIM_SHOOT].reset();
-          obj.animations[ctx.resources.ANIM_SLIDE_SHOOT].reset();
-          // obj.animations[shootAnimIndex].unfreezeAnim();
-          // and then we need to set freezeAtFrame() when .currentFrame() == 4
-          // and unfreezeAnim when SDL_SCANCODE_A is no longer being pressed and set obj.currentAnim accordingly
-          obj.texture = tex;
-          obj.currentAnimation = animIndex;
-      }
-    };
-
-    const bool wantSwing = obj.data.player.meleePressedThisFrame;
-    const bool canSwing  = (obj.data.player.state != PlayerState::swingWeapon);
-    // update animation state
-    switch (obj.data.player.state) {
-      case PlayerState::idle:
-      {
-        obj.collider = baseFacing(obj);
-        if (currDirection != 0) {
-          obj.data.player.state = PlayerState::running;
-          obj.texture = entityRes.texRun;
-          obj.currentAnimation = ctx.resources.ANIM_RUN;
-        } else {
-          // decelerate faster than we speed up
-          if (obj.velocity.x) {
-            const float factor = obj.velocity.x > 0 ? -1.5f : 1.5f;
-            float amount = factor * obj.acceleration.x * deltaTime;
-            if (std::abs(obj.velocity.x) < std::abs(amount)) {
-              obj.velocity.x = 0;
-            } else {
-              obj.velocity.x += amount;
-            }
-          }
-        }
-
-        if (wantSwing && canSwing) {
-            handleAttacking(entityRes.texRun, entityRes.texRunAttack, ctx.resources.ANIM_RUN, ctx.resources.ANIM_RUN_ATTACK, false, startAttack1);
-        } else {
-            handleAttacking(entityRes.texIdle, entityRes.texShoot, ctx.resources.ANIM_IDLE, ctx.resources.ANIM_SHOOT, false, startAttack1);
-        }
-
-        break;
-      }
-      case PlayerState::hurt: {
-        resetSwingState();
-        obj.collider = baseFacing(obj);
-        if (obj.data.player.damageTimer.step(deltaTime)) {
-          obj.data.player.state = PlayerState::idle;
-          obj.texture = entityRes.texIdle;
-          obj.currentAnimation = ctx.resources.ANIM_IDLE;
-        }
-        break;
-      }
-      case PlayerState::dead:
-      {
-        resetSwingState();
-        obj.collider = baseFacing(obj);
-        if (obj.currentAnimation != -1 && obj.animations[obj.currentAnimation].isDone()) {
-          obj.currentAnimation = -1; // prevent animation from looping after death
-          obj.spriteFrame = 4;
-
-          ctx.gameState.currentView = UIManager::GameView::GameOver;
-          ctx.engine.setAudioSoundtrack(
-            ctx.resources.m_currLevel ? ctx.resources.m_currLevel->gameOverAudioTrack : nullptr,
-            0);
-        }
-        break;
-      }
-      case PlayerState::running:
-      {
-        if (currDirection == 0) {
-          obj.data.player.state = PlayerState::idle;
-        }
-
-        ctx.resources.stepAudioCooldown.step(deltaTime);
-        if (ctx.resources.stepAudioCooldown.isTimedOut()) {
-          ctx.resources.stepAudioCooldown.reset();
-          MIX_PlayAudio(ctx.resources.mixer, ctx.resources.m_currLevel->audioStep);
-        }
-
-        // move in opposite dir of velocity, sliding
-        if (obj.velocity.x * obj.direction < 0 && obj.grounded) {
-          handleAttacking(entityRes.texSlide, entityRes.texSlideShoot, ctx.resources.ANIM_SLIDE, ctx.resources.ANIM_SLIDE_SHOOT, false, startAttack1);
-        } else {
-          if (wantSwing && canSwing) {
-            handleAttacking(entityRes.texRun, entityRes.texRunAttack, ctx.resources.ANIM_RUN, ctx.resources.ANIM_RUN_ATTACK, false, startAttack1);
-          } else {
-            handleAttacking(entityRes.texRun, entityRes.texRunShoot, ctx.resources.ANIM_RUN, ctx.resources.ANIM_RUN, false, startAttack1);
-          }
-        }
-
-        break;
-      }
-      case PlayerState::jumping:
-      {
-
-        if (!obj.data.player.jumpImpulseApplied) {
-          obj.data.player.jumpWindupTimer.step(deltaTime);
-          if (obj.data.player.jumpWindupTimer.isTimedOut()) {
-              obj.velocity.y += game_engine::Engine::JUMP_FORCE;   // upward impulse
-              obj.data.player.jumpImpulseApplied = true;
-              MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioJump);
-          }
-        } else {
-          int n = obj.animations[ctx.resources.ANIM_JUMP].getFrameCount(); // e.g. 6 frames -> indices 0..5
-
-          // Airborne: hold second‑to‑last frame once reached
-          if (!obj.grounded && obj.currentAnimation == ctx.resources.ANIM_JUMP) {
-              if (obj.animations[ctx.resources.ANIM_JUMP].currentFrame() >= n - 2) {
-                  obj.currentAnimation = -1;           // stop timered anim
-                  obj.spriteFrame = (n - 2) + 1;       // freeze on frame n-2 (1‑based)
-                  obj.data.player.playLandingFrame = true;
-              }
-          }
-
-          if (obj.grounded) {
-              if (obj.data.player.playLandingFrame) {
-                  obj.currentAnimation = -1;           // show landing frame once
-                  obj.spriteFrame = (n - 1) + 1;       // last frame (1‑based)
-                  obj.data.player.playLandingFrame = false;
-                  break;                               // render this frame; state stays jumping this tick
-              } else {
-                  obj.velocity.y = 0;
-                  obj.data.player.state = PlayerState::idle; // or running
-                  obj.animations[ctx.resources.ANIM_JUMP].reset();
-              }
-          }
-        }
-
-        if (wantSwing && canSwing) {
-          handleAttacking(entityRes.texRun, entityRes.texRunAttack, ctx.resources.ANIM_RUN, ctx.resources.ANIM_RUN_ATTACK, false, startAttack1);
-        } else {
-          handleAttacking(entityRes.texJump, entityRes.texRunShoot, ctx.resources.ANIM_JUMP, ctx.resources.ANIM_JUMP, true, startAttack1);
-        }
-        break;
-      }
-      case PlayerState::swingWeapon: { // handle swinging weapon like handleShooting
-        const bool isAttack1Anim =
-          obj.currentAnimation == ctx.resources.ANIM_RUN_ATTACK ||
-          obj.currentAnimation == ctx.resources.ANIM_SWING;
-        const bool isAttack2Anim =
-          obj.currentAnimation == ctx.resources.ANIM_SWING_2;
-        const bool attack1Done =
-          (obj.currentAnimation == ctx.resources.ANIM_RUN_ATTACK &&
-           obj.animations[ctx.resources.ANIM_RUN_ATTACK].isDone()) ||
-          (obj.currentAnimation == ctx.resources.ANIM_SWING &&
-           obj.animations[ctx.resources.ANIM_SWING].isDone());
-        const bool attack2Done =
-          obj.currentAnimation == ctx.resources.ANIM_SWING_2 &&
-          obj.animations[ctx.resources.ANIM_SWING_2].isDone();
-
-        // If the swing state ever gets out of sync with its animation, fail safe back to locomotion.
-        if (obj.currentAnimation == -1 ||
-            (obj.data.player.swingStage == PlayerSwingStage::Attack1 && !isAttack1Anim) ||
-            (obj.data.player.swingStage == PlayerSwingStage::Attack2 && !isAttack2Anim)) {
-          exitSwingState();
-          break;
-        }
-
-        if (obj.data.player.swingStage == PlayerSwingStage::Attack1 &&
-            hasSwingFollowup &&
-            obj.currentAnimation != -1) {
-          Animation& openerAnim = obj.animations[obj.currentAnimation];
-          if (obj.data.player.meleePressedThisFrame &&
-              openerAnim.currentFrame() >= openerAnim.getFrameCount() / 2) {
-            obj.data.player.queuedFollowupSwing = true;
-          }
-        }
-
-        if (attack1Done && obj.data.player.queuedFollowupSwing && hasSwingFollowup) {
-          if (obj.currentAnimation == ctx.resources.ANIM_RUN_ATTACK) {
-            obj.animations[ctx.resources.ANIM_RUN_ATTACK].reset();
-          } else if (obj.currentAnimation == ctx.resources.ANIM_SWING) {
-            obj.animations[ctx.resources.ANIM_SWING].reset();
-          }
-
-          obj.texture = entityRes.texAttack2;
-          obj.currentAnimation = ctx.resources.ANIM_SWING_2;
-          obj.animations[ctx.resources.ANIM_SWING_2].reset();
-          obj.data.player.swingStage = PlayerSwingStage::Attack2;
-          obj.data.player.queuedFollowupSwing = false;
-          obj.data.player.meleeDamage = 75;
-          widenColliderForSwing(obj);
-          MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioSword1);
-        } else if (attack1Done) {
-          if (obj.currentAnimation == ctx.resources.ANIM_RUN_ATTACK) {
-            obj.animations[ctx.resources.ANIM_RUN_ATTACK].reset();
-          } else if (obj.currentAnimation == ctx.resources.ANIM_SWING) {
-            obj.animations[ctx.resources.ANIM_SWING].reset();
-          }
-          exitSwingState();
-        } else if (attack2Done) {
-          obj.animations[ctx.resources.ANIM_SWING_2].reset();
-          exitSwingState();
-        }
-
-        break;
-      }
-    }
-
-    obj.data.player.meleePressedThisFrame = false;
-  } else if (obj.objClass == ObjectClass::Projectile) {
-
-    obj.data.bullet.liveTimer.step(deltaTime);
-    switch (obj.data.bullet.state) {
-      case BulletState::moving:
-      {
-        if (
-          obj.position.x - ctx.gameState.mapViewport.x < 0 ||
-          obj.position.x - ctx.gameState.mapViewport.x > ctx.sdlState.logW ||
-          obj.position.y - ctx.gameState.mapViewport.y < 0 ||
-          obj.position.y - ctx.gameState.mapViewport.y > ctx.sdlState.logH ||
-          obj.data.bullet.liveTimer.isTimedOut()
-        ) {
-            obj.data.bullet.liveTimer.reset();
-            // obj.position.x = 0; obj.position.y = 0;
-            obj.data.bullet.state = BulletState::inactive;
-        }
-        break;
-      }
-      case BulletState::colliding:
-      {
-        if (obj.animations[obj.currentAnimation].isDone()) {
-          obj.data.bullet.state = BulletState::inactive;
-        }
-        break;
-      }
-    }
-  } else if (obj.objClass == ObjectClass::Enemy) {
-
-    EntityResources entityRes = ctx.resources.m_currLevel->texCharacterMap[obj.spriteType];
-    switch (obj.data.enemy.state) {
-      case EnemyState::idle:
-      {
-        // obj.collider = baseFacing(obj);
-        glm::vec2 distToPlayer = ctx.engine.getPlayer().position - obj.position;
-        if (glm::length(distToPlayer) < 100) {
-          // face the enemy towards the player
-          currDirection = 1;
-          if (distToPlayer.x < 0) {
-            currDirection = -1;
-          };
-          obj.acceleration = glm::vec2(30, 0);
-          obj.texture = entityRes.texRun;
-
-
-          // step the attack timer here
-          // if the timer is done switch state to attack
-          if (obj.data.enemy.attackTimer.step(deltaTime)) {
-            obj.data.enemy.state = EnemyState::attack;
-            obj.texture = entityRes.texAttack;
-            obj.currentAnimation = ctx.resources.ANIM_SWING;
-            obj.data.enemy.attackTimer.reset();
-            widenColliderForSwing(obj);
-          }
-
-
-        } else {
-          // stop them from moving when too far away
-          obj.acceleration = glm::vec2(0);
-          obj.velocity.x = 0;
-          obj.texture = entityRes.texIdle;
-        }
-
-        break;
-      }
-      case EnemyState::attack:
-      {
-        if (obj.data.enemy.idleTimer.step(deltaTime)) {
-          obj.data.enemy.state = EnemyState::idle;
-          obj.texture = entityRes.texIdle;
-          obj.currentAnimation = ctx.resources.ANIM_IDLE;
-          obj.data.enemy.idleTimer.reset();
-          obj.collider = baseFacing(obj);  // revert to normal collider
-        }
-      }
-      case EnemyState::hurt:
-      {
-        if (obj.data.enemy.damageTimer.step(deltaTime)) {
-          obj.data.enemy.state = EnemyState::idle;
-          obj.texture = entityRes.texIdle;
-          obj.currentAnimation = ctx.resources.ANIM_IDLE;
-          obj.collider = baseFacing(obj);
-        }
-        break;
-      }
-      case EnemyState::dead:
-      {
-        obj.velocity.x = 0;
-        if (obj.currentAnimation != -1 && obj.animations[obj.currentAnimation].isDone()) {
-          // stop animations for dead enemy
-          obj.currentAnimation = -1;
-          obj.spriteFrame = 18; // TODO this is because enemy has 18 frames
-        }
-        break;
+    if (key.first == ObjectClass::Enemy && curr.healthPoints < prev.healthPoints) {
+      enemyDamaged = true;
+      if (curr.enemyState == EnemyState::dead) {
+        enemyDied = true;
       }
     }
   }
 
-  if (currDirection && obj.direction != currDirection) {
-    // Direction changed - mirror the collision box offset to match flipped character
-    // and adjust position to keep collision box at same world position
-    float drawW = obj.spritePixelW / obj.drawScale;
-    float oldColliderX = obj.collider.x;
-    float newColliderX = drawW - obj.collider.x - obj.collider.w;
-    obj.collider.x = newColliderX;
-    float positionShift = newColliderX - oldColliderX;
-    obj.position.x -= positionShift; // Keep world position constant
-
-    // If this is the player, adjust camera to prevent screen jump
-    // if (obj.objClass == ObjectClass::Player) {
-    //   // ctx.gameState.mapViewport.x -= positionShift/2;
-    // }
-
-    obj.direction = currDirection;
-  } else if (currDirection) {
-    obj.direction = currDirection;
-  }
-  // update velocity based on currDirection (which way we're facing),
-  // acceleration and deltaTime
-  obj.velocity += currDirection * obj.acceleration * deltaTime;
-  if (std::abs(obj.velocity.x) > obj.maxSpeedX) { // cap the max velocity
-    obj.velocity.x = currDirection * obj.maxSpeedX;
-  }
-  // update position based on velocity
-  obj.position += obj.velocity * deltaTime;
-
-  // handle collision detection
-  bool foundGround = false;
-  for (auto &layer : ctx.gameState.layers) {
-    for (GameObject &objB: layer){
-      // if (obj.type == ObjectType::enemy) {
-      //   std::cout << "found Ground" << foundGround << std::endl;
-      // }
-      if (&obj != &objB && objB.collider.h != 0 && objB.collider.w != 0) {
-        handleCollision(ctx, obj, objB, deltaTime);
-
-        // update ground sensor only when landing on level tiles
-        if (objB.objClass == ObjectClass::Level) {
-          SDL_FRect sensor{
-            .x = obj.position.x + obj.collider.x,
-            .y = obj.position.y + obj.collider.y + obj.collider.h,
-            .w = obj.collider.w, .h = 1
-          };
-
-          SDL_FRect rectB{
-            .x = objB.position.x + objB.collider.x,
-            .y = objB.position.y + objB.collider.y,
-            .w = objB.collider.w, .h = objB.collider.h
-          };
-
-          SDL_FRect dummyRectC{0};
-
-          if (SDL_GetRectIntersectionFloat(&sensor, &rectB, &dummyRectC)) {
-            foundGround = true;
-          }
-        }
-
-      }
-    }
-  }
-
-  if (obj.grounded != foundGround) {
-    // switching grounded state
-    obj.grounded = foundGround;
-    if (foundGround && obj.objClass == ObjectClass::Player && !obj.data.player.playLandingFrame) {
-        obj.data.player.state = PlayerState::running;
-
-        if (obj.grounded && obj.data.player.jumpImpulseApplied) {
-          obj.data.player.state = PlayerState::idle;
-          obj.data.player.jumpImpulseApplied = false;
-          obj.data.player.jumpWindupTimer.reset();
-        }
-      }
-
+  if (enemyDied && resources.audioEnemyDie) {
+    MIX_PlayAudio(resources.mixer, resources.audioEnemyDie);
+  } else if (enemyDamaged && resources.enemyProjectileHitTrack) {
+    MIX_PlayTrack(resources.enemyProjectileHitTrack, 0);
+  } else if (bulletCollided && resources.hitTrack) {
+    MIX_PlayTrack(resources.hitTrack, 0);
   }
 }
 
-/*
- collisionResponse will dictates what you want to happen given a collision has been detected
- The defaultResponse handles vertical and horizontal collisions by preventing sprites from overlapping due to collision
-*/
-static void collisionResponse(SimContext& ctx, const SDL_FRect &rectA, const SDL_FRect &rectB, const SDL_FRect &rectC, GameObject &objA, GameObject &objB, float deltaTime) {
-
-  // logRectEvery(rectC, 100000);
-  const auto defaultResponse = [&]() {
-    if (rectC.w < rectC.h) {
-      // horizontal collision
-      if (objA.velocity.x > 0) {
-        // traveling to right, colliding object must be to the right, so sub .w; need extra 0.1 to escape collision for next frame
-        objA.position.x -= rectC.w+0.1;
-      } else if (objA.velocity.x < 0) {
-        objA.position.x += rectC.w+0.1;
-      }
-      objA.velocity.x = 0; // reset velocity to 0 so object stops
-    } else {
-      //vertical collison
-      if (objA.velocity.y > 0) {
-        objA.position.y -= rectC.h; // down
-      } else if (objA.velocity.y < 0) {
-        objA.position.y += rectC.h; // up
-      }
-      objA.velocity.y = 0;
-    }
-  };
-
-  if (objA.objClass == ObjectClass::Player) {
-    switch (objB.objClass) {
-      case ObjectClass::Level:
-      {
-        if (objB.data.level.isHazard) {
-            EntityResources entityRes = ctx.resources.m_currLevel->texCharacterMap.at(objA.spriteType);
-            PlayerData &d = objA.data.player;
-            if (d.state != PlayerState::dead) {
-              // objA.direction = -1 * objA.direction;
-              objA.position.y -= rectC.h; // up
-              objA.shouldFlash = true;
-              objA.flashTimer.reset();
-              objA.texture = entityRes.texHit;
-              objA.currentAnimation = ctx.resources.ANIM_HIT;
-              d.state = PlayerState::hurt;
-
-              // damage and flag dead
-              if (d.damageTimer.isTimedOut()) {
-                d.healthPoints -= 50.0;
-                d.damageTimer.reset();
-              }
-              if (d.healthPoints <= 0) {
-                d.state = PlayerState::dead;
-                objA.texture = entityRes.texDie;
-                objA.currentAnimation = ctx.resources.ANIM_DIE;
-                MIX_PlayTrack(ctx.resources.enemyDieTrack, 0);
-                objA.velocity = glm::vec2(0);
-                // ctx.gameState.currentView = GameView::GameOver;
-              }
-              MIX_PlayTrack(ctx.resources.boneImpactHitTrack, 0);
-            }
-
-        } else {
-          defaultResponse();
-        }
-        break;
-      }
-      case ObjectClass::Enemy:
-      {
-        if (objB.data.enemy.state != EnemyState::dead) {
-
-
-          if (objA.data.player.state == PlayerState::swingWeapon) {
-            // when swinging weapon and colliding, reduce enemy health
-            EntityResources entityRes = ctx.resources.m_currLevel->texCharacterMap.at(objB.spriteType);
-            EnemyData &d = objB.data.enemy;
-
-            // function damageObject(state, damageAmount, entityRes, dieTrack, hitTrack)
-            if (d.state != EnemyState::dead) {
-              objB.direction = -1 * objA.direction;
-              objB.shouldFlash = true;
-              objB.flashTimer.reset();
-              objB.texture = entityRes.texHit;
-              objB.currentAnimation = ctx.resources.ANIM_HIT;
-              d.state = EnemyState::hurt;
-
-              if (d.damageTimer.isTimedOut()) {
-                d.healthPoints -= objA.data.player.meleeDamage;
-                d.damageTimer.reset();
-              }
-
-              if (d.healthPoints <= 0) {
-                d.state = EnemyState::dead;
-                objB.texture = entityRes.texDie;
-                objB.currentAnimation = ctx.resources.ANIM_DIE;
-                MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioEnemyDie);
-              }
-              // MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioBoneImpact);
-              MIX_PlayTrack(ctx.resources.boneImpactHitTrack, 0);
-              // TODO wrap this in a func() so that it doesnt allow more than one sound to occur until its done.
-              // PlayTrack doesnt allow repeating while the track is already playing so might be better to use it instead actually.
-            }
-          } else {
-            // push back player
-            objA.velocity = glm::vec2(50, 0) * - objA.direction;
-          }
-
-          // defaultResponse(); // TODO need to handle correctly
-        }
-        break;
-      }
-      case ObjectClass::Portal:
-      {
-        game::switchToLevel(ctx.engine, ctx.resources, objB.data.portal.nextLevel);
-        break;
-      }
-      case ObjectClass::Player:
-      {
-        break;
-      }
-    }
-  } else if (objA.objClass == ObjectClass::Projectile) {
-
-    bool passthrough = false;
-    switch (objA.data.bullet.state) {
-      case BulletState::moving:
-      {
-        switch (objB.objClass) {
-          case ObjectClass::Level:
-          {
-            if (!MIX_PlayTrack(ctx.resources.hitTrack, 0)) {
-            // SDL_Log("Play failed: %s", SDL_GetError());
-            };
-            // if (!MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioShootHit)) {
-            // // SDL_Log("Play failed: %s", SDL_GetError());
-            // };
-
-            break;
-          }
-          case ObjectClass::Enemy:
-          {
-
-            EntityResources entityRes = ctx.resources.m_currLevel->texCharacterMap.at(objB.spriteType);
-            EnemyData &d = objB.data.enemy;
-
-            // function damageObject(state, damageAmount, entityRes, dieTrack, hitTrack)
-            if (d.state != EnemyState::dead) {
-              objB.direction = -1 * objA.direction;
-              objB.shouldFlash = true;
-              objB.flashTimer.reset();
-              objB.texture = entityRes.texHit;
-              objB.currentAnimation = ctx.resources.ANIM_HIT;
-              d.state = EnemyState::hurt;
-
-              // damage and flag dead
-              if (d.damageTimer.isTimedOut()) {
-                d.healthPoints -= 10;
-                d.damageTimer.reset();
-              }
-
-              if (d.healthPoints <= 0) {
-                d.state = EnemyState::dead;
-                objB.texture = entityRes.texDie;
-                objB.currentAnimation = ctx.resources.ANIM_DIE;
-                MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioEnemyDie);
-              }
-              // MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioProjectileEnemyHit);
-              MIX_PlayTrack(ctx.resources.enemyProjectileHitTrack, 0);
-            } else {
-              passthrough = true;
-            }
-            break;
-          }
-          case ObjectClass::Player:
-          {
-             passthrough = true;
-          }
-        }
-
-        if (!passthrough) {
-          defaultResponse();
-          objA.velocity *= 0;
-          objA.data.bullet.state = BulletState::colliding;
-          objA.texture = ctx.resources.texBulletHit;
-          objA.currentAnimation = ctx.resources.ANIM_BULLET_HIT;
-        }
-        break;
-      }
-    }
-
-  }
-  else if (objA.objClass == ObjectClass::Enemy) {
-    switch (objB.objClass) {
-      case ObjectClass::Player:
-      {
-        if (objA.data.enemy.state == EnemyState::attack) {
-          EntityResources playerRes = ctx.resources.m_currLevel->texCharacterMap.at(objB.spriteType);
-            PlayerData &playerData = objB.data.player;
-            if (playerData.state != PlayerState::dead) {
-              // objA.direction = -1 * objA.direction;
-              // objB.position.y -= rectC.h; // up
-              objB.shouldFlash = true;
-              objB.flashTimer.reset();
-              objB.texture = playerRes.texHit;
-              objB.currentAnimation = ctx.resources.ANIM_HIT;
-              playerData.state = PlayerState::hurt;
-
-              // damage and flag dead
-              if (playerData.damageTimer.isTimedOut()) {
-                playerData.healthPoints -= 33.0;
-                playerData.damageTimer.reset();
-              }
-
-              if (playerData.healthPoints <= 0) {
-                playerData.state = PlayerState::dead;
-                objB.texture = playerRes.texDie;
-                objB.currentAnimation = ctx.resources.ANIM_DIE;
-                MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioEnemyDie);
-                objB.velocity = glm::vec2(0);
-              }
-              MIX_PlayTrack(ctx.resources.boneImpactHitTrack, 0);
-            }
-        }
-        // if collision if with player and enemy is swinging
-        // then reduce players health and do damage
-        break;
-      }
-      case ObjectClass::Level:
-      {
-        if (objB.data.level.isHazard) {
-            EntityResources entityRes = ctx.resources.m_currLevel->texCharacterMap.at(objA.spriteType);
-            EnemyData &d = objA.data.enemy;
-            if (d.state != EnemyState::dead) {
-              // objA.direction = -1 * objA.direction;
-              objA.position.y -= rectC.h; // up
-              objA.shouldFlash = true;
-              objA.flashTimer.reset();
-              objA.texture = entityRes.texHit;
-              objA.currentAnimation = ctx.resources.ANIM_HIT;
-              d.state = EnemyState::hurt;
-
-              // damage and flag dead
-              if (d.damageTimer.isTimedOut()) {
-                d.healthPoints -= 50;
-                d.damageTimer.reset();
-              }
-
-              if (d.healthPoints <= 0) {
-                d.state = EnemyState::dead;
-                objA.texture = entityRes.texDie;
-                objA.currentAnimation = ctx.resources.ANIM_DIE;
-                MIX_PlayAudio(ctx.resources.mixer, ctx.resources.audioEnemyDie);
-                objA.velocity = glm::vec2(0);
-                // ctx.gameState.currentView = GameView::GameOver;
-              }
-              MIX_PlayTrack(ctx.resources.boneImpactHitTrack, 0);
-            }
-
-        } else {
-          defaultResponse();
-        }
-        break;
-      }
-      case ObjectClass::Enemy:
-      {
-        if (objB.data.enemy.state != EnemyState::dead) {
-          objA.velocity = glm::vec2(50, 0) * - objA.direction;
-        }
-        break;
+void refreshPresentation(game::GameResources& resources, game_engine::GameState& gameState) {
+  for (auto& layer : gameState.layers) {
+    for (auto& obj : layer) {
+      if (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy) {
+        applyPresentation(resources, obj);
       }
     }
   }
 
+  for (auto& bullet : gameState.bullets) {
+    applyPresentation(resources, bullet);
+  }
 }
-
-static void handleCollision(SimContext& ctx, GameObject &a, GameObject &b, float deltaTime) {
-
-  SDL_FRect rectA{
-    .x = a.position.x + a.collider.x,
-    .y = a.position.y + a.collider.y,
-    .w = a.collider.w,
-    .h = a.collider.h
-  };
-  SDL_FRect rectB{
-    .x = b.position.x + b.collider.x,
-    .y = b.position.y + b.collider.y,
-    .w = b.collider.w,
-    .h = b.collider.h
-  };
-  SDL_FRect rectC{ 0 };
-
-  if (SDL_GetRectIntersectionFloat(&rectA, &rectB, &rectC)) {
-    // found interection
-    collisionResponse(ctx, rectA, rectB, rectC, a, b, deltaTime);
-  };
-};
 
 class DefaultSimulationSystem final : public game::ISimulationSystem {
 public:
@@ -1034,14 +490,66 @@ public:
     game::GameResources& resources,
     float deltaTime,
     const UIManager::UIActions& actions) override {
+    SimContext ctx{engine, engine.getGameState(), resources};
 
-    // instead of passing down many params
-    SimContext ctx{engine, engine.getGameState(), resources, engine.getSDLState()};
+    if (ctx.gameState.currentView == UIManager::GameView::LevelLoading) {
+      return;
+    }
 
-    auto& player = engine.getPlayer(); // TODO player should not live on engine?
+    if (engine.isMultiplayerActive()) {
+      if (auto* client = engine.getGameClient()) {
+        const AudioStateMap before = captureAudioState(ctx.gameState);
+        client->ProcessServerMessages();
+        game_engine::NetGameStateSnapshot latestSnapshot;
+        if (client->CopyLatestSnapshot(latestSnapshot)) {
+          applyAuthoritativeSnapshot(ctx, latestSnapshot, client->GetPlayerID());
+          playSimulationAudio(resources, before, ctx.gameState, client->GetPlayerID(), deltaTime);
+          if (ctx.gameState.playerIndex >= 0) {
+            auto& player = engine.getPlayer();
+            updateMapViewport(ctx, player);
+            if (player.data.player.state == PlayerState::dead && player.currentAnimation == -1) {
+              ctx.gameState.currentView = UIManager::GameView::GameOver;
+            }
+          }
+        }
+      }
+      return;
+    }
 
-    updateGameplayState(ctx, deltaTime, player, actions);
+    if (ctx.gameState.currentView != UIManager::GameView::Playing &&
+        ctx.gameState.currentView != UIManager::GameView::PauseMenu) {
+      return;
+    }
 
+    engine.setAudioSoundtrack(
+      resources.m_currLevel ? resources.m_currLevel->backgroundTrack : nullptr);
+
+    if (!actions.blockGameplayUpdates && ctx.gameState.playerIndex >= 0) {
+      const AudioStateMap before = captureAudioState(ctx.gameState);
+      std::unordered_map<uint32_t, game_engine::NetGameInput> playerInputs;
+      playerInputs.emplace(engine.getPlayer().id, engine.getLocalInput());
+
+      game_engine::GameplaySimulationHooks hooks;
+      hooks.onPortalTriggered = [&](LevelIndex nextLevel) {
+        game::switchToLevel(engine, resources, nextLevel);
+      };
+      hooks.cullProjectilesByViewport = true;
+      hooks.projectileViewport = ctx.gameState.mapViewport;
+      game_engine::stepGameplaySimulation(ctx.gameState, playerInputs, deltaTime, hooks);
+      refreshPresentation(resources, ctx.gameState);
+      playSimulationAudio(resources, before, ctx.gameState, engine.getPlayer().id, deltaTime);
+      updateMapViewport(ctx, engine.getPlayer());
+    }
+
+    if (ctx.gameState.currentView == UIManager::GameView::GameOver) {
+      engine.setAudioSoundtrack(
+        resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr,
+        0);
+    } else if (ctx.gameState.evaluateGameOver()) {
+      engine.setAudioSoundtrack(
+        resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr,
+        0);
+    }
   }
 };
 

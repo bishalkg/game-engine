@@ -34,6 +34,22 @@ class Timer
     bool isTimedOut() const { return timeout; }
     float getTime() const { return time; }
     float getLength() const { return length; }
+    void setState(float newTime, bool timedOut = false) {
+      if (length <= 0.0f) {
+        time = 0.0f;
+        timeout = timedOut;
+        return;
+      }
+
+      while (newTime < 0.0f) {
+        newTime += length;
+      }
+      while (newTime >= length) {
+        newTime -= length;
+      }
+      time = newTime;
+      timeout = timedOut;
+    }
     void reset() { time = 0; timeout = false; }
 
 };

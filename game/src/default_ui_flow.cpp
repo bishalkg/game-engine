@@ -114,7 +114,15 @@ public:
       }
     }
     if (actions.restartLevel && resources.m_currLevel) {
-      (void)game::switchToLevel(engine, resources, resources.m_currLevelIdx);
+      if (engine.isHostMode()) {
+        if (game::switchToLevel(engine, resources, resources.m_currLevelIdx)) {
+          engine.restartMultiplayerSession();
+        }
+      } else if (engine.isClientMode()) {
+        engine.restartMultiplayerSession();
+      } else {
+        (void)game::switchToLevel(engine, resources, resources.m_currLevelIdx);
+      }
     }
   }
 };

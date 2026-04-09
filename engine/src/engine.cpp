@@ -2,6 +2,96 @@
 #include "engine/igame_rules.h"
 #include "engine/net/game_server.h"
 
+namespace {
+
+ObjectData cloneObjectData(const GameObject& src) {
+  ObjectData data;
+  switch (src.objClass) {
+    case ObjectClass::Player:
+      new (&data.player) PlayerData(src.data.player);
+      break;
+    case ObjectClass::Enemy:
+      new (&data.enemy) EnemyData(src.data.enemy);
+      break;
+    case ObjectClass::Projectile:
+      new (&data.bullet) BulletData(src.data.bullet);
+      break;
+    case ObjectClass::Portal:
+      new (&data.portal) PortalData(src.data.portal.nextLevel);
+      break;
+    case ObjectClass::Level:
+    case ObjectClass::Background:
+      new (&data.level) LevelData(src.data.level);
+      break;
+  }
+  return data;
+}
+
+GameObject cloneGameObject(const GameObject& src) {
+  GameObject dst(src.spritePixelH, src.spritePixelW);
+  dst.id = src.id;
+  dst.objClass = src.objClass;
+  dst.spriteType = src.spriteType;
+  dst.data = cloneObjectData(src);
+  dst.position = src.position;
+  dst.velocity = src.velocity;
+  dst.acceleration = src.acceleration;
+  dst.direction = src.direction;
+  dst.maxSpeedX = src.maxSpeedX;
+  dst.animations = src.animations;
+  dst.currentAnimation = src.currentAnimation;
+  dst.texture = nullptr;
+  dst.dynamic = src.dynamic;
+  dst.grounded = src.grounded;
+  dst.bgscroll = src.bgscroll;
+  dst.scrollFactor = src.scrollFactor;
+  dst.drawScale = src.drawScale;
+  dst.spritePixelW = src.spritePixelW;
+  dst.spritePixelH = src.spritePixelH;
+  dst.baseCollider = src.baseCollider;
+  dst.collider = src.collider;
+  dst.colliderNorm = src.colliderNorm;
+  dst.flashTimer = src.flashTimer;
+  dst.shouldFlash = src.shouldFlash;
+  dst.spriteFrame = src.spriteFrame;
+  return dst;
+}
+
+game_engine::GameState cloneAuthoritativeGameState(
+  const game_engine::GameState& src,
+  const game_engine::SDLState& sdlState) {
+  game_engine::GameState dst(sdlState);
+  dst.currentView = src.currentView;
+  dst.currentLevelId = src.currentLevelId;
+  dst.m_stateLastUpdatedAt = src.m_stateLastUpdatedAt;
+  dst.debugMode = src.debugMode;
+  dst.selectedPlayerSprite = src.selectedPlayerSprite;
+  dst.playerLayer = src.playerLayer;
+  dst.playerIndex = src.playerIndex;
+  dst.mapViewport = src.mapViewport;
+  dst.bg2scroll = src.bg2scroll;
+  dst.bg3scroll = src.bg3scroll;
+  dst.bg4scroll = src.bg4scroll;
+
+  dst.layers.reserve(src.layers.size());
+  for (const auto& layer : src.layers) {
+    auto& newLayer = dst.layers.emplace_back();
+    newLayer.reserve(layer.size());
+    for (const auto& obj : layer) {
+      newLayer.push_back(cloneGameObject(obj));
+    }
+  }
+
+  dst.bullets.reserve(src.bullets.size());
+  for (const auto& bullet : src.bullets) {
+    dst.bullets.push_back(cloneGameObject(bullet));
+  }
+
+  return dst;
+}
+
+} // namespace
+
 GameObject &game_engine::Engine::getPlayer() {
  return m_gameState.player(LAYER_IDX_CHARACTERS);
 };
@@ -151,13 +241,20 @@ void game_engine::Engine::run(eng::IGameRules& rules) {
   m_gameServer.reset();
 }
 
+std::unique_ptr<game_engine::GameServer> game_engine::Engine::buildAuthoritativeStateForServer() {
+  auto authState = cloneAuthoritativeGameState(m_gameState, m_sdlState);
+  return std::make_unique<GameServer>(
+    9000,
+    std::make_unique<AuthoritativeContext>(std::move(authState)));
+}
+
 bool game_engine::Engine::handleMultiplayerConnections() {
     // create a client; need a GameClient that inherits from client_interface
     // wait for connection to the server to be made.
     // non-host client should be able to join and exit at any time.
   if (m_gameType == game_engine::Engine::Host && !m_gameServer) {
     std::cout << "starting server" << std::endl;
-    m_gameServer = std::make_unique<GameServer>(9000, m_gameState);
+    m_gameServer = buildAuthoritativeStateForServer();
     bool successStart = m_gameServer->Start();
     if (!successStart) {
       return false;
@@ -182,8 +279,65 @@ bool game_engine::Engine::handleMultiplayerConnections() {
         // return;
       }
     }
+
+    m_gameClient->ProcessServerMessages();
+    if (m_gameClient->IsClientValidated() && !m_gameClient->IsRegistered()) {
+      m_gameClient->RegisterWithServer(m_gameState.selectedPlayerSprite);
+    }
   }
   return true;
+}
+
+void game_engine::Engine::submitLocalInput(NetGameInput input) {
+  input.inputSeq = ++m_localInputSeq;
+  if (m_gameClient) {
+    input.playerID = m_gameClient->GetPlayerID();
+  }
+
+  input.shouldSendMessage =
+    input.leftHeld || input.rightHeld || input.fireHeld || input.jumpPressed || input.meleePressed;
+  m_localInput = input;
+
+  if (isMultiplayerActive() && m_gameClient) {
+    m_gameClient->SendInput(m_localInput);
+  }
+}
+
+void game_engine::Engine::restartMultiplayerSession() {
+  if (!isMultiplayerActive()) {
+    return;
+  }
+
+  if (isHostMode() && m_gameServer) {
+    auto authState = cloneAuthoritativeGameState(m_gameState, m_sdlState);
+    m_gameServer->resetAuthoritativeState(std::move(authState));
+    if (m_gameClient) {
+      m_gameClient->ClearLatestSnapshot();
+    }
+    m_gameState.currentView = UIManager::GameView::Playing;
+    return;
+  }
+
+  if (isClientMode() && m_gameClient) {
+    m_gameClient->RequestRespawn();
+    m_gameState.currentView = UIManager::GameView::Playing;
+  }
+}
+
+const game_engine::NetGameInput& game_engine::Engine::getLocalInput() const {
+  return m_localInput;
+}
+
+game_engine::GameClient* game_engine::Engine::getGameClient() {
+  return m_gameClient.get();
+}
+
+const game_engine::GameClient* game_engine::Engine::getGameClient() const {
+  return m_gameClient.get();
+}
+
+bool game_engine::Engine::isMultiplayerActive() const {
+  return m_gameType == Host || m_gameType == Client;
 }
 
 void game_engine::Engine::runGameServerLoopThread() {
@@ -193,6 +347,7 @@ void game_engine::Engine::runGameServerLoopThread() {
   const size_t maxInputsPerTick = 64;
   auto prev = clock::now();
   double accum = 0.0;
+  uint64_t tickCount = 0;
 
   // determine delta for server loop
   while (m_gameRunning.load() && m_gameServer) {
@@ -206,19 +361,18 @@ void game_engine::Engine::runGameServerLoopThread() {
     // run as many fixed steps as have accumulated time
     while (accum >= dt) {
       m_gameServer->applyPlayerInputs();
-      // 1) pop inputs from your queue and apply to authoritative state
-      //    e.g., serverState.applyInputs(inputQueue);
-      // 2) advance physics/logic by dt
-      //    e.g., serverState.step(dt);
+      m_gameServer->step(static_cast<float>(dt));
+      ++tickCount;
       accum -= dt;
+      if (tickCount % 3 == 0) {
+        m_gameServer->refreshSnapshot();
+        net::message<GameMsgHeaders> msg;
+        msg.header.id = GameMsgHeaders::Game_Snapshot;
+        msg.body = m_gameServer->m_currGameSnapshot.serealizeNetGameStateSnapshot();
+        msg.header.bodySize = msg.body.size();
+        m_gameServer->BroadcastToClients(msg);
+      }
     }
-
-    // Broadcast snapshot to all clients
-    net::message<GameMsgHeaders> msg;
-    msg.header.id = GameMsgHeaders::Game_Snapshot;
-    msg.body = m_gameServer->m_currGameSnapshot.serealizeNetGameStateSnapshot();
-    msg.header.bodySize = msg.body.size();
-    m_gameServer->BroadcastToClients(msg);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }

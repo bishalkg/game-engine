@@ -49,6 +49,12 @@ private:
     auto& gameState = engine.getGameState();
     auto& renderer = engine.getSDLState().renderer;
 
+    if (engine.isMultiplayerActive() && obj.dynamic &&
+        obj.currentAnimation >= 0 &&
+        obj.currentAnimation < static_cast<int>(obj.animations.size())) {
+      obj.animations[obj.currentAnimation].step(deltaTime);
+    }
+
     float frameW = obj.spritePixelW;
     float frameH = obj.spritePixelH;
     float srcX = (obj.currentAnimation != -1)
@@ -77,9 +83,6 @@ private:
 
     if (obj.shouldFlash) {
       SDL_SetTextureColorModFloat(obj.texture, 1.0f, 1.0f, 1.0f);
-      if (obj.flashTimer.step(deltaTime)) {
-        obj.shouldFlash = false;
-      }
     }
 
     if (!gameState.debugMode) {

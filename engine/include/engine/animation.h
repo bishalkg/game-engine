@@ -57,9 +57,11 @@ class Animation
       // return loopStart + loopIdx;
     }
 
-    int getFrameCount() { return frameCount; }
+    int getFrameCount() const { return frameCount; }
 
     bool isDone() const { return timer.isTimedOut(); }
+    float getElapsed() const { return timer.getTime(); }
+    void setElapsed(float elapsed, bool timedOut = false) { timer.setState(elapsed, timedOut); }
 
     void reset() { timer.reset(); }
 

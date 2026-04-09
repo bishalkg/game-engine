@@ -58,9 +58,17 @@ void GameRules::onUpdate(game_engine::Engine& engine, float deltaTime) {
       return;
     }
 
+    input_.leftHeld = sdlState.keys ? sdlState.keys[SDL_SCANCODE_LEFT] : false;
+    input_.rightHeld = sdlState.keys ? sdlState.keys[SDL_SCANCODE_RIGHT] : false;
+    input_.fireHeld = sdlState.keys ? sdlState.keys[SDL_SCANCODE_A] : false;
+    engine.submitLocalInput(input_);
+
     simulationSystem_->update(engine, *resources_, deltaTime, lastEngineActions_);
   }
 
+  input_.jumpPressed = false;
+  input_.meleePressed = false;
+  input_.shouldSendMessage = false;
   snaps_.advanceToNextScene = false;
   snaps_.togglePauseGameplay = false;
 }

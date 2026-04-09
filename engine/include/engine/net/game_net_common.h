@@ -27,48 +27,29 @@ namespace game_engine {
   // use std::ByteWriter, ByteReader to write and read GameStateSnapshot
   // transfer the GameStateSnapshot to the game_engines GameState during renderLoop update
 
-  enum class PlayerInput: uint16_t {
-    None,
-    Jump,
-    MoveLeft,
-    MoveRight,
-    MoveDown,
-    Fire,
-    Swing,
-  };
-
   // input body from the client
   // read from message.body (byte array) using ByteReader
   // write from NetGameInput -> ByteWriter. pass the ByteWriterBuff as message.body
-  struct NetGameInput { // can there be multiple inputs at a time?
-    //movePlayer. left, right, up keys.
-    //fireBullet. scancodeA
-    //swingSword. scancodeS (to add)
-    uint32_t playerID; // is msg.header.id already player id? no its the GameMsgHeaders
-    uint32_t tick;
-    PlayerInput move = PlayerInput::None;
-    PlayerInput fireProjectile = PlayerInput::None; // PlayerInput::Fire
-    PlayerInput swingWeapon = PlayerInput::None; // PlayerInput::Swing
+  struct NetGameInput {
+    uint32_t playerID = 0;
+    uint32_t inputSeq = 0;
+    bool leftHeld = false;
+    bool rightHeld = false;
+    bool fireHeld = false;
+    bool jumpPressed = false;
+    bool meleePressed = false;
+    bool shouldSendMessage = false; // not serialized; frame-local send hint only
 
-    bool shouldSendMessage = false; // not serealized, only used to indicate whether message is ready to be sent
     std::vector<uint8_t> serealizeNetGameInput() const {
       net::ByteWriter bytes;
 
       bytes.write_u32(playerID);
-      bytes.write_u32(tick);
-
-      bytes.write_enum(move);
-      bytes.write_enum(fireProjectile);
-      bytes.write_enum(swingWeapon);
-      // if (input.move != PlayerInput::None) {
-      //   bytes.write_enum(input.move);
-      // }
-      // if (input.fireProjectile != PlayerInput::None) {
-      //   bytes.write_enum(input.fireProjectile);
-      // }
-      // if (input.swingWeapon != PlayerInput::None) {
-      //   bytes.write_enum(input.swingWeapon);
-      // }
+      bytes.write_u32(inputSeq);
+      bytes.write_bool(leftHeld);
+      bytes.write_bool(rightHeld);
+      bytes.write_bool(fireHeld);
+      bytes.write_bool(jumpPressed);
+      bytes.write_bool(meleePressed);
 
       return bytes.buff;
     };
@@ -78,10 +59,12 @@ namespace game_engine {
       net::ByteReader reader(bytes);
 
       playerID = reader.read_u32();
-      tick = reader.read_u32();
-      move = reader.read_enum<PlayerInput>();
-      fireProjectile = reader.read_enum<PlayerInput>();
-      swingWeapon = reader.read_enum<PlayerInput>();
+      inputSeq = reader.read_u32();
+      leftHeld = reader.read_bool();
+      rightHeld = reader.read_bool();
+      fireHeld = reader.read_bool();
+      jumpPressed = reader.read_bool();
+      meleePressed = reader.read_bool();
 
     };
   };
@@ -97,9 +80,11 @@ namespace game_engine {
     uint32_t id = 0;
     uint32_t layer; // flattened so need? or since all updateable objects are in the same layer may not need..
     ObjectClass type;   //  ObjectType type; uint32_t
+    SpriteType spriteType = SpriteType::Player_Marie;
     glm::vec2 position, velocity, acceleration;
     uint32_t spriteFrame;
     uint32_t currentAnimation; // determined by the server
+    float animElapsed = 0.0f;
     float direction;
     float maxSpeedX;
     bool grounded;
@@ -125,6 +110,8 @@ namespace game_engine {
   };
 
   struct NetGameStateSnapshot {
+    uint64_t serverTick = 0;
+    LevelIndex levelId = LevelIndex::LEVEL_1;
     uint64_t m_stateLastUpdatedAt; // when the gameState was last updated, by local or by server msg
     std::unordered_map<GameObjectKey, NetGameObjectSnapshot, GameObjectKeyHash> m_gameObjects;
     // std::vector<NetGameObjectSnapshot> m_gameObjects;
@@ -136,6 +123,8 @@ namespace game_engine {
       w.write_u16(VERSION);
       w.write_u16(MSG_SNAPSHOT);
 
+      w.write_u64(serverTick);
+      w.write_enum<LevelIndex>(levelId);
       w.write_u64(m_stateLastUpdatedAt);
 
       // write the unordered_map
@@ -145,11 +134,13 @@ namespace game_engine {
           w.write_u32(obj.id); // std::pair<ObjectType, uint32_t>;
           w.write_u32(obj.layer);
           w.write_enum<ObjectClass>(obj.type); // std::pair<ObjectType, uint32_t>;
+          w.write_enum<SpriteType>(obj.spriteType);
           w.write_glm_vec2(obj.position);
           w.write_glm_vec2(obj.velocity);
           w.write_glm_vec2(obj.acceleration);
           w.write_u32(obj.spriteFrame);
           w.write_u32(obj.currentAnimation);
+          w.write_float(obj.animElapsed);
           w.write_float(obj.direction);
           w.write_float(obj.maxSpeedX);
           w.write_bool(obj.grounded);
@@ -179,6 +170,10 @@ namespace game_engine {
             w.write_sdl_frect(obj.data.level.dst);
             break;
           }
+          case ObjectClass::Portal:
+          case ObjectClass::Background: {
+            break;
+          }
         }
       }
 
@@ -193,6 +188,8 @@ namespace game_engine {
       if (version != VERSION) throw std::runtime_error("bad message version");
       auto msg_snapshot = r.read_u16();
       if (msg_snapshot != MSG_SNAPSHOT) throw std::runtime_error("not a snapshot");
+      serverTick = r.read_u64();
+      levelId = r.read_enum<LevelIndex>();
       m_stateLastUpdatedAt = r.read_u64();
 
       size_t length = r.read_u32(); // how many NetGameObjectSnapshot there are
@@ -203,11 +200,13 @@ namespace game_engine {
         obj.id = r.read_u32(); // std::pair<ObjectType, uint32_t>;
         obj.layer = r.read_u32();
         obj.type = r.read_enum<ObjectClass>();
+        obj.spriteType = r.read_enum<SpriteType>();
         obj.position = r.read_glm_vec2();
         obj.velocity = r.read_glm_vec2();
         obj.acceleration = r.read_glm_vec2();
         obj.spriteFrame = r.read_u32();
         obj.currentAnimation = r.read_u32();
+        obj.animElapsed = r.read_float();
         obj.direction = r.read_float();
         obj.maxSpeedX = r.read_float();
         obj.grounded = r.read_bool();
@@ -238,6 +237,11 @@ namespace game_engine {
             new (&obj.data.level) LevelData{};
             obj.data.level.src = r.read_sdl_frect();
             obj.data.level.dst = r.read_sdl_frect();
+            break;
+          }
+          case ObjectClass::Portal:
+          case ObjectClass::Background: {
+            new (&obj.data.level) LevelData{};
             break;
           }
         }

@@ -72,6 +72,7 @@ bool GameResources::loadLevel(
 
   m_currLevelIdx = levelId;
   m_currLevel = std::make_unique<Level>(levelId);
+  gs.currentLevelId = levelId;
   const LevelAssets& assets = LEVEL_CONFIG.at(levelId);
 
   m_currLevel->map = tmx::loadMap(assets.mapPath);
@@ -142,10 +143,10 @@ bool GameResources::loadLevel(
     m_currLevel->map->tileSets.end(),
     [](const tmx::TileSet& a, const tmx::TileSet& b) { return a.firstgid < b.firstgid; });
 
-  if (!headless) {
-    for (const SpriteType& character : assets.enemyTypes) {
-      const SpriteAssets& spriteAssets = ENEMY_CONFIG.at(character);
+  for (const SpriteType& character : assets.enemyTypes) {
+    const SpriteAssets& spriteAssets = ENEMY_CONFIG.at(character);
 
+    if (!headless) {
       m_currLevel->texCharacterMap[character].texIdle =
         m_currLevel->loadTexture(state.renderer, spriteAssets.paths.idleTex);
       m_currLevel->texCharacterMap[character].texWalk =
@@ -158,33 +159,33 @@ bool GameResources::loadLevel(
         m_currLevel->loadTexture(state.renderer, spriteAssets.paths.hitTex);
       m_currLevel->texCharacterMap[character].texDie =
         m_currLevel->loadTexture(state.renderer, spriteAssets.paths.dieTex);
-
-      m_currLevel->texCharacterMap[character].anims.resize(10);
-      auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
-      m_currLevel->texCharacterMap[character].anims[ANIM_IDLE] =
-        Animation(idleFrames, idleSeconds);
-
-      auto [runFrames, runSeconds] = spriteAssets.animSettings.at(ANIM_RUN);
-      m_currLevel->texCharacterMap[character].anims[ANIM_RUN] =
-        Animation(runFrames, runSeconds);
-
-      auto [hitFrames, hitSeconds] = spriteAssets.animSettings.at(ANIM_HIT);
-      m_currLevel->texCharacterMap[character].anims[ANIM_HIT] =
-        Animation(hitFrames, hitSeconds);
-
-      auto [dieFrames, dieSeconds] = spriteAssets.animSettings.at(ANIM_DIE);
-      m_currLevel->texCharacterMap[character].anims[ANIM_DIE] =
-        Animation(dieFrames, dieSeconds);
-
-      auto [attackFrames, attackSeconds] = spriteAssets.animSettings.at(ANIM_SWING);
-      m_currLevel->texCharacterMap[character].anims[ANIM_SWING] =
-        Animation(attackFrames, attackSeconds);
     }
+
+    m_currLevel->texCharacterMap[character].anims.resize(10);
+    auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
+    m_currLevel->texCharacterMap[character].anims[ANIM_IDLE] =
+      Animation(idleFrames, idleSeconds);
+
+    auto [runFrames, runSeconds] = spriteAssets.animSettings.at(ANIM_RUN);
+    m_currLevel->texCharacterMap[character].anims[ANIM_RUN] =
+      Animation(runFrames, runSeconds);
+
+    auto [hitFrames, hitSeconds] = spriteAssets.animSettings.at(ANIM_HIT);
+    m_currLevel->texCharacterMap[character].anims[ANIM_HIT] =
+      Animation(hitFrames, hitSeconds);
+
+    auto [dieFrames, dieSeconds] = spriteAssets.animSettings.at(ANIM_DIE);
+    m_currLevel->texCharacterMap[character].anims[ANIM_DIE] =
+      Animation(dieFrames, dieSeconds);
+
+    auto [attackFrames, attackSeconds] = spriteAssets.animSettings.at(ANIM_SWING);
+    m_currLevel->texCharacterMap[character].anims[ANIM_SWING] =
+      Animation(attackFrames, attackSeconds);
   }
 
   gs.setLevelLoadProgress(60);
-  if (!headless) {
-    for (const auto& [character, spriteAssets] : SPRITE_CONFIG) {
+  for (const auto& [character, spriteAssets] : SPRITE_CONFIG) {
+    if (!headless) {
       m_currLevel->texCharacterMap[character].texIdle =
         m_currLevel->loadTexture(state.renderer, spriteAssets.paths.idleTex);
       m_currLevel->texCharacterMap[character].texWalk =
@@ -213,54 +214,54 @@ bool GameResources::loadLevel(
         m_currLevel->loadTexture(state.renderer, spriteAssets.paths.slideShootTex);
       m_currLevel->texCharacterMap[character].texJump =
         m_currLevel->loadTexture(state.renderer, spriteAssets.paths.jumpTex);
-
-      m_currLevel->texCharacterMap[character].anims.resize(12);
-      auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
-      m_currLevel->texCharacterMap[character].anims[ANIM_IDLE] =
-        Animation(idleFrames, idleSeconds);
-
-      auto [runFrames, runSeconds] = spriteAssets.animSettings.at(ANIM_RUN);
-      m_currLevel->texCharacterMap[character].anims[ANIM_RUN] =
-        Animation(runFrames, runSeconds);
-
-      auto [runAttackFrames, runAttackSeconds] = spriteAssets.animSettings.at(ANIM_RUN_ATTACK);
-      m_currLevel->texCharacterMap[character].anims[ANIM_RUN_ATTACK] =
-        Animation(runAttackFrames, runAttackSeconds);
-
-      auto [slideFrames, slideSeconds] = spriteAssets.animSettings.at(ANIM_SLIDE);
-      m_currLevel->texCharacterMap[character].anims[ANIM_SLIDE] =
-        Animation(slideFrames, slideSeconds);
-
-      auto [shootFrames, shootSeconds] = spriteAssets.animSettings.at(ANIM_SHOOT);
-      m_currLevel->texCharacterMap[character].anims[ANIM_SHOOT] =
-        Animation(shootFrames, shootSeconds, 0, true);
-
-      auto [slideShootFrames, slideShootSeconds] = spriteAssets.animSettings.at(ANIM_SLIDE_SHOOT);
-      m_currLevel->texCharacterMap[character].anims[ANIM_SLIDE_SHOOT] =
-        Animation(slideShootFrames, slideShootSeconds, 0, true);
-
-      auto [hitFrames, hitSeconds] = spriteAssets.animSettings.at(ANIM_HIT);
-      m_currLevel->texCharacterMap[character].anims[ANIM_HIT] =
-        Animation(hitFrames, hitSeconds);
-
-      auto [dieFrames, dieSeconds] = spriteAssets.animSettings.at(ANIM_DIE);
-      m_currLevel->texCharacterMap[character].anims[ANIM_DIE] =
-        Animation(dieFrames, dieSeconds);
-
-      auto [attackFrames, attackSeconds] = spriteAssets.animSettings.at(ANIM_SWING);
-      m_currLevel->texCharacterMap[character].anims[ANIM_SWING] =
-        Animation(attackFrames, attackSeconds);
-
-      if (spriteAssets.animSettings.contains(ANIM_SWING_2)) {
-        auto [attack2Frames, attack2Seconds] = spriteAssets.animSettings.at(ANIM_SWING_2);
-        m_currLevel->texCharacterMap[character].anims[ANIM_SWING_2] =
-          Animation(attack2Frames, attack2Seconds);
-      }
-
-      auto [jumpFrames, jumpSeconds] = spriteAssets.animSettings.at(ANIM_JUMP);
-      m_currLevel->texCharacterMap[character].anims[ANIM_JUMP] =
-        Animation(jumpFrames, jumpSeconds, 2);
     }
+
+    m_currLevel->texCharacterMap[character].anims.resize(12);
+    auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
+    m_currLevel->texCharacterMap[character].anims[ANIM_IDLE] =
+      Animation(idleFrames, idleSeconds);
+
+    auto [runFrames, runSeconds] = spriteAssets.animSettings.at(ANIM_RUN);
+    m_currLevel->texCharacterMap[character].anims[ANIM_RUN] =
+      Animation(runFrames, runSeconds);
+
+    auto [runAttackFrames, runAttackSeconds] = spriteAssets.animSettings.at(ANIM_RUN_ATTACK);
+    m_currLevel->texCharacterMap[character].anims[ANIM_RUN_ATTACK] =
+      Animation(runAttackFrames, runAttackSeconds);
+
+    auto [slideFrames, slideSeconds] = spriteAssets.animSettings.at(ANIM_SLIDE);
+    m_currLevel->texCharacterMap[character].anims[ANIM_SLIDE] =
+      Animation(slideFrames, slideSeconds);
+
+    auto [shootFrames, shootSeconds] = spriteAssets.animSettings.at(ANIM_SHOOT);
+    m_currLevel->texCharacterMap[character].anims[ANIM_SHOOT] =
+      Animation(shootFrames, shootSeconds, 0, true);
+
+    auto [slideShootFrames, slideShootSeconds] = spriteAssets.animSettings.at(ANIM_SLIDE_SHOOT);
+    m_currLevel->texCharacterMap[character].anims[ANIM_SLIDE_SHOOT] =
+      Animation(slideShootFrames, slideShootSeconds, 0, true);
+
+    auto [hitFrames, hitSeconds] = spriteAssets.animSettings.at(ANIM_HIT);
+    m_currLevel->texCharacterMap[character].anims[ANIM_HIT] =
+      Animation(hitFrames, hitSeconds);
+
+    auto [dieFrames, dieSeconds] = spriteAssets.animSettings.at(ANIM_DIE);
+    m_currLevel->texCharacterMap[character].anims[ANIM_DIE] =
+      Animation(dieFrames, dieSeconds);
+
+    auto [attackFrames, attackSeconds] = spriteAssets.animSettings.at(ANIM_SWING);
+    m_currLevel->texCharacterMap[character].anims[ANIM_SWING] =
+      Animation(attackFrames, attackSeconds);
+
+    if (spriteAssets.animSettings.contains(ANIM_SWING_2)) {
+      auto [attack2Frames, attack2Seconds] = spriteAssets.animSettings.at(ANIM_SWING_2);
+      m_currLevel->texCharacterMap[character].anims[ANIM_SWING_2] =
+        Animation(attack2Frames, attack2Seconds);
+    }
+
+    auto [jumpFrames, jumpSeconds] = spriteAssets.animSettings.at(ANIM_JUMP);
+    m_currLevel->texCharacterMap[character].anims[ANIM_JUMP] =
+      Animation(jumpFrames, jumpSeconds, 2);
   }
 
   auto [backgroundAudio, backgroundTrack] =

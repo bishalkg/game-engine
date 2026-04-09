@@ -315,7 +315,10 @@ public:
     auto& gameState = engine.getGameState();
 
     resources.loadAllAssets(sdlState, gameState, headless);
-    if (!resources.m_currLevel ||
+    if (!resources.m_currLevel) {
+      return false;
+    }
+    if (!headless &&
         !resources.m_currLevel->texCharacterMap[SpriteType::Player_Knight].texIdle) {
       return false;
     }
