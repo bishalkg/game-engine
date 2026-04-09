@@ -239,7 +239,7 @@ namespace game_engine {
             obj.data.level.dst = r.read_sdl_frect();
             break;
           }
-          case ObjectClass::Portal:
+          case ObjectClass::Portal: // TODO
           case ObjectClass::Background: {
             new (&obj.data.level) LevelData{};
             break;

@@ -72,7 +72,7 @@ public:
       if (!m_hasSnapshot || newestSnapshot.serverTick >= m_latestSnapshot.serverTick) {
         m_latestSnapshot = std::move(newestSnapshot);
         m_hasSnapshot = true;
-        m_latestServerTickReceived = m_latestSnapshot.serverTick;
+        m_latestServerTickReceived = m_latestSnapshot.serverTick; // TODO why is this not newestSnapshot.serverTick
         auto it = m_latestSnapshot.m_gameObjects.find({ObjectClass::Player, m_playerID});
         if (it != m_latestSnapshot.m_gameObjects.end() &&
             it->second.data.player.state != PlayerState::dead) {

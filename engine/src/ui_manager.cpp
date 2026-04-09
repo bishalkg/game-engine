@@ -253,6 +253,7 @@ namespace UIManager {
     };
     act.stopBackgroundTrack = true;
     place("##single", [&]{
+      act.startSinglePlayer = true;
       // act.nextView = GameView::CutScene;
       act.nextView = GameView::CharacterSelect;
       // act.nextView = GameView::Playing; // need to set this one the cutscene is done
@@ -478,11 +479,11 @@ namespace UIManager {
       ImGui::Begin("MultiPlayer Menu", nullptr, flags);
       if (ImGui::Button("Host A Game", defaultButtonSize)) {
         act.startMultiPlayerHost = true;
-        act.nextView = UIManager::GameView::Playing;
+        act.nextView = UIManager::GameView::CharacterSelect;
       }
       if (ImGui::Button("Join A Game", defaultButtonSize)) {
         act.startMultiPlayerClient = true;
-        act.nextView = UIManager::GameView::Playing;
+        act.nextView = UIManager::GameView::CharacterSelect;
       }
       if (ImGui::Button("Back to Menu", defaultButtonSize)) {
         act.nextView = UIManager::GameView::MainMenu;
@@ -587,7 +588,6 @@ namespace UIManager {
           } else {
             std::cout << "cutscene complete" << std::endl;
             act.nextView = GameView::Playing; // need to set this one the cutscene is done
-            act.startSinglePlayer = true;
             return act;
           }
 

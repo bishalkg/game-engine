@@ -243,7 +243,9 @@ void updateReplicatedObject(
 void reconcileReplicatedLayer(
   SimContext& ctx,
   const game_engine::NetGameStateSnapshot& snapshot) {
+
   auto& layer = ctx.gameState.layers[ctx.gameState.playerLayer];
+
   std::unordered_map<game_engine::GameObjectKey, std::size_t, game_engine::GameObjectKeyHash> existing;
   for (std::size_t idx = 0; idx < layer.size(); ++idx) {
     const auto& obj = layer[idx];
@@ -260,13 +262,16 @@ void reconcileReplicatedLayer(
     seen.insert(key);
     const auto it = existing.find(key);
     if (it == existing.end()) {
+      // if doesnt exist, create
       layer.push_back(buildReplicatedObject(ctx, snap));
       existing[key] = layer.size() - 1;
     } else {
+      // update existing
       updateReplicatedObject(ctx, layer[it->second], snap);
     }
   }
 
+  // ?? TODO
   layer.erase(
     std::remove_if(
       layer.begin(),
