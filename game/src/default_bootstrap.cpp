@@ -233,6 +233,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           enemy.position.y = feetY - (enemy.collider.y + enemy.collider.h);
           enemy.data.enemy = EnemyData();
           enemy.currentAnimation = res.ANIM_IDLE;
+          enemy.presentationVariant = PresentationVariant::Idle;
           enemy.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
           enemy.dynamic = true;
           enemy.maxSpeedX = 15;
@@ -287,6 +288,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           player.data.player = PlayerData();
           player.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
           player.currentAnimation = res.ANIM_IDLE;
+          player.presentationVariant = PresentationVariant::Idle;
           player.acceleration = glm::vec2(500, 0);
           player.maxSpeedX = 100;
           player.dynamic = true;

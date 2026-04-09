@@ -40,6 +40,7 @@ GameObject cloneGameObject(const GameObject& src) {
   dst.maxSpeedX = src.maxSpeedX;
   dst.animations = src.animations;
   dst.currentAnimation = src.currentAnimation;
+  dst.presentationVariant = src.presentationVariant;
   dst.texture = nullptr;
   dst.dynamic = src.dynamic;
   dst.grounded = src.grounded;
@@ -92,6 +93,18 @@ game_engine::GameState cloneAuthoritativeGameState(
   return dst;
 }
 
+bool isMultiplayerBootstrapView(UIManager::GameView view) {
+  switch (view) {
+    case UIManager::GameView::MainMenu:
+    case UIManager::GameView::MultiPlayerOptionsMenu:
+    case UIManager::GameView::CharacterSelect:
+    case UIManager::GameView::MultiplayerBrowse:
+      return true;
+    default:
+      return false;
+  }
+}
+
 } // namespace
 
 GameObject &game_engine::Engine::getPlayer() {
@@ -101,12 +114,7 @@ GameObject &game_engine::Engine::getPlayer() {
 game_engine::Engine::~Engine() {
   // ensure server thread and client tear down cleanly
   m_gameRunning.store(false);
-  if (m_gameServer) {
-    m_gameServer->Stop();
-  }
-  if (m_serverLoopThd.joinable()) {
-    m_serverLoopThd.join();
-  }
+  resetMultiplayerNetworkingState();
 }
 
 game_engine::SDLState &game_engine::Engine::getSDLState() {
@@ -146,15 +154,26 @@ void game_engine::Engine::setWindowSize(int height, int width) {
 }
 
 void game_engine::Engine::setRunModeSinglePlayer() {
+  resetMultiplayerNetworkingState();
   m_gameType = SinglePlayer;
 }
 
 void game_engine::Engine::setRunModeHost() {
+  if (m_gameType != Host) {
+    resetMultiplayerNetworkingState();
+  }
   m_gameType = Host;
+  m_selectedJoinHost = "127.0.0.1";
+  m_selectedJoinPort = GAME_SERVER_PORT;
+  m_hasSelectedJoinTarget = true;
 }
 
 void game_engine::Engine::setRunModeClient() {
+  if (m_gameType != Client) {
+    resetMultiplayerNetworkingState();
+  }
   m_gameType = Client;
+  m_hasSelectedJoinTarget = false;
 }
 
 void game_engine::Engine::requestQuit() {
@@ -246,48 +265,150 @@ void game_engine::Engine::run(eng::IGameRules& rules) {
 std::unique_ptr<game_engine::GameServer> game_engine::Engine::buildAuthoritativeStateForServer() {
   auto authState = cloneAuthoritativeGameState(m_gameState, m_sdlState);
   return std::make_unique<GameServer>(
-    9000,
+    GAME_SERVER_PORT,
     std::make_unique<AuthoritativeContext>(std::move(authState)));
 }
 
 bool game_engine::Engine::handleMultiplayerConnections() {
-    // create a client; need a GameClient that inherits from client_interface
-    // wait for connection to the server to be made.
-    // non-host client should be able to join and exit at any time.
-  if (m_gameType == game_engine::Engine::Host && !m_gameServer) {
+  if (!isMultiplayerActive()) {
+    return true;
+  }
+
+  if (m_gameType == Host) {
+    if (!m_discoveryHost) {
+      m_discoveryHost = std::make_unique<DiscoveryHostService>();
+    }
+    if (m_discoveryHost && !m_discoveryHost->isStarted()) {
+      if (!m_discoveryHost->start()) {
+        m_multiplayerStatus = "Failed to start LAN discovery";
+        return false;
+      }
+    }
+    if (m_discoveryHost) {
+      const uint32_t playerCount = m_gameServer ? static_cast<uint32_t>(m_gameServer->m_playerSessions.size()) : 0;
+      m_discoveryHost->updateInfo("LAN Host", m_gameState.currentLevelId, playerCount, GAME_SERVER_PORT);
+      m_discoveryHost->setReady(m_serverReadyForDiscovery);
+      m_discoveryHost->poll();
+    }
+  } else if (m_discoveryHost) {
+    m_discoveryHost->stop();
+    m_discoveryHost.reset();
+    m_serverReadyForDiscovery = false;
+  }
+
+  if (m_gameType == Client && m_gameState.currentView == UIManager::GameView::MultiplayerBrowse) {
+    if (!m_discoveryBrowser) {
+      m_discoveryBrowser = std::make_unique<DiscoveryBrowserService>();
+    }
+    if (m_discoveryBrowser && !m_discoveryBrowser->isStarted()) {
+      if (!m_discoveryBrowser->start()) {
+        m_multiplayerStatus = "Failed to browse LAN games";
+        return false;
+      }
+    }
+    if (m_discoveryBrowser) {
+      m_discoveryBrowser->poll();
+    }
+    m_multiplayerStatus = "Searching LAN for ready hosts...";
+    return true;
+  }
+
+  if (m_discoveryBrowser) {
+    m_discoveryBrowser->stop();
+    m_discoveryBrowser.reset();
+  }
+
+  if (isMultiplayerBootstrapView(m_gameState.currentView)) {
+    return true;
+  }
+
+  if (m_gameType == Host && !m_gameServer) {
     std::cout << "starting server" << std::endl;
     m_gameServer = buildAuthoritativeStateForServer();
     bool successStart = m_gameServer->Start();
     if (!successStart) {
+      m_multiplayerStatus = "Failed to start host server";
       return false;
     }
     m_serverLoopThd = std::thread(&game_engine::Engine::runGameServerLoopThread, this);
   }
 
-  // host creates client
-  if (!m_gameClient && (m_gameType == game_engine::Engine::Host || m_gameType == game_engine::Engine::Client)) {
+  if (m_gameType == Client && !m_hasSelectedJoinTarget) {
+    m_multiplayerStatus = "Select a LAN host first";
+    return true;
+  }
+
+  if (!m_gameClient) {
     std::cout << "starting client" << std::endl;
     m_gameClient = std::make_unique<GameClient>();
   }
 
-  // every render loop tries to connect to server
   if (m_gameClient) {
     if (!isConnectedToServer) {
-      if (m_gameClient->Connect("127.0.0.1", 9000)) {
+      const std::string host = (m_gameType == Host) ? "127.0.0.1" : m_selectedJoinHost;
+      const uint16_t port = (m_gameType == Host) ? GAME_SERVER_PORT : m_selectedJoinPort;
+      if (m_gameClient->Connect(host, port)) {
         isConnectedToServer = true;
+        m_multiplayerStatus = "Connected to server";
         std::cout << "client connected to server" << std::endl;
       } else {
+        m_multiplayerStatus = "Waiting for server connection...";
         std::cout << "failed to connect to server" << std::endl;
-        // return;
+        return true;
       }
     }
 
     m_gameClient->ProcessServerMessages();
     if (m_gameClient->IsClientValidated() && !m_gameClient->IsRegistered()) {
       m_gameClient->RegisterWithServer(m_gameState.selectedPlayerSprite);
+      m_multiplayerStatus = "Registering with server...";
+    } else if (m_gameClient->IsRegistered()) {
+      m_multiplayerStatus = "Connected";
+    }
+  }
+
+  if (m_gameType == Host) {
+    const bool hostReady = m_gameClient && m_gameClient->IsRegistered();
+    m_serverReadyForDiscovery = hostReady;
+    if (m_discoveryHost) {
+      const uint32_t playerCount = m_gameServer ? static_cast<uint32_t>(m_gameServer->m_playerSessions.size()) : 0;
+      m_discoveryHost->updateInfo("LAN Host", m_gameState.currentLevelId, playerCount, GAME_SERVER_PORT);
+      m_discoveryHost->setReady(hostReady);
+    }
+    if (hostReady && m_gameState.currentView == UIManager::GameView::MultiplayerHostWaiting) {
+      m_gameState.currentView = UIManager::GameView::Playing;
     }
   }
   return true;
+}
+
+void game_engine::Engine::resetMultiplayerNetworkingState() {
+  m_serverReadyForDiscovery = false;
+  m_hasSelectedJoinTarget = false;
+  isConnectedToServer = false;
+  m_localInput = NetGameInput{};
+  m_localInputSeq = 0;
+  m_inputSendAccumulator = 0.0f;
+  m_multiplayerStatus.clear();
+
+  if (m_discoveryBrowser) {
+    m_discoveryBrowser->stop();
+    m_discoveryBrowser.reset();
+  }
+  if (m_discoveryHost) {
+    m_discoveryHost->stop();
+    m_discoveryHost.reset();
+  }
+  if (m_gameClient) {
+    m_gameClient.reset();
+  }
+  if (m_gameServer) {
+    m_gameServer->Stop();
+  }
+  if (m_serverLoopThd.joinable()) {
+    m_serverLoopThd.join();
+  }
+  m_gameServer.reset();
 }
 
 void game_engine::Engine::submitLocalInput(NetGameInput input) {
@@ -351,15 +472,50 @@ void game_engine::Engine::restartMultiplayerSession() {
     if (m_gameClient) {
       m_gameClient->ClearLatestSnapshot();
     }
-    m_gameState.currentView = UIManager::GameView::Playing;
+    m_gameState.currentView = UIManager::GameView::MultiplayerRespawnWait;
     m_gameServer->broadcastSnapshot();
     return;
   }
 
   if (isClientMode() && m_gameClient) {
     m_gameClient->RequestRespawn();
-    m_gameState.currentView = UIManager::GameView::Playing;
+    m_gameState.currentView = UIManager::GameView::MultiplayerRespawnWait;
   }
+}
+
+std::vector<game_engine::DiscoveredSessionInfo> game_engine::Engine::copyDiscoveredSessions() const {
+  if (!m_discoveryBrowser) {
+    return {};
+  }
+  return m_discoveryBrowser->sessions();
+}
+
+bool game_engine::Engine::selectDiscoveredSession(size_t index) {
+  if (!m_discoveryBrowser) {
+    return false;
+  }
+  const auto& sessions = m_discoveryBrowser->sessions();
+  if (index >= sessions.size()) {
+    return false;
+  }
+
+  m_selectedJoinHost = sessions[index].hostAddress;
+  m_selectedJoinPort = sessions[index].gamePort;
+  m_hasSelectedJoinTarget = true;
+  m_multiplayerStatus = "Selected host " + sessions[index].hostName;
+  return true;
+}
+
+bool game_engine::Engine::hasSelectedJoinTarget() const {
+  return m_hasSelectedJoinTarget;
+}
+
+bool game_engine::Engine::isServerReadyForDiscovery() const {
+  return m_serverReadyForDiscovery;
+}
+
+const std::string& game_engine::Engine::getMultiplayerStatus() const {
+  return m_multiplayerStatus;
 }
 
 const game_engine::NetGameInput& game_engine::Engine::getLocalInput() const {

@@ -22,6 +22,7 @@ enum class UIActionType {
   StartMultiPlayerHost,
   StartMultiPlayerClient,
   SelectPlayerCharacter,
+  SelectMultiplayerSession,
   NextView,
   QuitGame,
 };
@@ -30,6 +31,7 @@ struct UIAction {
   UIActionType type;
   float value{0.0f};
   std::optional<SpriteType> selectedPlayerSprite;
+  std::optional<size_t> selectedSessionIndex;
   std::optional<UIManager::GameView> nextView;
 };
 

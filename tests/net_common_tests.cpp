@@ -18,6 +18,8 @@ bool equalSnapshots(const game_engine::NetGameObjectSnapshot& a,
       !closeVec2(a.acceleration, b.acceleration)) return false;
   if (a.spriteFrame != b.spriteFrame || a.currentAnimation != b.currentAnimation) return false;
   if (std::fabs(a.animElapsed - b.animElapsed) > 1e-5f) return false;
+  if (a.animTimedOut != b.animTimedOut) return false;
+  if (a.presentationVariant != b.presentationVariant) return false;
   if (std::fabs(a.direction - b.direction) > 1e-5f) return false;
   if (std::fabs(a.maxSpeedX - b.maxSpeedX) > 1e-5f) return false;
   if (a.grounded != b.grounded || a.shouldFlash != b.shouldFlash) return false;
@@ -67,6 +69,8 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   player.spriteFrame = 3;
   player.currentAnimation = 1;
   player.animElapsed = 0.33f;
+  player.animTimedOut = false;
+  player.presentationVariant = PresentationVariant::Run;
   player.direction = 1.f;
   player.maxSpeedX = 10.f;
   player.grounded = true;
@@ -87,6 +91,8 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   enemy.spriteFrame = 2;
   enemy.currentAnimation = 0;
   enemy.animElapsed = 0.12f;
+  enemy.animTimedOut = true;
+  enemy.presentationVariant = PresentationVariant::Hit;
   enemy.direction = -1.f;
   enemy.maxSpeedX = 4.f;
   enemy.grounded = false;
@@ -109,6 +115,8 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   bullet.spriteFrame = 1;
   bullet.currentAnimation = 0;
   bullet.animElapsed = 0.45f;
+  bullet.animTimedOut = false;
+  bullet.presentationVariant = PresentationVariant::ProjectileMoving;
   bullet.direction = 1.f;
   bullet.maxSpeedX = 20.f;
   bullet.grounded = false;
@@ -128,6 +136,8 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   level.spriteFrame = 0;
   level.currentAnimation = 0;
   level.animElapsed = 0.0f;
+  level.animTimedOut = false;
+  level.presentationVariant = PresentationVariant::Idle;
   level.direction = 0.f;
   level.maxSpeedX = 0.f;
   level.grounded = true;

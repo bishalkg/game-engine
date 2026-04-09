@@ -23,6 +23,24 @@ enum class EnemyState: std::uint32_t {
   idle, hurt, dead, attack
 };
 
+enum class PresentationVariant : std::uint32_t {
+  Idle,
+  Run,
+  Slide,
+  Shoot,
+  RunShoot,
+  SlideShoot,
+  Jump,
+  JumpShoot,
+  Swing,
+  RunAttack,
+  Swing2,
+  Hit,
+  Die,
+  ProjectileMoving,
+  ProjectileHit,
+};
+
 struct PlayerData {
   PlayerState state;
   Timer damageTimer;
@@ -102,6 +120,7 @@ struct GameObject {
   float maxSpeedX;
   std::vector<Animation> animations;
   int currentAnimation;
+  PresentationVariant presentationVariant;
   SDL_Texture *texture;
   bool dynamic;
   bool grounded;
@@ -129,6 +148,7 @@ struct GameObject {
     renderPosition = glm::vec2(0);
     renderPositionInitialized = false;
     currentAnimation = -1;
+    presentationVariant = PresentationVariant::Idle;
     texture = nullptr;
     dynamic = false;
     grounded = false;

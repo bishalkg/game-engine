@@ -1,6 +1,7 @@
 #include "game/default_systems.h"
 
 #include <algorithm>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -31,64 +32,66 @@ struct AudioObjectState {
 using AudioStateMap =
   std::unordered_map<game_engine::GameObjectKey, AudioObjectState, game_engine::GameObjectKeyHash>;
 
+struct LayeredDynamicKey {
+  uint32_t layer = 0;
+  ObjectClass objClass = ObjectClass::Level;
+  uint32_t id = 0;
+
+  bool operator==(const LayeredDynamicKey& other) const {
+    return layer == other.layer && objClass == other.objClass && id == other.id;
+  }
+};
+
+struct LayeredDynamicKeyHash {
+  size_t operator()(const LayeredDynamicKey& key) const noexcept {
+    const size_t h1 = std::hash<uint32_t>{}(key.layer);
+    const size_t h2 =
+      std::hash<std::underlying_type_t<ObjectClass>>{}(static_cast<std::underlying_type_t<ObjectClass>>(key.objClass));
+    const size_t h3 = std::hash<uint32_t>{}(key.id);
+    return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2)) ^
+           (h3 + 0x9e3779b9 + (h2 << 6) + (h2 >> 2));
+  }
+};
+
 SDL_Texture* pickEntityTexture(
   const EntityResources& entityRes,
   ObjectClass objClass,
-  const ObjectData& data,
-  int currentAnimation) {
+  PresentationVariant presentation) {
   if (objClass == ObjectClass::Projectile) {
     return nullptr;
   }
 
-  switch (currentAnimation) {
-    case ANIM_RUN:
+  switch (presentation) {
+    case PresentationVariant::Run:
       return entityRes.texRun ? entityRes.texRun : entityRes.texWalk;
-    case ANIM_SHOOT:
+    case PresentationVariant::Shoot:
       return entityRes.texShoot ? entityRes.texShoot : entityRes.texIdle;
-    case ANIM_SLIDE:
+    case PresentationVariant::RunShoot:
+      return entityRes.texRunShoot ? entityRes.texRunShoot : entityRes.texShoot;
+    case PresentationVariant::Slide:
       return entityRes.texSlide ? entityRes.texSlide : entityRes.texRun;
-    case ANIM_SLIDE_SHOOT:
+    case PresentationVariant::SlideShoot:
       return entityRes.texSlideShoot ? entityRes.texSlideShoot : entityRes.texSlide;
-    case ANIM_SWING:
+    case PresentationVariant::Swing:
       return entityRes.texAttack ? entityRes.texAttack : entityRes.texIdle;
-    case ANIM_JUMP:
+    case PresentationVariant::Jump:
       return entityRes.texJump ? entityRes.texJump : entityRes.texRun;
-    case ANIM_HIT:
+    case PresentationVariant::JumpShoot:
+      return entityRes.texRunShoot ? entityRes.texRunShoot : entityRes.texShoot;
+    case PresentationVariant::Hit:
       return entityRes.texHit ? entityRes.texHit : entityRes.texIdle;
-    case ANIM_DIE:
+    case PresentationVariant::Die:
       return entityRes.texDie ? entityRes.texDie : entityRes.texIdle;
-    case ANIM_RUN_ATTACK:
+    case PresentationVariant::RunAttack:
       return entityRes.texRunAttack ? entityRes.texRunAttack : entityRes.texRun;
-    case ANIM_SWING_2:
+    case PresentationVariant::Swing2:
       return entityRes.texAttack2 ? entityRes.texAttack2 : entityRes.texAttack;
-    case ANIM_IDLE:
+    case PresentationVariant::Idle:
     default:
       break;
   }
 
-  if (objClass == ObjectClass::Player) {
-    switch (data.player.state) {
-      case PlayerState::jumping:
-        return entityRes.texJump ? entityRes.texJump : entityRes.texRun;
-      case PlayerState::hurt:
-        return entityRes.texHit ? entityRes.texHit : entityRes.texIdle;
-      case PlayerState::dead:
-        return entityRes.texDie ? entityRes.texDie : entityRes.texIdle;
-      default:
-        return entityRes.texIdle;
-    }
-  }
-
-  switch (data.enemy.state) {
-    case EnemyState::hurt:
-      return entityRes.texHit ? entityRes.texHit : entityRes.texIdle;
-    case EnemyState::dead:
-      return entityRes.texDie ? entityRes.texDie : entityRes.texIdle;
-    case EnemyState::attack:
-      return entityRes.texAttack ? entityRes.texAttack : entityRes.texRun;
-    default:
-      return entityRes.texIdle;
-  }
+  return entityRes.texIdle;
 }
 
 void applyReplicatedAnimation(GameObject& obj, const game_engine::NetGameObjectSnapshot& snap) {
@@ -101,13 +104,15 @@ void applyReplicatedAnimation(GameObject& obj, const game_engine::NetGameObjectS
   obj.currentAnimation = static_cast<int>(snap.currentAnimation);
   obj.spriteFrame = static_cast<int>(snap.spriteFrame);
   if (obj.currentAnimation >= 0 && obj.currentAnimation < static_cast<int>(obj.animations.size())) {
-    obj.animations[obj.currentAnimation].setElapsed(snap.animElapsed);
+    obj.animations[obj.currentAnimation].setElapsed(snap.animElapsed, snap.animTimedOut);
   }
 }
 
 void applyPresentation(game::GameResources& resources, GameObject& obj) {
   if (obj.objClass == ObjectClass::Projectile) {
-    obj.texture = obj.currentAnimation == ANIM_RUN ? resources.texBulletHit : resources.texBullet;
+    obj.texture = obj.presentationVariant == PresentationVariant::ProjectileHit
+                    ? resources.texBulletHit
+                    : resources.texBullet;
     return;
   }
 
@@ -120,8 +125,7 @@ void applyPresentation(game::GameResources& resources, GameObject& obj) {
   obj.texture = pickEntityTexture(
     it->second,
     obj.objClass,
-    obj.data,
-    obj.currentAnimation >= 0 ? obj.currentAnimation : ANIM_IDLE);
+    obj.presentationVariant);
 }
 
 GameObject buildReplicatedObject(SimContext& ctx, const game_engine::NetGameObjectSnapshot& snap) {
@@ -129,6 +133,7 @@ GameObject buildReplicatedObject(SimContext& ctx, const game_engine::NetGameObje
   obj.id = snap.id;
   obj.objClass = snap.type;
   obj.spriteType = snap.spriteType;
+  obj.presentationVariant = snap.presentationVariant;
   obj.position = snap.position;
   obj.renderPosition = snap.position;
   obj.renderPositionInitialized = true;
@@ -206,6 +211,7 @@ void updateReplicatedObject(
                                             : false;
   const glm::vec2 previousPosition = obj.position;
   obj.spriteType = snap.spriteType;
+  obj.presentationVariant = snap.presentationVariant;
   obj.position = snap.position;
   obj.velocity = snap.velocity;
   obj.acceleration = snap.acceleration;
@@ -240,48 +246,69 @@ void updateReplicatedObject(
   applyPresentation(ctx.resources, obj);
 }
 
-void reconcileReplicatedLayer(
+void purgeReplicatedActors(game_engine::GameState& gameState) {
+  for (auto& layer : gameState.layers) {
+    layer.erase(
+      std::remove_if(
+        layer.begin(),
+        layer.end(),
+        [](const GameObject& obj) {
+          return obj.dynamic &&
+                 (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy);
+        }),
+      layer.end());
+  }
+  gameState.bullets.clear();
+}
+
+void reconcileReplicatedActors(
   SimContext& ctx,
   const game_engine::NetGameStateSnapshot& snapshot) {
-
-  auto& layer = ctx.gameState.layers[ctx.gameState.playerLayer];
-
-  std::unordered_map<game_engine::GameObjectKey, std::size_t, game_engine::GameObjectKeyHash> existing;
-  for (std::size_t idx = 0; idx < layer.size(); ++idx) {
-    const auto& obj = layer[idx];
-    if (obj.dynamic && (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy)) {
-      existing[{obj.objClass, obj.id}] = idx;
+  std::unordered_map<LayeredDynamicKey, std::size_t, LayeredDynamicKeyHash> existing;
+  for (std::size_t layerIdx = 0; layerIdx < ctx.gameState.layers.size(); ++layerIdx) {
+    auto& layer = ctx.gameState.layers[layerIdx];
+    for (std::size_t objIdx = 0; objIdx < layer.size(); ++objIdx) {
+      const auto& obj = layer[objIdx];
+      if (obj.dynamic && (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy)) {
+        existing[{static_cast<uint32_t>(layerIdx), obj.objClass, obj.id}] = objIdx;
+      }
     }
   }
 
-  std::unordered_set<game_engine::GameObjectKey, game_engine::GameObjectKeyHash> seen;
-  for (const auto& [key, snap] : snapshot.m_gameObjects) {
+  std::unordered_set<LayeredDynamicKey, LayeredDynamicKeyHash> seen;
+  for (const auto& [_, snap] : snapshot.m_gameObjects) {
     if (snap.type != ObjectClass::Player && snap.type != ObjectClass::Enemy) {
       continue;
     }
+    if (snap.layer >= ctx.gameState.layers.size()) {
+      ctx.gameState.layers.resize(snap.layer + 1);
+    }
+
+    LayeredDynamicKey key{snap.layer, snap.type, snap.id};
     seen.insert(key);
+    auto& targetLayer = ctx.gameState.layers[snap.layer];
     const auto it = existing.find(key);
     if (it == existing.end()) {
-      // if doesnt exist, create
-      layer.push_back(buildReplicatedObject(ctx, snap));
-      existing[key] = layer.size() - 1;
+      targetLayer.push_back(buildReplicatedObject(ctx, snap));
+      existing[key] = targetLayer.size() - 1;
     } else {
-      // update existing
-      updateReplicatedObject(ctx, layer[it->second], snap);
+      updateReplicatedObject(ctx, targetLayer[it->second], snap);
     }
   }
 
-  // ?? TODO
-  layer.erase(
-    std::remove_if(
-      layer.begin(),
-      layer.end(),
-      [&seen](const GameObject& obj) {
-        return obj.dynamic &&
-               (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy) &&
-               !seen.contains({obj.objClass, obj.id});
-      }),
-    layer.end());
+  for (std::size_t layerIdx = 0; layerIdx < ctx.gameState.layers.size(); ++layerIdx) {
+    auto& layer = ctx.gameState.layers[layerIdx];
+    layer.erase(
+      std::remove_if(
+        layer.begin(),
+        layer.end(),
+        [&seen, layerIdx](const GameObject& obj) {
+          return obj.dynamic &&
+                 (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy) &&
+                 !seen.contains({static_cast<uint32_t>(layerIdx), obj.objClass, obj.id});
+        }),
+      layer.end());
+  }
 }
 
 void reconcileReplicatedBullets(
@@ -318,31 +345,40 @@ void reconcileReplicatedBullets(
 void applyAuthoritativeSnapshot(
   SimContext& ctx,
   const game_engine::NetGameStateSnapshot& snapshot,
-  uint32_t localPlayerID) {
-  if (!ctx.resources.m_currLevel || ctx.gameState.playerLayer < 0 ||
-      ctx.gameState.playerLayer >= static_cast<int>(ctx.gameState.layers.size())) {
+  uint32_t localPlayerID,
+  bool forceFullRebuild) {
+  if (!ctx.resources.m_currLevel) {
     return;
   }
 
   ctx.gameState.m_stateLastUpdatedAt = snapshot.m_stateLastUpdatedAt;
   ctx.gameState.currentLevelId = snapshot.levelId;
 
-  reconcileReplicatedLayer(ctx, snapshot);
+  if (forceFullRebuild) {
+    purgeReplicatedActors(ctx.gameState);
+  }
+
+  reconcileReplicatedActors(ctx, snapshot);
   reconcileReplicatedBullets(ctx, snapshot);
 
   ctx.gameState.playerIndex = -1;
-  for (int idx = 0; idx < static_cast<int>(ctx.gameState.layers[ctx.gameState.playerLayer].size()); ++idx) {
-    const auto& obj = ctx.gameState.layers[ctx.gameState.playerLayer][idx];
-    if (obj.objClass == ObjectClass::Player && obj.id == localPlayerID) {
-      ctx.gameState.playerIndex = idx;
-      break;
+  for (int layerIdx = 0; layerIdx < static_cast<int>(ctx.gameState.layers.size()); ++layerIdx) {
+    for (int idx = 0; idx < static_cast<int>(ctx.gameState.layers[layerIdx].size()); ++idx) {
+      const auto& obj = ctx.gameState.layers[layerIdx][idx];
+      if (obj.objClass == ObjectClass::Player && obj.id == localPlayerID) {
+        ctx.gameState.playerLayer = layerIdx;
+        ctx.gameState.playerIndex = idx;
+        return;
+      }
     }
   }
-  if (ctx.gameState.playerIndex == -1) {
-    for (int idx = 0; idx < static_cast<int>(ctx.gameState.layers[ctx.gameState.playerLayer].size()); ++idx) {
-      if (ctx.gameState.layers[ctx.gameState.playerLayer][idx].objClass == ObjectClass::Player) {
+
+  for (int layerIdx = 0; layerIdx < static_cast<int>(ctx.gameState.layers.size()); ++layerIdx) {
+    for (int idx = 0; idx < static_cast<int>(ctx.gameState.layers[layerIdx].size()); ++idx) {
+      if (ctx.gameState.layers[layerIdx][idx].objClass == ObjectClass::Player) {
+        ctx.gameState.playerLayer = layerIdx;
         ctx.gameState.playerIndex = idx;
-        break;
+        return;
       }
     }
   }
@@ -402,12 +438,11 @@ AudioStateMap captureAudioState(const game_engine::GameState& gameState) {
 }
 
 GameObject* findPlayerById(game_engine::GameState& gameState, uint32_t playerID) {
-  if (gameState.playerLayer < 0 || gameState.playerLayer >= static_cast<int>(gameState.layers.size())) {
-    return nullptr;
-  }
-  for (auto& obj : gameState.layers[gameState.playerLayer]) {
-    if (obj.objClass == ObjectClass::Player && obj.id == playerID) {
-      return &obj;
+  for (auto& layer : gameState.layers) {
+    for (auto& obj : layer) {
+      if (obj.objClass == ObjectClass::Player && obj.id == playerID) {
+        return &obj;
+      }
     }
   }
   return nullptr;
@@ -529,13 +564,24 @@ public:
         client->ProcessServerMessages();
         game_engine::NetGameStateSnapshot latestSnapshot;
         if (client->CopyLatestSnapshot(latestSnapshot)) {
-          applyAuthoritativeSnapshot(ctx, latestSnapshot, client->GetPlayerID());
+          const bool forceFullRebuild = client->NeedsFullRebuild();
+          applyAuthoritativeSnapshot(
+            ctx,
+            latestSnapshot,
+            client->GetPlayerID(),
+            forceFullRebuild);
+          if (forceFullRebuild) {
+            client->MarkFullRebuildApplied();
+          }
           playSimulationAudio(resources, before, ctx.gameState, client->GetPlayerID(), deltaTime);
           if (ctx.gameState.playerIndex >= 0) {
             auto& player = engine.getPlayer();
             updateMapViewport(ctx, player);
             if (player.data.player.state == PlayerState::dead && player.currentAnimation == -1) {
               ctx.gameState.currentView = UIManager::GameView::GameOver;
+            } else if (ctx.gameState.currentView == UIManager::GameView::MultiplayerRespawnWait &&
+                       player.data.player.state != PlayerState::dead) {
+              ctx.gameState.currentView = UIManager::GameView::Playing;
             }
           }
         }

@@ -27,6 +27,16 @@ namespace UIManager {
       InventoryMenu,
       GameOver,
       MultiPlayerOptionsMenu, // this menu will show host or client buttons
+      MultiplayerBrowse,
+      MultiplayerHostWaiting,
+      MultiplayerRespawnWait,
+  };
+
+  struct MultiplayerSessionDisplay {
+    std::string hostName;
+    std::string hostAddress;
+    std::string levelName;
+    uint32_t playerCount = 0;
   };
 
   struct LoadingSnapshot { float progress01; bool done; };
@@ -46,6 +56,7 @@ namespace UIManager {
     std::optional<bool> startMultiPlayerHost;
     std::optional<bool> startMultiPlayerClient;
     std::optional<SpriteType> selectedPlayerSprite;
+    std::optional<size_t> selectedSessionIndex;
     std::optional<GameView> nextView;
     bool quitGame = false;
   };
@@ -80,6 +91,8 @@ namespace UIManager {
     bool togglePauseGameplay = false;
     const std::vector<Cutscene>* cutscene{nullptr};
     int cutSceneID = -1; // test with main menu?
+    std::vector<MultiplayerSessionDisplay> multiplayerSessions;
+    std::string multiplayerStatus;
   };
 
   // cutscene manager gets set once when we enter GameView::CutScene
@@ -143,6 +156,9 @@ namespace UIManager {
       UIActions drawPausedMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawCharacterSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
+      UIActions drawMultiplayerBrowse(const UISnapshots& snaps, ImGuiWindowFlags flags);
+      UIActions drawMultiplayerHostWaiting(const UISnapshots& snaps, ImGuiWindowFlags flags);
+      UIActions drawMultiplayerRespawnWait(const UISnapshots& snaps, ImGuiWindowFlags flags);
       float drawCustomSlider(const std::string& label, float currVal, float v_min, float v_max);
 
 

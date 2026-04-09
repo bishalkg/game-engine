@@ -48,6 +48,7 @@ GameObject cloneGameObject(const GameObject& src) {
   dst.maxSpeedX = src.maxSpeedX;
   dst.animations = src.animations;
   dst.currentAnimation = src.currentAnimation;
+  dst.presentationVariant = src.presentationVariant;
   dst.dynamic = src.dynamic;
   dst.grounded = src.grounded;
   dst.drawScale = src.drawScale;
@@ -268,6 +269,7 @@ void GameServer::resetAuthoritativeState(GameState&& initialState) {
     player.acceleration = templatePlayer.acceleration;
     player.data.player = PlayerData();
     player.currentAnimation = ANIM_IDLE;
+    player.presentationVariant = PresentationVariant::Idle;
     if (player.currentAnimation >= 0 &&
         player.currentAnimation < static_cast<int>(player.animations.size())) {
       player.animations[player.currentAnimation].reset();
@@ -316,6 +318,7 @@ bool GameServer::registerPlayer(uint32_t playerID, SpriteType spriteType) {
     templatePlayer->data.player = PlayerData();
     templatePlayer->velocity = glm::vec2(0.0f);
     templatePlayer->currentAnimation = ANIM_IDLE;
+    templatePlayer->presentationVariant = PresentationVariant::Idle;
     templatePlayer->spriteFrame = 1;
     m_playerSessions[playerID] = PlayerSession{
       .spriteType = spriteType,
@@ -333,6 +336,7 @@ bool GameServer::registerPlayer(uint32_t playerID, SpriteType spriteType) {
   newPlayer.velocity = glm::vec2(0.0f);
   newPlayer.data.player = PlayerData();
   newPlayer.currentAnimation = ANIM_IDLE;
+  newPlayer.presentationVariant = PresentationVariant::Idle;
   state.layers[state.playerLayer].push_back(std::move(newPlayer));
   m_playerSessions[playerID] = PlayerSession{
     .spriteType = spriteType,
@@ -367,6 +371,7 @@ bool GameServer::respawnPlayer(uint32_t playerID) {
   player->grounded = false;
   player->direction = 1.0f;
   player->currentAnimation = ANIM_IDLE;
+  player->presentationVariant = PresentationVariant::Idle;
   if (player->currentAnimation >= 0 &&
       player->currentAnimation < static_cast<int>(player->animations.size())) {
     player->animations[player->currentAnimation].reset();

@@ -50,22 +50,23 @@ void GameRules::onUpdate(game_engine::Engine& engine, float deltaTime) {
 
   uiFlow_->apply(engine, *resources_, lastEngineActions_);
 
-  if (!lastEngineActions_.blockMainGameDraw) {
-    uiManager.clearRenderer(sdlState);
-
+  if (engine.isMultiplayerActive()) {
     if (!engine.handleMultiplayerConnections()) {
       engine.requestQuit();
       return;
     }
+  }
 
+  if (!lastEngineActions_.blockMainGameDraw) {
+    uiManager.clearRenderer(sdlState);
     input_.leftHeld = sdlState.keys ? sdlState.keys[SDL_SCANCODE_LEFT] : false;
     input_.rightHeld = sdlState.keys ? sdlState.keys[SDL_SCANCODE_RIGHT] : false;
     input_.fireHeld = sdlState.keys ? sdlState.keys[SDL_SCANCODE_A] : false;
     engine.submitLocalInput(input_);
     engine.flushLocalInput(deltaTime);
-
-    simulationSystem_->update(engine, *resources_, deltaTime, lastEngineActions_);
   }
+
+  simulationSystem_->update(engine, *resources_, deltaTime, lastEngineActions_);
 
   input_.jumpPressed = false;
   input_.meleePressed = false;

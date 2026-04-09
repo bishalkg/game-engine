@@ -85,6 +85,8 @@ namespace game_engine {
     uint32_t spriteFrame;
     uint32_t currentAnimation; // determined by the server
     float animElapsed = 0.0f;
+    bool animTimedOut = false;
+    PresentationVariant presentationVariant = PresentationVariant::Idle;
     float direction;
     float maxSpeedX;
     bool grounded;
@@ -141,6 +143,8 @@ namespace game_engine {
           w.write_u32(obj.spriteFrame);
           w.write_u32(obj.currentAnimation);
           w.write_float(obj.animElapsed);
+          w.write_bool(obj.animTimedOut);
+          w.write_enum<PresentationVariant>(obj.presentationVariant);
           w.write_float(obj.direction);
           w.write_float(obj.maxSpeedX);
           w.write_bool(obj.grounded);
@@ -207,6 +211,8 @@ namespace game_engine {
         obj.spriteFrame = r.read_u32();
         obj.currentAnimation = r.read_u32();
         obj.animElapsed = r.read_float();
+        obj.animTimedOut = r.read_bool();
+        obj.presentationVariant = r.read_enum<PresentationVariant>();
         obj.direction = r.read_float();
         obj.maxSpeedX = r.read_float();
         obj.grounded = r.read_bool();

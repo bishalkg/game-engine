@@ -123,6 +123,12 @@ namespace net
     void write_bool(const bool v) {
       write_bytes(&v, sizeof(v));
     };
+    void write_string(const std::string& v) {
+      write_u32(static_cast<std::uint32_t>(v.size()));
+      if (!v.empty()) {
+        write_bytes(v.data(), v.size());
+      }
+    };
 
     void write_glm_vec2(const glm::vec2& v) {
       write_float(v.x);
@@ -202,6 +208,14 @@ namespace net
     std::uint64_t read_u64() { std::uint64_t v; read_bytes(&v, sizeof(v)); return v; };
     std::float_t read_float() { std::float_t v; read_bytes(&v, sizeof(v)); return v; };
     bool read_bool() { bool v; read_bytes(&v, sizeof(v)); return v; };
+    std::string read_string() {
+      const std::uint32_t length = read_u32();
+      std::string out(length, '\0');
+      if (length > 0) {
+        read_bytes(out.data(), length);
+      }
+      return out;
+    };
 
     glm::vec2 read_glm_vec2() {
       glm::vec2 vec;

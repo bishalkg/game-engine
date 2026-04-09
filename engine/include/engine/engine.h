@@ -4,6 +4,7 @@
 #include <array>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -12,6 +13,7 @@
 #include <glm/glm.hpp>
 
 #include "engine/gameobject.h"
+#include "engine/net/lan_discovery.h"
 #include "engine/net/game_server.h" // needs complete type for unique_ptr destructor
 #include "engine/net/game_client.h"
 #include "engine/level_types.h"
@@ -95,6 +97,7 @@ namespace game_engine {
     GameState(GameState&& other) noexcept
       : m_loadProgress(other.m_loadProgress.load()),
         currentView(other.currentView),
+        currentLevelId(other.currentLevelId),
         m_stateLastUpdatedAt(other.m_stateLastUpdatedAt),
         layers(std::move(other.layers)),
         bullets(std::move(other.bullets)),
@@ -112,6 +115,7 @@ namespace game_engine {
       if (this != &other) {
         m_loadProgress.store(other.m_loadProgress.load());
         currentView         = other.currentView;
+        currentLevelId      = other.currentLevelId;
         m_stateLastUpdatedAt= other.m_stateLastUpdatedAt;
         layers              = std::move(other.layers);
         bullets             = std::move(other.bullets);
@@ -202,6 +206,12 @@ namespace game_engine {
                       obj.currentAnimation < static_cast<int>(obj.animations.size())
                     ? obj.animations[obj.currentAnimation].getElapsed()
                     : 0.0f;
+                s.animTimedOut =
+                  obj.currentAnimation >= 0 &&
+                      obj.currentAnimation < static_cast<int>(obj.animations.size())
+                    ? obj.animations[obj.currentAnimation].isDone()
+                    : false;
+                s.presentationVariant = obj.presentationVariant;
                 s.data = obj.data; // union to be handled in encodeNetGameStateSnapshot
                 snapshot.m_gameObjects[{obj.objClass, obj.id}] = s;
               };
@@ -230,6 +240,12 @@ namespace game_engine {
                 obj.currentAnimation < static_cast<int>(obj.animations.size())
               ? obj.animations[obj.currentAnimation].getElapsed()
               : 0.0f;
+          s.animTimedOut =
+            obj.currentAnimation >= 0 &&
+                obj.currentAnimation < static_cast<int>(obj.animations.size())
+              ? obj.animations[obj.currentAnimation].isDone()
+              : false;
+          s.presentationVariant = obj.presentationVariant;
           snapshot.m_gameObjects[{obj.objClass, obj.id}] = s;
           // }
         };
@@ -262,11 +278,18 @@ namespace game_engine {
       std::unique_ptr<GameServer> m_gameServer = nullptr; // only create if gameType==Host
       bool isConnectedToServer = false;
       std::unique_ptr<GameClient> m_gameClient = nullptr; // only create if gameType!=SinglePlayer
+      std::unique_ptr<DiscoveryHostService> m_discoveryHost = nullptr;
+      std::unique_ptr<DiscoveryBrowserService> m_discoveryBrowser = nullptr;
       std::thread m_serverLoopThd;
       std::thread m_levelLoadThd;
       NetGameInput m_localInput{};
       uint32_t m_localInputSeq = 0;
       float m_inputSendAccumulator = 0.0f;
+      std::string m_selectedJoinHost = "127.0.0.1";
+      uint16_t m_selectedJoinPort = GAME_SERVER_PORT;
+      bool m_hasSelectedJoinTarget = false;
+      bool m_serverReadyForDiscovery = false;
+      std::string m_multiplayerStatus;
 
 
     public:
@@ -298,9 +321,15 @@ namespace game_engine {
       std::unique_ptr<GameServer> buildAuthoritativeStateForServer();
       bool handleMultiplayerConnections();
       void runGameServerLoopThread();
+      void resetMultiplayerNetworkingState();
       void submitLocalInput(NetGameInput input);
       void flushLocalInput(float deltaTime);
       void restartMultiplayerSession();
+      std::vector<DiscoveredSessionInfo> copyDiscoveredSessions() const;
+      bool selectDiscoveredSession(size_t index);
+      bool hasSelectedJoinTarget() const;
+      bool isServerReadyForDiscovery() const;
+      const std::string& getMultiplayerStatus() const;
       const NetGameInput& getLocalInput() const;
       GameClient* getGameClient();
       const GameClient* getGameClient() const;
