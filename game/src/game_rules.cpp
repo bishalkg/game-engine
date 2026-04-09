@@ -62,6 +62,7 @@ void GameRules::onUpdate(game_engine::Engine& engine, float deltaTime) {
     input_.rightHeld = sdlState.keys ? sdlState.keys[SDL_SCANCODE_RIGHT] : false;
     input_.fireHeld = sdlState.keys ? sdlState.keys[SDL_SCANCODE_A] : false;
     engine.submitLocalInput(input_);
+    engine.flushLocalInput(deltaTime);
 
     simulationSystem_->update(engine, *resources_, deltaTime, lastEngineActions_);
   }

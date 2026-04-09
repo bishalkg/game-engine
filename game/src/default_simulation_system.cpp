@@ -130,6 +130,8 @@ GameObject buildReplicatedObject(SimContext& ctx, const game_engine::NetGameObje
   obj.objClass = snap.type;
   obj.spriteType = snap.spriteType;
   obj.position = snap.position;
+  obj.renderPosition = snap.position;
+  obj.renderPositionInitialized = true;
   obj.velocity = snap.velocity;
   obj.acceleration = snap.acceleration;
   obj.direction = snap.direction;
@@ -197,6 +199,12 @@ void updateReplicatedObject(
   SimContext& ctx,
   GameObject& obj,
   const game_engine::NetGameObjectSnapshot& snap) {
+  const bool wasDead =
+    obj.objClass == ObjectClass::Player ? obj.data.player.state == PlayerState::dead
+                                        : obj.objClass == ObjectClass::Enemy
+                                            ? obj.data.enemy.state == EnemyState::dead
+                                            : false;
+  const glm::vec2 previousPosition = obj.position;
   obj.spriteType = snap.spriteType;
   obj.position = snap.position;
   obj.velocity = snap.velocity;
@@ -205,6 +213,10 @@ void updateReplicatedObject(
   obj.maxSpeedX = snap.maxSpeedX;
   obj.grounded = snap.grounded;
   obj.shouldFlash = snap.shouldFlash;
+  if (!obj.renderPositionInitialized) {
+    obj.renderPosition = obj.position;
+    obj.renderPositionInitialized = true;
+  }
 
   if (obj.objClass == ObjectClass::Projectile) {
     obj.data.bullet = snap.data.bullet;
@@ -212,6 +224,16 @@ void updateReplicatedObject(
     obj.data.player = snap.data.player;
   } else if (obj.objClass == ObjectClass::Enemy) {
     obj.data.enemy = snap.data.enemy;
+  }
+
+  const bool isRespawn =
+    obj.objClass == ObjectClass::Player &&
+    wasDead &&
+    snap.data.player.state != PlayerState::dead;
+  const bool teleported = glm::length(obj.position - previousPosition) > 128.0f;
+  if (!obj.renderPositionInitialized || isRespawn || teleported) {
+    obj.renderPosition = obj.position;
+    obj.renderPositionInitialized = true;
   }
 
   applyReplicatedAnimation(obj, snap);

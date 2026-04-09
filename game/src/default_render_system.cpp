@@ -49,10 +49,28 @@ private:
     auto& gameState = engine.getGameState();
     auto& renderer = engine.getSDLState().renderer;
 
+    bool shouldInterpolate = false;
+    if (engine.isMultiplayerActive() && obj.dynamic) {
+      const auto* client = engine.getGameClient();
+      const bool isLocalPlayer =
+        client && obj.objClass == ObjectClass::Player && obj.id == client->GetPlayerID();
+      shouldInterpolate = !isLocalPlayer;
+    }
+
     if (engine.isMultiplayerActive() && obj.dynamic &&
         obj.currentAnimation >= 0 &&
         obj.currentAnimation < static_cast<int>(obj.animations.size())) {
       obj.animations[obj.currentAnimation].step(deltaTime);
+    }
+
+    if (!obj.renderPositionInitialized) {
+      obj.renderPosition = obj.position;
+      obj.renderPositionInitialized = true;
+    } else if (shouldInterpolate) {
+      const float blend = std::clamp(deltaTime * 15.0f, 0.0f, 1.0f);
+      obj.renderPosition += (obj.position - obj.renderPosition) * blend;
+    } else {
+      obj.renderPosition = obj.position;
     }
 
     float frameW = obj.spritePixelW;
@@ -67,8 +85,8 @@ private:
     float drawH = frameH / obj.drawScale;
 
     SDL_FRect dst{
-      obj.position.x - gameState.mapViewport.x,
-      obj.position.y - gameState.mapViewport.y,
+      obj.renderPosition.x - gameState.mapViewport.x,
+      obj.renderPosition.y - gameState.mapViewport.y,
       drawW,
       drawH,
     };

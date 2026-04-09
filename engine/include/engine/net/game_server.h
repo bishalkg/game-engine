@@ -9,6 +9,20 @@ namespace game_engine {
 
 struct GameState;
 
+enum class PlayerSessionState : uint8_t {
+  connected,
+  alive,
+  dead,
+  respawning,
+};
+
+struct PlayerSession {
+  SpriteType spriteType = SpriteType::Player_Marie;
+  PlayerSessionState lifecycle = PlayerSessionState::connected;
+  uint32_t lastInputSeq = 0;
+  glm::vec2 spawnPosition{0.0f, 0.0f};
+};
+
 struct AuthoritativeContext {
   std::unique_ptr<GameState> state;
   std::unordered_map<uint32_t, NetGameInput> latestPlayerInputs;
@@ -21,7 +35,7 @@ class GameServer : public net::server_interface<GameMsgHeaders> {
 public:
   GameServer(uint16_t nPort, std::unique_ptr<AuthoritativeContext> authCtx);
 
-  std::unordered_map<uint32_t, NetGameObjectSnapshot> m_mapPlayerRoster;
+  std::unordered_map<uint32_t, PlayerSession> m_playerSessions;
   std::vector<uint32_t> m_vGarbageIDs;
   NetGameStateSnapshot m_currGameSnapshot;
   net::tsqueue<NetGameInput> m_playerInputQueue;
@@ -38,8 +52,10 @@ public:
   void applyPlayerInputs();
   void step(float deltaTime);
   void refreshSnapshot();
+  void broadcastSnapshot();
   void resetAuthoritativeState(GameState&& initialState);
   bool registerPlayer(uint32_t playerID, SpriteType spriteType);
+  bool respawnPlayer(uint32_t playerID);
   void removePlayer(uint32_t playerID);
 };
 

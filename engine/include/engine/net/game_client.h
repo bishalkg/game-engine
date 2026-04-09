@@ -27,6 +27,10 @@ public:
       return;
     }
 
+    bool haveNewSnapshot = false;
+    NetGameStateSnapshot newestSnapshot;
+    uint64_t newestTick = m_latestServerTickReceived;
+
     while (!Incoming().empty()) {
       auto msg = Incoming().pop_front().msg;
 
@@ -44,9 +48,11 @@ public:
         case GameMsgHeaders::Game_Snapshot: {
           NetGameStateSnapshot latestSnapshot;
           latestSnapshot.deserealizeNetGameStateSnapshot(msg.body);
-          std::scoped_lock lock(m_gameStateMu);
-          m_latestSnapshot = std::move(latestSnapshot);
-          m_hasSnapshot = true;
+          if (latestSnapshot.serverTick >= newestTick) {
+            newestTick = latestSnapshot.serverTick;
+            newestSnapshot = std::move(latestSnapshot);
+            haveNewSnapshot = true;
+          }
           break;
         }
         case GameMsgHeaders::Game_RemovePlayer: {
@@ -58,6 +64,20 @@ public:
         }
         default:
           break;
+      }
+    }
+
+    if (haveNewSnapshot) {
+      std::scoped_lock lock(m_gameStateMu);
+      if (!m_hasSnapshot || newestSnapshot.serverTick >= m_latestSnapshot.serverTick) {
+        m_latestSnapshot = std::move(newestSnapshot);
+        m_hasSnapshot = true;
+        m_latestServerTickReceived = m_latestSnapshot.serverTick;
+        auto it = m_latestSnapshot.m_gameObjects.find({ObjectClass::Player, m_playerID});
+        if (it != m_latestSnapshot.m_gameObjects.end() &&
+            it->second.data.player.state != PlayerState::dead) {
+          m_respawnRequested = false;
+        }
       }
     }
   }
@@ -104,13 +124,13 @@ public:
   }
 
   void RequestRespawn() {
-    if (IsConnected() && m_isRegistered) {
+    if (IsConnected() && m_isRegistered && !m_respawnRequested) {
       net::message<GameMsgHeaders> msg;
-      msg.header.id = GameMsgHeaders::Client_UnregisterWithServer;
+      msg.header.id = GameMsgHeaders::Game_PlayerRespawnRequest;
       Send(msg);
+      m_respawnRequested = true;
     }
 
-    m_isRegistered = false;
     ClearLatestSnapshot();
   }
 
@@ -121,6 +141,8 @@ private:
   bool m_isClientValidated = false;
   bool m_isRegistered = false;
   bool m_hasSnapshot = false;
+  bool m_respawnRequested = false;
+  uint64_t m_latestServerTickReceived = 0;
 };
 
 } // namespace game_engine

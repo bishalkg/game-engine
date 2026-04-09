@@ -266,6 +266,7 @@ namespace game_engine {
       std::thread m_levelLoadThd;
       NetGameInput m_localInput{};
       uint32_t m_localInputSeq = 0;
+      float m_inputSendAccumulator = 0.0f;
 
 
     public:
@@ -298,6 +299,7 @@ namespace game_engine {
       bool handleMultiplayerConnections();
       void runGameServerLoopThread();
       void submitLocalInput(NetGameInput input);
+      void flushLocalInput(float deltaTime);
       void restartMultiplayerSession();
       const NetGameInput& getLocalInput() const;
       GameClient* getGameClient();

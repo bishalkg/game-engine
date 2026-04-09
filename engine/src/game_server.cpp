@@ -59,6 +59,8 @@ GameObject cloneGameObject(const GameObject& src) {
   dst.flashTimer = src.flashTimer;
   dst.shouldFlash = src.shouldFlash;
   dst.spriteFrame = src.spriteFrame;
+  dst.renderPosition = src.renderPosition;
+  dst.renderPositionInitialized = src.renderPositionInitialized;
   dst.texture = nullptr;
   return dst;
 }
@@ -109,7 +111,7 @@ void GameServer::OnMessage(
         reply.body = std::move(writer.buff);
         reply.header.bodySize = reply.body.size();
         MessageClient(client, reply);
-        refreshSnapshot();
+        broadcastSnapshot();
       }
       break;
     }
@@ -123,6 +125,11 @@ void GameServer::OnMessage(
       m_playerInputQueue.push_back(input);
       break;
     }
+    case GameMsgHeaders::Game_PlayerRespawnRequest:
+      if (respawnPlayer(client->GetID())) {
+        broadcastSnapshot();
+      }
+      break;
     default:
       break;
   }
@@ -152,6 +159,14 @@ void GameServer::applyPlayerInputs() {
     if (!m_authCtx) {
       continue;
     }
+    auto sessionIt = m_playerSessions.find(input.playerID);
+    if (sessionIt == m_playerSessions.end()) {
+      continue;
+    }
+    if (input.inputSeq <= sessionIt->second.lastInputSeq) {
+      continue;
+    }
+    sessionIt->second.lastInputSeq = input.inputSeq;
     m_authCtx->latestPlayerInputs[input.playerID] = input;
   }
 }
@@ -172,6 +187,14 @@ void GameServer::step(float deltaTime) {
     input.meleePressed = false;
     (void)playerID;
   }
+
+  for (auto& [playerID, session] : m_playerSessions) {
+    if (GameObject* player = findPlayerById(playerID)) {
+      session.lifecycle =
+        player->data.player.state == PlayerState::dead ? PlayerSessionState::dead
+                                                       : PlayerSessionState::alive;
+    }
+  }
 }
 
 void GameServer::refreshSnapshot() {
@@ -181,6 +204,15 @@ void GameServer::refreshSnapshot() {
   m_currGameSnapshot = m_authCtx->state->extractNetSnapshot();
   m_currGameSnapshot.serverTick = m_authCtx->serverTick;
   m_currGameSnapshot.levelId = m_authCtx->state->currentLevelId;
+}
+
+void GameServer::broadcastSnapshot() {
+  refreshSnapshot();
+  net::message<GameMsgHeaders> msg;
+  msg.header.id = GameMsgHeaders::Game_Snapshot;
+  msg.body = m_currGameSnapshot.serealizeNetGameStateSnapshot();
+  msg.header.bodySize = msg.body.size();
+  BroadcastToClients(msg);
 }
 
 void GameServer::resetAuthoritativeState(GameState&& initialState) {
@@ -220,18 +252,18 @@ void GameServer::resetAuthoritativeState(GameState&& initialState) {
       [](const GameObject& obj) { return obj.objClass == ObjectClass::Player; }),
     layer.end());
 
-  std::vector<std::pair<uint32_t, SpriteType>> roster;
-  roster.reserve(m_mapPlayerRoster.size());
-  for (const auto& [playerID, snapshot] : m_mapPlayerRoster) {
-    roster.emplace_back(playerID, snapshot.spriteType);
+  std::vector<std::pair<uint32_t, PlayerSession>> roster;
+  roster.reserve(m_playerSessions.size());
+  for (const auto& [playerID, session] : m_playerSessions) {
+    roster.emplace_back(playerID, session);
   }
   std::sort(roster.begin(), roster.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
 
   for (std::size_t idx = 0; idx < roster.size(); ++idx) {
     GameObject player = cloneGameObject(templatePlayer);
     player.id = roster[idx].first;
-    player.spriteType = roster[idx].second;
-    player.position.x += 48.0f * static_cast<float>(idx);
+    player.spriteType = roster[idx].second.spriteType;
+    player.position = roster[idx].second.spawnPosition;
     player.velocity = glm::vec2(0.0f);
     player.acceleration = templatePlayer.acceleration;
     player.data.player = PlayerData();
@@ -246,6 +278,7 @@ void GameServer::resetAuthoritativeState(GameState&& initialState) {
     player.collider = player.baseCollider;
     player.direction = 1.0f;
     layer.push_back(std::move(player));
+    m_playerSessions[roster[idx].first].lifecycle = PlayerSessionState::alive;
   }
 
   refreshSnapshot();
@@ -276,24 +309,77 @@ bool GameServer::registerPlayer(uint32_t playerID, SpriteType spriteType) {
     return false;
   }
 
-  if (m_mapPlayerRoster.empty()) {
+  if (m_playerSessions.empty()) {
+    const glm::vec2 spawnPosition = templatePlayer->position;
     templatePlayer->id = playerID;
     templatePlayer->spriteType = spriteType;
-    m_mapPlayerRoster[playerID] =
-      NetGameObjectSnapshot{.id = playerID, .type = ObjectClass::Player, .spriteType = spriteType};
+    templatePlayer->data.player = PlayerData();
+    templatePlayer->velocity = glm::vec2(0.0f);
+    templatePlayer->currentAnimation = ANIM_IDLE;
+    templatePlayer->spriteFrame = 1;
+    m_playerSessions[playerID] = PlayerSession{
+      .spriteType = spriteType,
+      .lifecycle = PlayerSessionState::alive,
+      .lastInputSeq = 0,
+      .spawnPosition = spawnPosition,
+    };
     return true;
   }
 
   GameObject newPlayer = cloneGameObject(*templatePlayer);
   newPlayer.id = playerID;
   newPlayer.spriteType = spriteType;
-  newPlayer.position.x += 48.0f * static_cast<float>(m_mapPlayerRoster.size());
+  newPlayer.position.x += 48.0f * static_cast<float>(m_playerSessions.size());
   newPlayer.velocity = glm::vec2(0.0f);
   newPlayer.data.player = PlayerData();
   newPlayer.currentAnimation = ANIM_IDLE;
   state.layers[state.playerLayer].push_back(std::move(newPlayer));
-  m_mapPlayerRoster[playerID] =
-    NetGameObjectSnapshot{.id = playerID, .type = ObjectClass::Player, .spriteType = spriteType};
+  m_playerSessions[playerID] = PlayerSession{
+    .spriteType = spriteType,
+    .lifecycle = PlayerSessionState::alive,
+    .lastInputSeq = 0,
+    .spawnPosition = state.layers[state.playerLayer].back().position,
+  };
+  return true;
+}
+
+bool GameServer::respawnPlayer(uint32_t playerID) {
+  if (!m_authCtx || !m_authCtx->state) {
+    return false;
+  }
+
+  auto sessionIt = m_playerSessions.find(playerID);
+  if (sessionIt == m_playerSessions.end()) {
+    return false;
+  }
+
+  GameObject* player = findPlayerById(playerID);
+  if (!player) {
+    return false;
+  }
+
+  sessionIt->second.lifecycle = PlayerSessionState::respawning;
+  player->position = sessionIt->second.spawnPosition;
+  player->velocity = glm::vec2(0.0f);
+  player->data.player = PlayerData();
+  player->shouldFlash = false;
+  player->flashTimer.reset();
+  player->grounded = false;
+  player->direction = 1.0f;
+  player->currentAnimation = ANIM_IDLE;
+  if (player->currentAnimation >= 0 &&
+      player->currentAnimation < static_cast<int>(player->animations.size())) {
+    player->animations[player->currentAnimation].reset();
+  }
+  player->spriteFrame = 1;
+  player->collider = player->baseCollider;
+  player->renderPosition = player->position;
+  player->renderPositionInitialized = true;
+  sessionIt->second.lifecycle = PlayerSessionState::alive;
+  m_authCtx->latestPlayerInputs[playerID] = NetGameInput{
+    .playerID = playerID,
+    .inputSeq = sessionIt->second.lastInputSeq,
+  };
   return true;
 }
 
@@ -316,8 +402,8 @@ void GameServer::removePlayer(uint32_t playerID) {
   }
 
   m_authCtx->latestPlayerInputs.erase(playerID);
-  m_mapPlayerRoster.erase(playerID);
-  refreshSnapshot();
+  m_playerSessions.erase(playerID);
+  broadcastSnapshot();
 }
 
 } // namespace game_engine

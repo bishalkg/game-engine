@@ -105,6 +105,8 @@ struct GameObject {
   SDL_Texture *texture;
   bool dynamic;
   bool grounded;
+  glm::vec2 renderPosition;
+  bool renderPositionInitialized;
 
   float bgscroll;
   float scrollFactor;
@@ -124,6 +126,8 @@ struct GameObject {
     maxSpeedX = 0;
     direction = 1;
     position = velocity = acceleration = glm::vec2(0);
+    renderPosition = glm::vec2(0);
+    renderPositionInitialized = false;
     currentAnimation = -1;
     texture = nullptr;
     dynamic = false;

@@ -43,6 +43,8 @@ GameObject cloneGameObject(const GameObject& src) {
   dst.texture = nullptr;
   dst.dynamic = src.dynamic;
   dst.grounded = src.grounded;
+  dst.renderPosition = src.renderPosition;
+  dst.renderPositionInitialized = src.renderPositionInitialized;
   dst.bgscroll = src.bgscroll;
   dst.scrollFactor = src.scrollFactor;
   dst.drawScale = src.drawScale;
@@ -289,24 +291,59 @@ bool game_engine::Engine::handleMultiplayerConnections() {
 }
 
 void game_engine::Engine::submitLocalInput(NetGameInput input) {
-  input.inputSeq = ++m_localInputSeq;
-  if (m_gameClient) {
-    input.playerID = m_gameClient->GetPlayerID();
-  }
-
-  input.shouldSendMessage =
-    input.leftHeld || input.rightHeld || input.fireHeld || input.jumpPressed || input.meleePressed;
-  m_localInput = input;
-
   if (isMultiplayerActive() && m_gameClient) {
-    m_gameClient->SendInput(m_localInput);
+    if (m_gameClient) {
+      m_localInput.playerID = m_gameClient->GetPlayerID();
+    }
+    m_localInput.leftHeld = input.leftHeld;
+    m_localInput.rightHeld = input.rightHeld;
+    m_localInput.fireHeld = input.fireHeld;
+    m_localInput.jumpPressed = m_localInput.jumpPressed || input.jumpPressed;
+    m_localInput.meleePressed = m_localInput.meleePressed || input.meleePressed;
+    m_localInput.shouldSendMessage =
+      m_localInput.leftHeld || m_localInput.rightHeld || m_localInput.fireHeld ||
+      m_localInput.jumpPressed || m_localInput.meleePressed;
+  } else {
+    input.shouldSendMessage =
+      input.leftHeld || input.rightHeld || input.fireHeld || input.jumpPressed || input.meleePressed;
+    m_localInput = input;
   }
+}
+
+void game_engine::Engine::flushLocalInput(float deltaTime) {
+  if (!isMultiplayerActive() || !m_gameClient || !m_gameClient->IsRegistered()) {
+    return;
+  }
+
+  constexpr float kInputSendInterval = 1.0f / 60.0f;
+  m_inputSendAccumulator += deltaTime;
+  const bool hasEdgeInput = m_localInput.jumpPressed || m_localInput.meleePressed;
+  if (m_inputSendAccumulator < kInputSendInterval && !hasEdgeInput) {
+    return;
+  }
+
+  m_inputSendAccumulator = 0.0f;
+  NetGameInput outgoing = m_localInput;
+  outgoing.playerID = m_gameClient->GetPlayerID();
+  outgoing.inputSeq = ++m_localInputSeq;
+  outgoing.shouldSendMessage =
+    outgoing.leftHeld || outgoing.rightHeld || outgoing.fireHeld ||
+    outgoing.jumpPressed || outgoing.meleePressed;
+  m_gameClient->SendInput(outgoing);
+
+  m_localInput.jumpPressed = false;
+  m_localInput.meleePressed = false;
+  m_localInput.shouldSendMessage =
+    m_localInput.leftHeld || m_localInput.rightHeld || m_localInput.fireHeld;
 }
 
 void game_engine::Engine::restartMultiplayerSession() {
   if (!isMultiplayerActive()) {
     return;
   }
+
+  m_localInput = NetGameInput{};
+  m_inputSendAccumulator = 0.0f;
 
   if (isHostMode() && m_gameServer) {
     auto authState = cloneAuthoritativeGameState(m_gameState, m_sdlState);
@@ -315,6 +352,7 @@ void game_engine::Engine::restartMultiplayerSession() {
       m_gameClient->ClearLatestSnapshot();
     }
     m_gameState.currentView = UIManager::GameView::Playing;
+    m_gameServer->broadcastSnapshot();
     return;
   }
 
@@ -345,6 +383,7 @@ void game_engine::Engine::runGameServerLoopThread() {
   using clock = std::chrono::steady_clock;
   const double dt = 1.0/60.0; // 60Hz
   const size_t maxInputsPerTick = 64;
+  constexpr uint64_t kSnapshotEveryTicks = 2;
   auto prev = clock::now();
   double accum = 0.0;
   uint64_t tickCount = 0;
@@ -364,13 +403,8 @@ void game_engine::Engine::runGameServerLoopThread() {
       m_gameServer->step(static_cast<float>(dt));
       ++tickCount;
       accum -= dt;
-      if (tickCount % 3 == 0) {
-        m_gameServer->refreshSnapshot();
-        net::message<GameMsgHeaders> msg;
-        msg.header.id = GameMsgHeaders::Game_Snapshot;
-        msg.body = m_gameServer->m_currGameSnapshot.serealizeNetGameStateSnapshot();
-        msg.header.bodySize = msg.body.size();
-        m_gameServer->BroadcastToClients(msg);
+      if (tickCount % kSnapshotEveryTicks == 0) {
+        m_gameServer->broadcastSnapshot();
       }
     }
 

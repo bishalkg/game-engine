@@ -268,7 +268,8 @@ namespace game_engine {
     Game_UpdatePlayer,
 
     Game_Snapshot,
-    Game_PlayerInput
+    Game_PlayerInput,
+    Game_PlayerRespawnRequest
   };
 
 }
