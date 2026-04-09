@@ -302,10 +302,17 @@ cmake --build build --target game -j2
 cmake --build build --target bundle_game
 ```
 
+Or use the repo helper script:
+
+```bash
+./scripts/build_bundle.sh
+```
+
 Notes:
 
 - `game` builds the actual `JeetersCastle.app` executable target.
 - `bundle_game` runs the extra macOS bundle fixup step so the app is easier to move to another Mac.
+- `./scripts/build_bundle.sh` runs configure, builds `game`, runs `bundle_game`, and prints link/minimum-OS verification output.
 
 Bundle output:
 
