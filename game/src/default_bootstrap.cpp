@@ -349,6 +349,7 @@ bool switchToLevel(game_engine::Engine& engine, GameResources& resources, LevelI
   }
 
   GameState newGameState(sdlState);
+  newGameState.currentLevelId = levelId;
   newGameState.selectedPlayerSprite = gameState.selectedPlayerSprite;
   newGameState.currentView = UIManager::GameView::LevelLoading;
   if (!initAllTiles(engine, resources, newGameState)) {
