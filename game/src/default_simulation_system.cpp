@@ -129,16 +129,17 @@ void widenReplicatedColliderForSwing(GameObject& obj) {
     c.x -= extra;
   }
   obj.collider = c;
+
 }
 
 void widenReplicatedColliderForUltimate(GameObject& obj) {
   const float drawW = obj.spritePixelW / obj.drawScale;
   const float drawH = obj.spritePixelH / obj.drawScale;
   obj.collider = SDL_FRect{
-    -0.25f * drawW,
-    -0.25f * drawH,
-    drawW * 1.5f,
-    drawH * 1.5f,
+    -0.15f * drawW,
+    -0.15f * drawH,
+    drawW * 1.3f,
+    drawH * 1.3f,
   };
 }
 
@@ -617,6 +618,15 @@ void playSimulationAudio(
          localPlayer->currentAnimation == ANIM_SWING_2);
       if (startedSwing && resources.audioSword1) {
         MIX_PlayAudio(resources.mixer, resources.audioSword1);
+      }
+
+      const bool startedUltimate =
+        (prev.playerState != PlayerState::ultimate &&
+         localPlayer->data.player.state == PlayerState::ultimate) ||
+        (localPlayer->currentAnimation != prev.currentAnimation &&
+         localPlayer->currentAnimation == ANIM_ULTIMATE);
+      if (startedUltimate && resources.audioUltimateAttack) {
+        MIX_PlayAudio(resources.mixer, resources.audioUltimateAttack);
       }
 
       if (playLocalShotAudioFromStateDiff &&

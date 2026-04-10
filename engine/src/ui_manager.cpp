@@ -4,6 +4,7 @@
 #include "imgui_impl_sdlrenderer3.h"
 #include "imgui_impl_sdl3.h"
 
+#include <cmath>
 #include <cstdio>
 #include <iostream>
 
@@ -623,13 +624,15 @@ namespace UIManager {
       float hpFrac = static_cast<float>(value) / 100.0f; // 0..1
       ImGui::TextUnformatted(name.c_str());
       ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color); // green
+      const bool flashHighlight =
+        highlightReady && std::fmod(ImGui::GetTime(), 1.0) < 0.5;
       ImGui::PushStyleColor(
         ImGuiCol_Border,
-        highlightReady ? IM_COL32(255, 220, 180, 255) : IM_COL32(255, 255, 255, 80));
+        flashHighlight ? IM_COL32(255, 220, 180, 255) : IM_COL32(255, 255, 255, 80));
       ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-      ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, highlightReady ? 2.0f : 1.0f);
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, flashHighlight ? 2.0f : 1.0f);
       ImGui::ProgressBar(hpFrac, ImVec2(150, 24));
-      if (highlightReady) {
+      if (flashHighlight) {
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         const ImVec2 min = ImGui::GetItemRectMin();
         const ImVec2 max = ImGui::GetItemRectMax();

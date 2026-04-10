@@ -9,6 +9,9 @@
 namespace game_engine {
 namespace {
 
+constexpr float kUltimateColliderPaddingFrac = 0.05f;
+constexpr int kUltimateDamageWindowFrames = 9;
+
 const NetGameInput& inputForPlayer(
   const std::unordered_map<uint32_t, NetGameInput>& playerInputs,
   uint32_t playerID) {
@@ -97,11 +100,25 @@ void expandColliderForUltimate(GameObject& obj) {
   const float drawW = obj.spritePixelW / obj.drawScale;
   const float drawH = obj.spritePixelH / obj.drawScale;
   obj.collider = SDL_FRect{
-    -0.25f * drawW,
-    -0.25f * drawH,
-    drawW * 1.5f,
-    drawH * 1.5f,
+    -kUltimateColliderPaddingFrac * drawW,
+    -kUltimateColliderPaddingFrac * drawH,
+    drawW * (1.0f + 2.0f * kUltimateColliderPaddingFrac),
+    drawH * (1.0f + 2.0f * kUltimateColliderPaddingFrac),
   };
+}
+
+bool isUltimateDamageActive(const GameObject& obj) {
+  if (obj.objClass != ObjectClass::Player ||
+      obj.data.player.state != PlayerState::ultimate ||
+      obj.currentAnimation != ANIM_ULTIMATE ||
+      !hasAnimation(obj, ANIM_ULTIMATE)) {
+    return false;
+  }
+
+  const Animation& ultimateAnim = obj.animations[ANIM_ULTIMATE];
+  const int frameCount = ultimateAnim.getFrameCount();
+  const int damageStartFrame = std::max(0, frameCount - kUltimateDamageWindowFrames);
+  return ultimateAnim.currentFrame() >= damageStartFrame && !ultimateAnim.isDone();
 }
 
 SDL_FRect physicsColliderFor(const GameObject& obj, ObjectClass otherClass) {
@@ -832,13 +849,15 @@ void collisionResponse(
       case ObjectClass::Enemy:
         if (objB.data.enemy.state != EnemyState::dead) {
           if (objA.data.player.state == PlayerState::ultimate) {
-            damageEnemy(
-              state,
-              objB,
-              100,
-              objA.id,
-              objA.data.player.activeUltimateCastId,
-              true);
+            if (isUltimateDamageActive(objA)) {
+              damageEnemy(
+                state,
+                objB,
+                100,
+                objA.id,
+                objA.data.player.activeUltimateCastId,
+                true);
+            }
           } else if (objA.data.player.state == PlayerState::swingWeapon) {
             damageEnemy(state, objB, objA.data.player.meleeDamage, objA.id);
           } else {

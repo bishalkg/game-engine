@@ -342,6 +342,8 @@ void GameResources::loadAllAssets(
     loadAudioChunk("data/audio/fireball_whoosh.mp3", chunkAudioGain);
   std::tie(audioSword1, sword1Track) =
     loadAudioChunk("data/audio/sword/sword_swing_1.mp3", chunkAudioGain);
+  std::tie(audioUltimateAttack, ultimateAttackTrack) =
+    loadAudioChunk("data/audio/sword/ultimate_attack.wav", chunkAudioGain);
   std::tie(audioShootHit, hitTrack) =
     loadAudioChunk("data/audio/fireball_hit.mp3", chunkAudioGain);
   std::tie(audioBoneImpact, boneImpactHitTrack) =
@@ -437,6 +439,8 @@ void GameResources::unload() {
   destroyAudio(audioShoot);
   destroyTrack(sword1Track);
   destroyAudio(audioSword1);
+  destroyTrack(ultimateAttackTrack);
+  destroyAudio(audioUltimateAttack);
   destroyTrack(hitTrack);
   destroyAudio(audioShootHit);
   destroyTrack(boneImpactHitTrack);

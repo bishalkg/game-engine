@@ -381,9 +381,12 @@ void testUltimateOnlyHitsEnemyOncePerCast() {
   inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .ultimatePressed = true});
 
   game_engine::stepGameplaySimulation(state, inputs, 0.05f);
-  assert(state.layers[1][1].data.enemy.healthPoints == 100);
+  assert(state.layers[1][1].data.enemy.healthPoints == 200);
 
   inputs[1].ultimatePressed = false;
+  game_engine::stepGameplaySimulation(state, inputs, 1.35f);
+  assert(state.layers[1][1].data.enemy.healthPoints == 100);
+
   game_engine::stepGameplaySimulation(state, inputs, 0.05f);
   assert(state.layers[1][1].data.enemy.healthPoints == 100);
 }
