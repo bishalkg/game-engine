@@ -30,6 +30,7 @@ const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
         .runAttackTex = "data/players/Mage/Attack_2.png",
         .slideShootTex = "data/players/Mage/Attack_1.png",
         .jumpTex = "data/players/Mage/Jump.png",
+        .ultimateTex = "",
       },
       .animSettings = {
         { ANIM_IDLE,{ 9, 1.6f } },
@@ -61,6 +62,7 @@ const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
         .runAttackTex = "data/players/Knight_3/Run+Attack.png",
         .slideShootTex = "data/players/Knight_3/Run+Attack.png",
         .jumpTex = "data/players/Knight_3/Jump.png",
+        .ultimateTex = "",
       },
       .animSettings = {
         { ANIM_IDLE,{ 4, 0.5f } },
@@ -93,6 +95,7 @@ const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
         .runAttackTex = "data/players/Marie/Attack_1.png", // TODO
         .slideShootTex = "data/players/Marie/Attack_1.png",
         .jumpTex = "data/players/Marie/Jump_2.png",
+        .ultimateTex = "data/players/Marie/Ultimate_1.png",
       },
       .animSettings = {
         { ANIM_IDLE,{ 6, 0.8f } },
@@ -106,6 +109,7 @@ const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
         { ANIM_SWING , { 6, 0.4f } },
         { ANIM_SWING_2 , { 12, 0.7f } },
         { ANIM_RUN_ATTACK , { 6, 0.4f } },
+        { ANIM_ULTIMATE , { 42, 1.7f } },
       },
     },
   },
@@ -126,6 +130,7 @@ const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
         .runAttackTex = "data/players/Bonkfather/Attack_1.png",
         .slideShootTex = "data/players/Bonkfather/Attack_1.png",
         .jumpTex = "data/players/Bonkfather/Jump.png",
+        .ultimateTex = "data/players/Bonkfather/Ultimate_1.png",
       },
       .animSettings = {
         { ANIM_IDLE,{ 9, 0.8f } },
@@ -139,6 +144,7 @@ const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
         { ANIM_SWING , { 10, 0.4f } },
         { ANIM_SWING_2 , { 17, 0.8f } },
         { ANIM_RUN_ATTACK , { 10, 0.4f } },
+        { ANIM_ULTIMATE , { 34, 1.7f } },
       },
     },
   },

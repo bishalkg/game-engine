@@ -196,6 +196,7 @@ void GameServer::step(float deltaTime) {
   for (auto& [playerID, input] : m_authCtx->latestPlayerInputs) {
     input.jumpPressed = false;
     input.meleePressed = false;
+    input.ultimatePressed = false;
     (void)playerID;
   }
 

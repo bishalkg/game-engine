@@ -38,9 +38,14 @@ public:
       auto& player = engine.getPlayer();
       snaps.playerHP = player.data.player.healthPoints;
       snaps.playerMana = player.data.player.manaPoints;
+      snaps.playerUltimate = player.data.player.ultimatePoints;
+      snaps.playerUltimateReady =
+        player.data.player.ultimatePoints >= player.data.player.maxUltimatePoints;
     } else {
       snaps.playerHP = 0;
       snaps.playerMana = 0;
+      snaps.playerUltimate = 0;
+      snaps.playerUltimateReady = false;
     }
     snaps.winDims = ImVec2(static_cast<float>(sdlState.logW), static_cast<float>(sdlState.logH));
     snaps.debugMode = gameState.debugMode;

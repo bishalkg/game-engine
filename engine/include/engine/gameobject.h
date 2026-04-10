@@ -6,7 +6,7 @@
 #include "engine/level_types.h"
 
 enum class PlayerState: std::uint32_t {
-  idle, running, jumping, swingWeapon, hurt, dead
+  idle, running, jumping, swingWeapon, ultimate, hurt, dead
 };
 
 enum class PlayerSwingStage: std::uint32_t {
@@ -35,6 +35,7 @@ enum class PresentationVariant : std::uint32_t {
   Swing,
   RunAttack,
   Swing2,
+  Ultimate,
   Hit,
   Die,
   ProjectileMoving,
@@ -48,8 +49,11 @@ struct PlayerData {
   int maxHealthPoints;
   int manaPoints;
   int maxManaPoints;
+  int ultimatePoints;
+  int maxUltimatePoints;
   Timer manaRecoveryTimer;
   Timer healthRecoveryTimer;
+  Timer ultimateRecoveryTimer;
   Timer weaponTimer;
   Timer jumpWindupTimer;
   bool jumpImpulseApplied;
@@ -57,9 +61,24 @@ struct PlayerData {
   PlayerSwingStage swingStage = PlayerSwingStage::None;
   bool queuedFollowupSwing = false;
   bool meleePressedThisFrame = false;
+  bool ultimatePressedThisFrame = false;
   int meleeDamage = 50;
+  uint32_t activeUltimateCastId = 0;
+  uint32_t nextUltimateCastId = 1;
 
-  PlayerData(): weaponTimer(0.1f), damageTimer(0.5f), jumpWindupTimer(0.00f), manaRecoveryTimer(0.2f), healthRecoveryTimer(0.2f) { state = PlayerState::idle; healthPoints = maxHealthPoints = manaPoints = maxManaPoints = 100;};
+  PlayerData()
+    : damageTimer(0.5f),
+      manaRecoveryTimer(0.2f),
+      healthRecoveryTimer(0.2f),
+      ultimateRecoveryTimer(1.0f),
+      weaponTimer(0.1f),
+      jumpWindupTimer(0.00f) {
+    state = PlayerState::idle;
+    healthPoints = maxHealthPoints = 100;
+    manaPoints = maxManaPoints = 100;
+    ultimatePoints = 0;
+    maxUltimatePoints = 100;
+  };
 };
 
 struct LevelData {
@@ -80,17 +99,24 @@ struct EnemyData {
   Timer idleTimer;
   int healthPoints;
   int srcH, srcW;
+  uint32_t lastUltimatePlayerId;
+  uint32_t lastUltimateCastId;
 
 
   EnemyData(): state(EnemyState::idle), damageTimer(0.4f), attackTimer(1.0), idleTimer(1.0) {
     healthPoints = 100;
+    srcH = 0;
+    srcW = 0;
+    lastUltimatePlayerId = 0;
+    lastUltimateCastId = 0;
   };
 };
 
 struct BulletData{
   BulletState state;
   Timer liveTimer;
-  BulletData(): state(BulletState::moving), liveTimer(0.7f) {};
+  uint32_t ownerPlayerId;
+  BulletData(): state(BulletState::moving), liveTimer(0.7f), ownerPlayerId(0) {};
 };
 
 union ObjectData {

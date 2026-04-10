@@ -70,6 +70,7 @@ void GameRules::onUpdate(game_engine::Engine& engine, float deltaTime) {
 
   input_.jumpPressed = false;
   input_.meleePressed = false;
+  input_.ultimatePressed = false;
   input_.shouldSendMessage = false;
   snaps_.advanceToNextScene = false;
   snaps_.togglePauseGameplay = false;

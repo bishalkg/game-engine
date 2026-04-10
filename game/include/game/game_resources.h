@@ -25,7 +25,8 @@ namespace game {
 
 struct EntityResources {
   SDL_Texture *texIdle{}, *texWalk{}, *texRun{}, *texSlide{}, *texAttack{}, *texJump{}, *texHit{},
-    *texDie{}, *texShoot{}, *texRunShoot{}, *texSlideShoot{}, *texRunAttack{}, *texAttack2{};
+    *texDie{}, *texShoot{}, *texRunShoot{}, *texSlideShoot{}, *texRunAttack{}, *texAttack2{},
+    *texUltimate{};
   std::vector<Animation> anims;
 };
 
@@ -71,6 +72,7 @@ struct GameResources {
   const int ANIM_DIE = 9;
   const int ANIM_RUN_ATTACK = 10;
   const int ANIM_SWING_2 = 11;
+  const int ANIM_ULTIMATE = 12;
 
   const int ANIM_MAIN_MENU = 0;
 
@@ -92,9 +94,9 @@ struct GameResources {
   std::shared_ptr<Animation> charSelectAnim;
   std::vector<UIManager::Cutscene> characterSelectScene;
 
-  MIX_Audio *audioShoot{}, *audioSword1{}, *audioShootHit{}, *audioBoneImpact{},
+  MIX_Audio *audioShoot{}, *audioSword1{}, *audioUltimateAttack{}, *audioShootHit{}, *audioBoneImpact{},
     *audioProjectileEnemyHit{}, *audioEnemyDie{};
-  MIX_Track *shootTrack{}, *sword1Track{}, *hitTrack{}, *boneImpactHitTrack{},
+  MIX_Track *shootTrack{}, *sword1Track{}, *ultimateAttackTrack{}, *hitTrack{}, *boneImpactHitTrack{},
     *enemyProjectileHitTrack{}, *enemyDieTrack{};
 
   MIX_Audio* audioJump{};

@@ -38,6 +38,7 @@ namespace game_engine {
     bool fireHeld = false;
     bool jumpPressed = false;
     bool meleePressed = false;
+    bool ultimatePressed = false;
     bool shouldSendMessage = false; // not serialized; frame-local send hint only
 
     std::vector<uint8_t> serealizeNetGameInput() const {
@@ -50,6 +51,7 @@ namespace game_engine {
       bytes.write_bool(fireHeld);
       bytes.write_bool(jumpPressed);
       bytes.write_bool(meleePressed);
+      bytes.write_bool(ultimatePressed);
 
       return bytes.buff;
     };
@@ -65,6 +67,7 @@ namespace game_engine {
       fireHeld = reader.read_bool();
       jumpPressed = reader.read_bool();
       meleePressed = reader.read_bool();
+      ultimatePressed = reader.read_bool();
 
     };
   };
@@ -157,6 +160,7 @@ namespace game_engine {
             w.write_enum<PlayerState>(obj.data.player.state);
             w.write_u32(static_cast<uint32_t>(obj.data.player.healthPoints));
             w.write_u32(static_cast<uint32_t>(obj.data.player.manaPoints));
+            w.write_u32(static_cast<uint32_t>(obj.data.player.ultimatePoints));
             break;
           }
           case ObjectClass::Projectile: {
@@ -225,6 +229,7 @@ namespace game_engine {
             obj.data.player.state = r.read_enum<PlayerState>();
             obj.data.player.healthPoints = r.read_u32();
             obj.data.player.manaPoints = r.read_u32();
+            obj.data.player.ultimatePoints = r.read_u32();
             break;
           }
           case ObjectClass::Projectile: {

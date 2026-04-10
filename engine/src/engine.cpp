@@ -435,12 +435,14 @@ void game_engine::Engine::submitLocalInput(NetGameInput input) {
     m_localInput.fireHeld = input.fireHeld;
     m_localInput.jumpPressed = m_localInput.jumpPressed || input.jumpPressed;
     m_localInput.meleePressed = m_localInput.meleePressed || input.meleePressed;
+    m_localInput.ultimatePressed = m_localInput.ultimatePressed || input.ultimatePressed;
     m_localInput.shouldSendMessage =
       m_localInput.leftHeld || m_localInput.rightHeld || m_localInput.fireHeld ||
-      m_localInput.jumpPressed || m_localInput.meleePressed;
+      m_localInput.jumpPressed || m_localInput.meleePressed || m_localInput.ultimatePressed;
   } else {
     input.shouldSendMessage =
-      input.leftHeld || input.rightHeld || input.fireHeld || input.jumpPressed || input.meleePressed;
+      input.leftHeld || input.rightHeld || input.fireHeld || input.jumpPressed ||
+      input.meleePressed || input.ultimatePressed;
     m_localInput = input;
   }
 }
@@ -452,7 +454,8 @@ void game_engine::Engine::flushLocalInput(float deltaTime) {
 
   constexpr float kInputSendInterval = 1.0f / 60.0f;
   m_inputSendAccumulator += deltaTime;
-  const bool hasEdgeInput = m_localInput.jumpPressed || m_localInput.meleePressed;
+  const bool hasEdgeInput =
+    m_localInput.jumpPressed || m_localInput.meleePressed || m_localInput.ultimatePressed;
   if (m_inputSendAccumulator < kInputSendInterval && !hasEdgeInput) {
     return;
   }
@@ -463,11 +466,12 @@ void game_engine::Engine::flushLocalInput(float deltaTime) {
   outgoing.inputSeq = ++m_localInputSeq;
   outgoing.shouldSendMessage =
     outgoing.leftHeld || outgoing.rightHeld || outgoing.fireHeld ||
-    outgoing.jumpPressed || outgoing.meleePressed;
+    outgoing.jumpPressed || outgoing.meleePressed || outgoing.ultimatePressed;
   m_gameClient->SendInput(outgoing);
 
   m_localInput.jumpPressed = false;
   m_localInput.meleePressed = false;
+  m_localInput.ultimatePressed = false;
   m_localInput.shouldSendMessage =
     m_localInput.leftHeld || m_localInput.rightHeld || m_localInput.fireHeld;
 }

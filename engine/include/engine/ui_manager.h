@@ -79,6 +79,8 @@ namespace UIManager {
     LoadingSnapshot loading; /* add title/pause data */
     int playerHP;
     int playerMana;
+    int playerUltimate;
+    bool playerUltimateReady = false;
     ImVec2 winDims;
     float deltaTime;
     float currVolume;
@@ -162,7 +164,12 @@ namespace UIManager {
       float drawCustomSlider(const std::string& label, float currVal, float v_min, float v_max);
 
 
-      void drawPlayerHealthbar(const std::string& name, const int playerHP, ImU32 color, ImGuiWindowFlags flags);
+      void drawPlayerBar(
+        const std::string& name,
+        int value,
+        ImU32 color,
+        float yOffset,
+        bool highlightReady);
 
 
     private:
