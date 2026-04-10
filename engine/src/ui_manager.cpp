@@ -578,6 +578,9 @@ namespace UIManager {
 
       ImGuiWindowFlags windowFlags = flags | ImGuiWindowFlags_NoBackground;
       ImGui::Begin("HUD", nullptr, windowFlags);
+      ImGui::SetCursorPos(ImVec2(
+        ImGui::GetWindowWidth() - defaultButtonSize.x - 8.0f,
+        4.0f));
       // Optional: remove padding so the button hugs the corner
       ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
       ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
@@ -592,26 +595,54 @@ namespace UIManager {
       ImGui::PopStyleVar(2);
       ImGui::End();
 
-      drawPlayerHealthbar("HP", snaps.playerHP, IM_COL32(0, 200, 0, 255), flags);
-      drawPlayerHealthbar("Mana", snaps.playerMana, IM_COL32(186, 154, 255, 255), flags);
+      drawPlayerBar("HP", snaps.playerHP, IM_COL32(0, 200, 0, 255), 10.0f, false);
+      drawPlayerBar("Mana", snaps.playerMana, IM_COL32(186, 154, 255, 255), 56.0f, false);
+      drawPlayerBar(
+        "Ultimate",
+        snaps.playerUltimate,
+        IM_COL32(220, 40, 40, 255),
+        102.0f,
+        snaps.playerUltimateReady);
 
       return act;
   }
 
 
-  void UI_Manager::drawPlayerHealthbar(const std::string& name, const int value, ImU32 color, ImGuiWindowFlags flags) {
-      ImGui::SetNextWindowPos(ImVec2(10, 10));
-      ImGui::Begin("HUD", nullptr, ImGuiWindowFlags_NoTitleBar |
-                                  ImGuiWindowFlags_NoBackground |
-                                  ImGuiWindowFlags_NoResize |
-                                  ImGuiWindowFlags_NoMove);
-      float hpFrac = static_cast<float>(value) / 100.0; // 0..1
+  void UI_Manager::drawPlayerBar(
+    const std::string& name,
+    int value,
+    ImU32 color,
+    float yOffset,
+    bool highlightReady) {
+      ImGui::SetNextWindowPos(ImVec2(10, yOffset));
+      const std::string windowName = "HUD##" + name;
+      ImGui::Begin(windowName.c_str(), nullptr, ImGuiWindowFlags_NoTitleBar |
+                                            ImGuiWindowFlags_NoBackground |
+                                            ImGuiWindowFlags_NoResize |
+                                            ImGuiWindowFlags_NoMove);
+      float hpFrac = static_cast<float>(value) / 100.0f; // 0..1
       ImGui::TextUnformatted(name.c_str());
       ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color); // green
+      ImGui::PushStyleColor(
+        ImGuiCol_Border,
+        highlightReady ? IM_COL32(255, 220, 180, 255) : IM_COL32(255, 255, 255, 80));
       ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, highlightReady ? 2.0f : 1.0f);
       ImGui::ProgressBar(hpFrac, ImVec2(150, 24));
-      ImGui::PopStyleColor();
-      ImGui::PopStyleVar();
+      if (highlightReady) {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 min = ImGui::GetItemRectMin();
+        const ImVec2 max = ImGui::GetItemRectMax();
+        drawList->AddRect(
+          min,
+          max,
+          IM_COL32(255, 120, 120, 255),
+          8.0f,
+          0,
+          2.0f);
+      }
+      ImGui::PopStyleVar(2);
+      ImGui::PopStyleColor(2);
       ImGui::End();
   }
 

@@ -214,9 +214,13 @@ bool GameResources::loadLevel(
         m_currLevel->loadTexture(state.renderer, spriteAssets.paths.slideShootTex);
       m_currLevel->texCharacterMap[character].texJump =
         m_currLevel->loadTexture(state.renderer, spriteAssets.paths.jumpTex);
+      m_currLevel->texCharacterMap[character].texUltimate =
+        spriteAssets.paths.ultimateTex.empty()
+          ? nullptr
+          : m_currLevel->loadTexture(state.renderer, spriteAssets.paths.ultimateTex);
     }
 
-    m_currLevel->texCharacterMap[character].anims.resize(12);
+    m_currLevel->texCharacterMap[character].anims.resize(13);
     auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
     m_currLevel->texCharacterMap[character].anims[ANIM_IDLE] =
       Animation(idleFrames, idleSeconds);
@@ -257,6 +261,12 @@ bool GameResources::loadLevel(
       auto [attack2Frames, attack2Seconds] = spriteAssets.animSettings.at(ANIM_SWING_2);
       m_currLevel->texCharacterMap[character].anims[ANIM_SWING_2] =
         Animation(attack2Frames, attack2Seconds);
+    }
+
+    if (spriteAssets.animSettings.contains(ANIM_ULTIMATE)) {
+      auto [ultimateFrames, ultimateSeconds] = spriteAssets.animSettings.at(ANIM_ULTIMATE);
+      m_currLevel->texCharacterMap[character].anims[ANIM_ULTIMATE] =
+        Animation(ultimateFrames, ultimateSeconds);
     }
 
     auto [jumpFrames, jumpSeconds] = spriteAssets.animSettings.at(ANIM_JUMP);

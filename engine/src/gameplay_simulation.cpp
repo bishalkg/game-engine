@@ -93,6 +93,56 @@ void widenColliderForSwing(GameObject& obj) {
   obj.collider = c;
 }
 
+void expandColliderForUltimate(GameObject& obj) {
+  const float drawW = obj.spritePixelW / obj.drawScale;
+  const float drawH = obj.spritePixelH / obj.drawScale;
+  obj.collider = SDL_FRect{
+    -0.25f * drawW,
+    -0.25f * drawH,
+    drawW * 1.5f,
+    drawH * 1.5f,
+  };
+}
+
+SDL_FRect physicsColliderFor(const GameObject& obj, ObjectClass otherClass) {
+  if (obj.objClass == ObjectClass::Player &&
+      obj.data.player.state == PlayerState::ultimate &&
+      otherClass != ObjectClass::Enemy) {
+    return baseFacing(obj);
+  }
+  return obj.collider;
+}
+
+SDL_FRect collisionRect(const GameObject& obj, ObjectClass otherClass) {
+  const SDL_FRect collider = physicsColliderFor(obj, otherClass);
+  return SDL_FRect{
+    obj.position.x + collider.x,
+    obj.position.y + collider.y,
+    collider.w,
+    collider.h,
+  };
+}
+
+GameObject* findPlayerById(GameState& state, uint32_t playerID) {
+  if (state.playerLayer >= 0 && state.playerLayer < static_cast<int>(state.layers.size())) {
+    for (auto& obj : state.layers[state.playerLayer]) {
+      if (obj.objClass == ObjectClass::Player && obj.id == playerID) {
+        return &obj;
+      }
+    }
+  }
+
+  for (auto& layer : state.layers) {
+    for (auto& obj : layer) {
+      if (obj.objClass == ObjectClass::Player && obj.id == playerID) {
+        return &obj;
+      }
+    }
+  }
+
+  return nullptr;
+}
+
 GameObject* findClosestLivingPlayer(GameState& state, const GameObject& source) {
   if (state.playerLayer < 0 || state.playerLayer >= static_cast<int>(state.layers.size())) {
     return nullptr;
@@ -127,14 +177,51 @@ uint32_t nextDynamicId(const GameState& state) {
   return nextID;
 }
 
-void damageEnemy(GameObject& enemy, int damage) {
-  if (enemy.objClass != ObjectClass::Enemy || enemy.data.enemy.state == EnemyState::dead) {
-    return;
-  }
-  if (enemy.data.enemy.state == EnemyState::hurt && !enemy.data.enemy.damageTimer.isTimedOut()) {
+void awardUltimateCharge(GameState& state, uint32_t playerID, int amount) {
+  if (amount <= 0) {
     return;
   }
 
+  if (GameObject* player = findPlayerById(state, playerID)) {
+    player->data.player.ultimatePoints = std::clamp(
+      player->data.player.ultimatePoints + amount,
+      0,
+      player->data.player.maxUltimatePoints);
+  }
+}
+
+struct DamageEnemyResult {
+  bool applied = false;
+  bool killed = false;
+};
+
+DamageEnemyResult damageEnemy(
+  GameState& state,
+  GameObject& enemy,
+  int damage,
+  uint32_t sourcePlayerId = 0,
+  uint32_t sourceUltimateCastId = 0,
+  bool ignoreHurtCooldown = false) {
+  DamageEnemyResult result{};
+  if (enemy.objClass != ObjectClass::Enemy || enemy.data.enemy.state == EnemyState::dead) {
+    return result;
+  }
+  if (sourceUltimateCastId != 0 &&
+      enemy.data.enemy.lastUltimatePlayerId == sourcePlayerId &&
+      enemy.data.enemy.lastUltimateCastId == sourceUltimateCastId) {
+    return result;
+  }
+  if (!ignoreHurtCooldown &&
+      enemy.data.enemy.state == EnemyState::hurt &&
+      !enemy.data.enemy.damageTimer.isTimedOut()) {
+    return result;
+  }
+
+  result.applied = true;
+  if (sourceUltimateCastId != 0) {
+    enemy.data.enemy.lastUltimatePlayerId = sourcePlayerId;
+    enemy.data.enemy.lastUltimateCastId = sourceUltimateCastId;
+  }
   enemy.direction *= -1.0f;
   enemy.shouldFlash = true;
   enemy.flashTimer.reset();
@@ -148,11 +235,19 @@ void damageEnemy(GameObject& enemy, int damage) {
     enemy.data.enemy.state = EnemyState::dead;
     setAnimationAndPresentation(enemy, ANIM_DIE, PresentationVariant::Die);
     enemy.velocity = glm::vec2(0.0f);
+    result.killed = true;
+    if (sourcePlayerId != 0) {
+      awardUltimateCharge(state, sourcePlayerId, 33);
+    }
   }
+
+  return result;
 }
 
 void damagePlayer(GameObject& player, int damage) {
-  if (player.objClass != ObjectClass::Player || player.data.player.state == PlayerState::dead) {
+  if (player.objClass != ObjectClass::Player ||
+      player.data.player.state == PlayerState::dead ||
+      player.data.player.state == PlayerState::ultimate) {
     return;
   }
   if (player.data.player.state == PlayerState::hurt && !player.data.player.damageTimer.isTimedOut()) {
@@ -183,6 +278,7 @@ GameObject makeBulletFromPlayer(const GameObject& player, const GameState& state
   bullet.colliderNorm = {.x = 0.0f, .y = 0.40f, .w = 0.5f, .h = 0.1f};
   bullet.applyScale();
   bullet.data.bullet = BulletData();
+  bullet.data.bullet.ownerPlayerId = player.id;
   bullet.currentAnimation = ANIM_IDLE;
   bullet.presentationVariant = PresentationVariant::ProjectileMoving;
   bullet.dynamic = true;
@@ -228,7 +324,9 @@ void updateDynamicObject(
     player.weaponTimer.step(deltaTime);
     player.healthRecoveryTimer.step(deltaTime);
     player.manaRecoveryTimer.step(deltaTime);
+    player.ultimateRecoveryTimer.step(deltaTime);
     player.meleePressedThisFrame = input.meleePressed;
+    player.ultimatePressedThisFrame = input.ultimatePressed;
 
     if (player.healthRecoveryTimer.isTimedOut()) {
       player.healthRecoveryTimer.reset();
@@ -238,6 +336,10 @@ void updateDynamicObject(
       player.manaRecoveryTimer.reset();
       player.manaPoints = std::clamp(player.manaPoints + 1, 0, player.maxManaPoints);
     }
+    if (player.ultimateRecoveryTimer.isTimedOut()) {
+      player.ultimateRecoveryTimer.reset();
+      player.ultimatePoints = std::clamp(player.ultimatePoints + 33, 0, player.maxUltimatePoints);
+    }
 
     if (input.leftHeld) {
       currDirection -= 1.0f;
@@ -245,12 +347,21 @@ void updateDynamicObject(
     if (input.rightHeld) {
       currDirection += 1.0f;
     }
+    const float desiredDirection = currDirection;
 
     const bool hasSwingFollowup =
       static_cast<int>(obj.animations.size()) > ANIM_SWING_2 &&
       obj.animations[ANIM_SWING_2].getFrameCount() > 0;
     const bool wantSwing = player.meleePressedThisFrame;
-    const bool canSwing = player.state != PlayerState::swingWeapon;
+    const bool canSwing =
+      player.state != PlayerState::swingWeapon && player.state != PlayerState::ultimate;
+    const bool canStartUltimate =
+      player.ultimatePressedThisFrame &&
+      player.state != PlayerState::dead &&
+      player.state != PlayerState::hurt &&
+      player.state != PlayerState::ultimate &&
+      player.ultimatePoints >= player.maxUltimatePoints &&
+      hasAnimation(obj, ANIM_ULTIMATE);
 
     const auto resetSwingState = [&obj]() {
       obj.data.player.swingStage = PlayerSwingStage::None;
@@ -258,8 +369,9 @@ void updateDynamicObject(
       obj.data.player.meleeDamage = 50;
     };
 
-    const auto exitSwingState = [&]() {
+    const auto restoreDefaultPlayerState = [&]() {
       resetSwingState();
+      player.activeUltimateCastId = 0;
       obj.collider = baseFacing(obj);
 
       if (!obj.grounded) {
@@ -268,7 +380,7 @@ void updateDynamicObject(
         return;
       }
 
-      if (currDirection != 0.0f) {
+      if (desiredDirection != 0.0f) {
         obj.data.player.state = PlayerState::running;
         setAnimationAndPresentation(obj, ANIM_RUN, PresentationVariant::Run);
         return;
@@ -284,6 +396,16 @@ void updateDynamicObject(
       obj.data.player.swingStage = PlayerSwingStage::Attack1;
       setAnimationAndPresentation(obj, attackAnimIndex, attackPresentation);
       widenColliderForSwing(obj);
+    };
+
+    const auto startUltimate = [&]() {
+      resetSwingState();
+      player.state = PlayerState::ultimate;
+      player.ultimatePoints = 0;
+      player.activeUltimateCastId = player.nextUltimateCastId++;
+      obj.velocity.x = 0.0f;
+      setAnimationAndPresentation(obj, ANIM_ULTIMATE, PresentationVariant::Ultimate);
+      expandColliderForUltimate(obj);
     };
 
     const auto handleAttacking = [&](int idleOrMoveAnim,
@@ -321,6 +443,10 @@ void updateDynamicObject(
         setPresentation(obj, idlePresentation);
       }
     };
+
+    if (canStartUltimate) {
+      startUltimate();
+    }
 
     switch (player.state) {
       case PlayerState::idle: {
@@ -487,7 +613,7 @@ void updateDynamicObject(
         if (obj.currentAnimation == -1 ||
             (player.swingStage == PlayerSwingStage::Attack1 && !isAttack1Anim) ||
             (player.swingStage == PlayerSwingStage::Attack2 && !isAttack2Anim)) {
-          exitSwingState();
+          restoreDefaultPlayerState();
           break;
         }
 
@@ -516,15 +642,32 @@ void updateDynamicObject(
           } else if (obj.currentAnimation == ANIM_SWING) {
             obj.animations[ANIM_SWING].reset();
           }
-          exitSwingState();
+          restoreDefaultPlayerState();
         } else if (attack2Done) {
           obj.animations[ANIM_SWING_2].reset();
-          exitSwingState();
+          restoreDefaultPlayerState();
+        }
+        break;
+      }
+      case PlayerState::ultimate: {
+        currDirection = 0.0f;
+        obj.velocity.x = 0.0f;
+        expandColliderForUltimate(obj);
+        setPresentation(obj, PresentationVariant::Ultimate);
+        if (obj.currentAnimation == -1) {
+          setAnimationAndPresentation(obj, ANIM_ULTIMATE, PresentationVariant::Ultimate);
+          break;
+        }
+        if (obj.currentAnimation == ANIM_ULTIMATE &&
+            obj.animations[ANIM_ULTIMATE].isDone()) {
+          obj.animations[ANIM_ULTIMATE].reset();
+          restoreDefaultPlayerState();
         }
         break;
       }
       case PlayerState::hurt: {
         resetSwingState();
+        player.activeUltimateCastId = 0;
         obj.collider = baseFacing(obj);
         if (player.damageTimer.step(deltaTime)) {
           player.state = PlayerState::idle;
@@ -534,6 +677,7 @@ void updateDynamicObject(
       }
       case PlayerState::dead: {
         resetSwingState();
+        player.activeUltimateCastId = 0;
         obj.collider = baseFacing(obj);
         setPresentation(obj, PresentationVariant::Die);
         obj.velocity = glm::vec2(0.0f);
@@ -687,8 +831,16 @@ void collisionResponse(
         break;
       case ObjectClass::Enemy:
         if (objB.data.enemy.state != EnemyState::dead) {
-          if (objA.data.player.state == PlayerState::swingWeapon) {
-            damageEnemy(objB, objA.data.player.meleeDamage);
+          if (objA.data.player.state == PlayerState::ultimate) {
+            damageEnemy(
+              state,
+              objB,
+              100,
+              objA.id,
+              objA.data.player.activeUltimateCastId,
+              true);
+          } else if (objA.data.player.state == PlayerState::swingWeapon) {
+            damageEnemy(state, objB, objA.data.player.meleeDamage, objA.id);
           } else {
             objA.velocity = glm::vec2(50.0f, 0.0f) * -objA.direction;
           }
@@ -713,7 +865,7 @@ void collisionResponse(
     switch (objB.objClass) {
       case ObjectClass::Enemy:
         if (objB.data.enemy.state != EnemyState::dead) {
-          damageEnemy(objB, 10);
+          damageEnemy(state, objB, 10, objA.data.bullet.ownerPlayerId);
         } else {
           passthrough = true;
         }
@@ -746,7 +898,7 @@ void collisionResponse(
       case ObjectClass::Level:
         if (objB.data.level.isHazard) {
           objA.position.y -= rectC.h;
-          damageEnemy(objA, 50);
+          damageEnemy(state, objA, 50);
         } else {
           defaultResponse();
         }
@@ -775,15 +927,16 @@ void resolveObjectCollisions(
         continue;
       }
 
-      const SDL_FRect rectA = worldRect(obj);
-      const SDL_FRect rectB = worldRect(objB);
+      const SDL_FRect rectA = collisionRect(obj, objB.objClass);
+      const SDL_FRect rectB = collisionRect(objB, obj.objClass);
       SDL_FRect rectC{0.0f, 0.0f, 0.0f, 0.0f};
       if (!SDL_GetRectIntersectionFloat(&rectA, &rectB, &rectC)) {
         if (objB.objClass == ObjectClass::Level) {
+          const SDL_FRect physicsCollider = physicsColliderFor(obj, objB.objClass);
           SDL_FRect sensor{
-            .x = obj.position.x + obj.collider.x,
-            .y = obj.position.y + obj.collider.y + obj.collider.h,
-            .w = obj.collider.w,
+            .x = obj.position.x + physicsCollider.x,
+            .y = obj.position.y + physicsCollider.y + physicsCollider.h,
+            .w = physicsCollider.w,
             .h = 1.0f,
           };
           SDL_FRect dummy{0.0f, 0.0f, 0.0f, 0.0f};
@@ -797,10 +950,11 @@ void resolveObjectCollisions(
       collisionResponse(state, obj, objB, rectC, hooks);
 
       if (objB.objClass == ObjectClass::Level) {
+        const SDL_FRect physicsCollider = physicsColliderFor(obj, objB.objClass);
         SDL_FRect sensor{
-          .x = obj.position.x + obj.collider.x,
-          .y = obj.position.y + obj.collider.y + obj.collider.h,
-          .w = obj.collider.w,
+          .x = obj.position.x + physicsCollider.x,
+          .y = obj.position.y + physicsCollider.y + physicsCollider.h,
+          .w = physicsCollider.w,
           .h = 1.0f,
         };
         SDL_FRect dummy{0.0f, 0.0f, 0.0f, 0.0f};
@@ -840,7 +994,7 @@ void resolveBulletCollisions(
         continue;
       }
       const SDL_FRect rectA = worldRect(bullet);
-      const SDL_FRect rectB = worldRect(objB);
+      const SDL_FRect rectB = collisionRect(objB, bullet.objClass);
       SDL_FRect rectC{0.0f, 0.0f, 0.0f, 0.0f};
       if (SDL_GetRectIntersectionFloat(&rectA, &rectB, &rectC)) {
         collisionResponse(state, bullet, objB, rectC, hooks);

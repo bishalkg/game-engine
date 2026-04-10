@@ -32,6 +32,9 @@ public:
         } else if (!event.key.repeat && event.key.scancode == SDL_SCANCODE_S) {
           input.meleePressed = true;
           input.shouldSendMessage = true;
+        } else if (!event.key.repeat && event.key.scancode == SDL_SCANCODE_Z) {
+          input.ultimatePressed = true;
+          input.shouldSendMessage = true;
         }
         break;
       case SDL_EVENT_KEY_UP:

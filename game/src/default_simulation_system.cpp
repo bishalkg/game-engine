@@ -86,6 +86,11 @@ SDL_Texture* pickEntityTexture(
       return entityRes.texRunAttack ? entityRes.texRunAttack : entityRes.texRun;
     case PresentationVariant::Swing2:
       return entityRes.texAttack2 ? entityRes.texAttack2 : entityRes.texAttack;
+    case PresentationVariant::Ultimate:
+      if (entityRes.texUltimate) {
+        return entityRes.texUltimate;
+      }
+      return entityRes.texAttack2 ? entityRes.texAttack2 : entityRes.texAttack;
     case PresentationVariant::Idle:
     default:
       break;
@@ -126,9 +131,22 @@ void widenReplicatedColliderForSwing(GameObject& obj) {
   obj.collider = c;
 }
 
+void widenReplicatedColliderForUltimate(GameObject& obj) {
+  const float drawW = obj.spritePixelW / obj.drawScale;
+  const float drawH = obj.spritePixelH / obj.drawScale;
+  obj.collider = SDL_FRect{
+    -0.25f * drawW,
+    -0.25f * drawH,
+    drawW * 1.5f,
+    drawH * 1.5f,
+  };
+}
+
 void syncReplicatedCollider(GameObject& obj) {
   if (obj.objClass == ObjectClass::Player) {
-    if (obj.data.player.state == PlayerState::swingWeapon) {
+    if (obj.data.player.state == PlayerState::ultimate) {
+      widenReplicatedColliderForUltimate(obj);
+    } else if (obj.data.player.state == PlayerState::swingWeapon) {
       widenReplicatedColliderForSwing(obj);
     } else {
       obj.collider = replicatedBaseFacing(obj);
