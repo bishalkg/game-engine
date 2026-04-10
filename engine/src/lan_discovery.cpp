@@ -296,7 +296,8 @@ void DiscoveryBrowserService::poll() {
       [now](const DiscoveredSessionInfo& session) {
         return now - session.lastSeenAtMs > kSessionExpiryMs;
       }),
-    m_sessions.end());
+      m_sessions.end()
+  );
 }
 
 } // namespace game_engine

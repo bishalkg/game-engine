@@ -4,6 +4,8 @@
 #include "net/net_server.h"
 
 #include <memory>
+#include <mutex>
+#include <optional>
 
 namespace game_engine {
 
@@ -40,6 +42,9 @@ public:
   NetGameStateSnapshot m_currGameSnapshot;
   net::tsqueue<NetGameInput> m_playerInputQueue;
   std::unique_ptr<AuthoritativeContext> m_authCtx;
+  mutable std::recursive_mutex m_stateMu;
+  mutable std::mutex m_pendingLevelTransitionMu;
+  std::optional<LevelIndex> m_pendingLevelTransition;
 
 protected:
   bool OnClientConnect(std::shared_ptr<net::connection<GameMsgHeaders>> client) override;
@@ -53,10 +58,13 @@ public:
   void step(float deltaTime);
   void refreshSnapshot();
   void broadcastSnapshot();
-  void resetAuthoritativeState(GameState&& initialState);
+  bool copyCurrentSnapshot(NetGameStateSnapshot& out) const;
+  void resetAuthoritativeState(GameState&& initialState, bool refreshSpawnPositions = false);
   bool registerPlayer(uint32_t playerID, SpriteType spriteType);
   bool respawnPlayer(uint32_t playerID);
   void removePlayer(uint32_t playerID);
+  bool HasPendingLevelTransition() const;
+  std::optional<LevelIndex> ConsumePendingLevelTransition();
 };
 
 } // namespace game_engine

@@ -153,6 +153,9 @@ public:
         }
       }
     }
+    if (actions.nextView == UIManager::GameView::MainMenu && engine.isMultiplayerActive()) {
+      engine.setRunModeSinglePlayer();
+    }
     if (actions.nextView && !(actions.selectedPlayerSprite && engine.isMultiplayerActive())) {
       gameState.currentView = *actions.nextView;
     }

@@ -249,6 +249,8 @@ void updateDynamicObject(
     const bool hasSwingFollowup =
       static_cast<int>(obj.animations.size()) > ANIM_SWING_2 &&
       obj.animations[ANIM_SWING_2].getFrameCount() > 0;
+    const bool wantSwing = player.meleePressedThisFrame;
+    const bool canSwing = player.state != PlayerState::swingWeapon;
 
     const auto resetSwingState = [&obj]() {
       obj.data.player.swingStage = PlayerSwingStage::None;
@@ -276,15 +278,11 @@ void updateDynamicObject(
       setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
     };
 
-    const auto startAttack1 = [&]() {
+    const auto startAttack1 = [&](int attackAnimIndex, PresentationVariant attackPresentation) {
       resetSwingState();
       obj.data.player.state = PlayerState::swingWeapon;
       obj.data.player.swingStage = PlayerSwingStage::Attack1;
-      const bool runningAttack = currDirection != 0.0f;
-      setAnimationAndPresentation(
-        obj,
-        runningAttack ? ANIM_RUN_ATTACK : ANIM_SWING,
-        runningAttack ? PresentationVariant::RunAttack : PresentationVariant::Swing);
+      setAnimationAndPresentation(obj, attackAnimIndex, attackPresentation);
       widenColliderForSwing(obj);
     };
 
@@ -292,9 +290,11 @@ void updateDynamicObject(
                                      PresentationVariant idlePresentation,
                                      int shootAnim,
                                      PresentationVariant shootPresentation,
+                                     int attackAnim,
+                                     PresentationVariant attackPresentation,
                                      bool handleJump) {
-      if (player.meleePressedThisFrame && player.state != PlayerState::swingWeapon) {
-        startAttack1();
+      if (wantSwing && canSwing) {
+        startAttack1(attackAnim, attackPresentation);
       } else if (input.fireHeld) {
         setAnimation(obj, shootAnim, false);
         setPresentation(obj, shootPresentation);
@@ -346,12 +346,25 @@ void updateDynamicObject(
           }
         }
 
-        handleAttacking(
-          ANIM_IDLE,
-          PresentationVariant::Idle,
-          ANIM_SHOOT,
-          PresentationVariant::Shoot,
-          false);
+        if (wantSwing && canSwing) {
+          handleAttacking(
+            ANIM_RUN,
+            PresentationVariant::Run,
+            ANIM_RUN_ATTACK,
+            PresentationVariant::RunAttack,
+            ANIM_RUN_ATTACK,
+            PresentationVariant::RunAttack,
+            false);
+        } else {
+          handleAttacking(
+            ANIM_IDLE,
+            PresentationVariant::Idle,
+            ANIM_SHOOT,
+            PresentationVariant::Shoot,
+            ANIM_SHOOT,
+            PresentationVariant::Shoot,
+            false);
+        }
         break;
       }
       case PlayerState::running: {
@@ -368,19 +381,45 @@ void updateDynamicObject(
         }
 
         if (obj.velocity.x * obj.direction < 0.0f && obj.grounded) {
-          handleAttacking(
-            ANIM_SLIDE,
-            PresentationVariant::Slide,
-            ANIM_SLIDE_SHOOT,
-            PresentationVariant::SlideShoot,
-            false);
+          if (wantSwing && canSwing) {
+            handleAttacking(
+              ANIM_RUN,
+              PresentationVariant::Run,
+              ANIM_RUN_ATTACK,
+              PresentationVariant::RunAttack,
+              ANIM_RUN_ATTACK,
+              PresentationVariant::RunAttack,
+              false);
+          } else {
+            handleAttacking(
+              ANIM_SLIDE,
+              PresentationVariant::Slide,
+              ANIM_SLIDE_SHOOT,
+              PresentationVariant::SlideShoot,
+              ANIM_SLIDE_SHOOT,
+              PresentationVariant::SlideShoot,
+              false);
+          }
         } else {
-          handleAttacking(
-            ANIM_RUN,
-            PresentationVariant::Run,
-            ANIM_RUN,
-            PresentationVariant::RunShoot,
-            false);
+          if (wantSwing && canSwing) {
+            handleAttacking(
+              ANIM_RUN,
+              PresentationVariant::Run,
+              ANIM_RUN_ATTACK,
+              PresentationVariant::RunAttack,
+              ANIM_RUN_ATTACK,
+              PresentationVariant::RunAttack,
+              false);
+          } else {
+            handleAttacking(
+              ANIM_RUN,
+              PresentationVariant::Run,
+              ANIM_RUN,
+              PresentationVariant::RunShoot,
+              ANIM_RUN,
+              PresentationVariant::RunAttack,
+              false);
+          }
         }
         break;
       }
@@ -414,22 +453,40 @@ void updateDynamicObject(
           }
         }
 
-        handleAttacking(
-          ANIM_JUMP,
-          PresentationVariant::Jump,
-          ANIM_JUMP,
-          PresentationVariant::JumpShoot,
-          true);
+        if (wantSwing && canSwing) {
+          handleAttacking(
+            ANIM_RUN,
+            PresentationVariant::Run,
+            ANIM_RUN_ATTACK,
+            PresentationVariant::RunAttack,
+            ANIM_RUN_ATTACK,
+            PresentationVariant::RunAttack,
+            false);
+        } else {
+          handleAttacking(
+            ANIM_JUMP,
+            PresentationVariant::Jump,
+            ANIM_JUMP,
+            PresentationVariant::JumpShoot,
+            ANIM_JUMP,
+            PresentationVariant::JumpShoot,
+            true);
+        }
         break;
       }
       case PlayerState::swingWeapon: {
+        const bool isAttack1Anim =
+          obj.currentAnimation == ANIM_RUN_ATTACK || obj.currentAnimation == ANIM_SWING;
+        const bool isAttack2Anim = obj.currentAnimation == ANIM_SWING_2;
         const bool attack1Done =
           (obj.currentAnimation == ANIM_RUN_ATTACK && obj.animations[ANIM_RUN_ATTACK].isDone()) ||
           (obj.currentAnimation == ANIM_SWING && obj.animations[ANIM_SWING].isDone());
         const bool attack2Done =
           obj.currentAnimation == ANIM_SWING_2 && obj.animations[ANIM_SWING_2].isDone();
 
-        if (obj.currentAnimation == -1) {
+        if (obj.currentAnimation == -1 ||
+            (player.swingStage == PlayerSwingStage::Attack1 && !isAttack1Anim) ||
+            (player.swingStage == PlayerSwingStage::Attack2 && !isAttack2Anim)) {
           exitSwingState();
           break;
         }
@@ -443,14 +500,22 @@ void updateDynamicObject(
         }
 
         if (attack1Done && player.queuedFollowupSwing && hasSwingFollowup) {
-          obj.animations[obj.currentAnimation].reset();
+          if (obj.currentAnimation == ANIM_RUN_ATTACK) {
+            obj.animations[ANIM_RUN_ATTACK].reset();
+          } else if (obj.currentAnimation == ANIM_SWING) {
+            obj.animations[ANIM_SWING].reset();
+          }
           setAnimationAndPresentation(obj, ANIM_SWING_2, PresentationVariant::Swing2);
           player.swingStage = PlayerSwingStage::Attack2;
           player.queuedFollowupSwing = false;
           player.meleeDamage = 75;
           widenColliderForSwing(obj);
         } else if (attack1Done) {
-          obj.animations[obj.currentAnimation].reset();
+          if (obj.currentAnimation == ANIM_RUN_ATTACK) {
+            obj.animations[ANIM_RUN_ATTACK].reset();
+          } else if (obj.currentAnimation == ANIM_SWING) {
+            obj.animations[ANIM_SWING].reset();
+          }
           exitSwingState();
         } else if (attack2Done) {
           obj.animations[ANIM_SWING_2].reset();

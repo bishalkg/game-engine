@@ -20,6 +20,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
     GameState& gs;
     GameResources& res;
     int countModColliders = 0;
+    uint32_t nextDynamicId = 1;
 
     LayerVisitor(const SDLState& state, GameState& gs, GameResources& res)
       : state(state), gs(gs), res(res) {}
@@ -209,6 +210,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
             128,
             0,
             0);
+          enemy.id = nextDynamicId++;
           enemy.spriteType = spriteType;
 
           switch (spriteType) {
@@ -253,6 +255,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
             texDim,
             0,
             0);
+          player.id = nextDynamicId++;
           player.spriteType = spriteType;
           player.drawScale = 1.5f;
 

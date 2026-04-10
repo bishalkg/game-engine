@@ -159,9 +159,7 @@ void game_engine::Engine::setRunModeSinglePlayer() {
 }
 
 void game_engine::Engine::setRunModeHost() {
-  if (m_gameType != Host) {
-    resetMultiplayerNetworkingState();
-  }
+  resetMultiplayerNetworkingState();
   m_gameType = Host;
   m_selectedJoinHost = "127.0.0.1";
   m_selectedJoinPort = GAME_SERVER_PORT;
@@ -169,9 +167,7 @@ void game_engine::Engine::setRunModeHost() {
 }
 
 void game_engine::Engine::setRunModeClient() {
-  if (m_gameType != Client) {
-    resetMultiplayerNetworkingState();
-  }
+  resetMultiplayerNetworkingState();
   m_gameType = Client;
   m_hasSelectedJoinTarget = false;
 }
@@ -253,6 +249,7 @@ void game_engine::Engine::run(eng::IGameRules& rules) {
 
   rules.onShutdown(*this);
 
+  m_serverLoopRunning.store(false);
   if (m_gameServer) {
     m_gameServer->Stop();
   }
@@ -330,6 +327,7 @@ bool game_engine::Engine::handleMultiplayerConnections() {
       m_multiplayerStatus = "Failed to start host server";
       return false;
     }
+    m_serverLoopRunning.store(true);
     m_serverLoopThd = std::thread(&game_engine::Engine::runGameServerLoopThread, this);
   }
 
@@ -386,6 +384,7 @@ void game_engine::Engine::resetMultiplayerNetworkingState() {
   m_serverReadyForDiscovery = false;
   m_hasSelectedJoinTarget = false;
   isConnectedToServer = false;
+  m_serverLoopRunning.store(false);
   m_localInput = NetGameInput{};
   m_localInputSeq = 0;
   m_inputSendAccumulator = 0.0f;
@@ -467,11 +466,7 @@ void game_engine::Engine::restartMultiplayerSession() {
   m_inputSendAccumulator = 0.0f;
 
   if (isHostMode() && m_gameServer) {
-    auto authState = cloneAuthoritativeGameState(m_gameState, m_sdlState);
-    m_gameServer->resetAuthoritativeState(std::move(authState));
-    if (m_gameClient) {
-      m_gameClient->ClearLatestSnapshot();
-    }
+    synchronizeHostAuthoritativeState();
     m_gameState.currentView = UIManager::GameView::MultiplayerRespawnWait;
     m_gameServer->broadcastSnapshot();
     return;
@@ -481,6 +476,41 @@ void game_engine::Engine::restartMultiplayerSession() {
     m_gameClient->RequestRespawn();
     m_gameState.currentView = UIManager::GameView::MultiplayerRespawnWait;
   }
+}
+
+void game_engine::Engine::synchronizeHostAuthoritativeState(bool refreshSpawnPositions) {
+  if (!isHostMode() || !m_gameServer) {
+    return;
+  }
+
+  m_localInput = NetGameInput{};
+  m_inputSendAccumulator = 0.0f;
+  auto authState = cloneAuthoritativeGameState(m_gameState, m_sdlState);
+  m_gameServer->resetAuthoritativeState(std::move(authState), refreshSpawnPositions);
+  if (m_gameClient) {
+    m_gameClient->ClearLatestSnapshot();
+  }
+}
+
+std::optional<LevelIndex> game_engine::Engine::consumePendingHostLevelTransition() {
+  if (!isHostMode() || !m_gameServer) {
+    return std::nullopt;
+  }
+  return m_gameServer->ConsumePendingLevelTransition();
+}
+
+void game_engine::Engine::broadcastHostSnapshot() {
+  if (!isHostMode() || !m_gameServer) {
+    return;
+  }
+  m_gameServer->broadcastSnapshot();
+}
+
+bool game_engine::Engine::copyHostSnapshot(NetGameStateSnapshot& out) const {
+  if (!isHostMode() || !m_gameServer) {
+    return false;
+  }
+  return m_gameServer->copyCurrentSnapshot(out);
 }
 
 std::vector<game_engine::DiscoveredSessionInfo> game_engine::Engine::copyDiscoveredSessions() const {
@@ -545,7 +575,7 @@ void game_engine::Engine::runGameServerLoopThread() {
   uint64_t tickCount = 0;
 
   // determine delta for server loop
-  while (m_gameRunning.load() && m_gameServer) {
+  while (m_gameRunning.load() && m_serverLoopRunning.load() && m_gameServer) {
     // right now the loop blocks on ProcessIncomingMessages() and only broadcasts right after a message arrives. That ties your tick rate to network traffic; if no input arrives, clients get no snapshots. Run the server loop on a fixed timestep (e.g., sleep to 60Hz), call ProcessIncomingMessages(nMaxMessagesPerTick, /*enableWaiting=*/false) to drain some inputs, then step simulation and broadcast
     m_gameServer->ProcessIncomingMessages(maxInputsPerTick, false);
 
@@ -566,6 +596,7 @@ void game_engine::Engine::runGameServerLoopThread() {
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
+  m_serverLoopRunning.store(false);
 }
 bool game_engine::Engine::initWindowAndRenderer(int width, int height, int logW, int logH) {
 

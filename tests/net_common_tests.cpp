@@ -27,7 +27,8 @@ bool equalSnapshots(const game_engine::NetGameObjectSnapshot& a,
   switch (a.type) {
     case ObjectClass::Player:
       return a.data.player.state == b.data.player.state &&
-             a.data.player.healthPoints == b.data.player.healthPoints;
+             a.data.player.healthPoints == b.data.player.healthPoints &&
+             a.data.player.manaPoints == b.data.player.manaPoints;
     case ObjectClass::Enemy:
       return a.data.enemy.state == b.data.enemy.state &&
              a.data.enemy.healthPoints == b.data.enemy.healthPoints &&
@@ -78,6 +79,7 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   new (&player.data.player) PlayerData{};
   player.data.player.state = PlayerState::running;
   player.data.player.healthPoints = 88;
+  player.data.player.manaPoints = 42;
   snap.m_gameObjects[{player.type, player.id}] = player;
 
   NetGameObjectSnapshot enemy{};

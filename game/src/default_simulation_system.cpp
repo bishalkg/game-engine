@@ -94,6 +94,57 @@ SDL_Texture* pickEntityTexture(
   return entityRes.texIdle;
 }
 
+const EntityResources* findEntityResources(
+  const game::GameResources& resources,
+  SpriteType spriteType) {
+  if (!resources.m_currLevel) {
+    return nullptr;
+  }
+
+  const auto it = resources.m_currLevel->texCharacterMap.find(spriteType);
+  return it == resources.m_currLevel->texCharacterMap.end() ? nullptr : &it->second;
+}
+
+SDL_FRect replicatedBaseFacing(const GameObject& obj) {
+  SDL_FRect c = obj.baseCollider;
+  if (obj.direction < 0.0f) {
+    const float drawW = obj.spritePixelW / obj.drawScale;
+    c.x = drawW - (c.x + c.w);
+  }
+  return c;
+}
+
+void widenReplicatedColliderForSwing(GameObject& obj) {
+  const float drawW = obj.spritePixelW / obj.drawScale;
+  const float extra = 0.2f * drawW;
+
+  SDL_FRect c = replicatedBaseFacing(obj);
+  c.w += extra;
+  if (obj.direction < 0.0f) {
+    c.x -= extra;
+  }
+  obj.collider = c;
+}
+
+void syncReplicatedCollider(GameObject& obj) {
+  if (obj.objClass == ObjectClass::Player) {
+    if (obj.data.player.state == PlayerState::swingWeapon) {
+      widenReplicatedColliderForSwing(obj);
+    } else {
+      obj.collider = replicatedBaseFacing(obj);
+    }
+    return;
+  }
+
+  if (obj.objClass == ObjectClass::Enemy) {
+    if (obj.data.enemy.state == EnemyState::attack) {
+      widenReplicatedColliderForSwing(obj);
+    } else {
+      obj.collider = replicatedBaseFacing(obj);
+    }
+  }
+}
+
 void applyReplicatedAnimation(GameObject& obj, const game_engine::NetGameObjectSnapshot& snap) {
   if (snap.currentAnimation == UINT32_MAX) {
     obj.currentAnimation = -1;
@@ -101,11 +152,17 @@ void applyReplicatedAnimation(GameObject& obj, const game_engine::NetGameObjectS
     return;
   }
 
-  obj.currentAnimation = static_cast<int>(snap.currentAnimation);
-  obj.spriteFrame = static_cast<int>(snap.spriteFrame);
-  if (obj.currentAnimation >= 0 && obj.currentAnimation < static_cast<int>(obj.animations.size())) {
-    obj.animations[obj.currentAnimation].setElapsed(snap.animElapsed, snap.animTimedOut);
+  const int animIndex = static_cast<int>(snap.currentAnimation);
+  if (animIndex < 0 || animIndex >= static_cast<int>(obj.animations.size()) ||
+      obj.animations[animIndex].getFrameCount() <= 0) {
+    obj.currentAnimation = -1;
+    obj.spriteFrame = static_cast<int>(snap.spriteFrame);
+    return;
   }
+
+  obj.currentAnimation = animIndex;
+  obj.spriteFrame = static_cast<int>(snap.spriteFrame);
+  obj.animations[obj.currentAnimation].setElapsed(snap.animElapsed, snap.animTimedOut);
 }
 
 void applyPresentation(game::GameResources& resources, GameObject& obj) {
@@ -116,14 +173,14 @@ void applyPresentation(game::GameResources& resources, GameObject& obj) {
     return;
   }
 
-  const auto it = resources.m_currLevel->texCharacterMap.find(obj.spriteType);
-  if (it == resources.m_currLevel->texCharacterMap.end()) {
+  const EntityResources* entityRes = findEntityResources(resources, obj.spriteType);
+  if (!entityRes) {
     obj.texture = nullptr;
     return;
   }
 
   obj.texture = pickEntityTexture(
-    it->second,
+    *entityRes,
     obj.objClass,
     obj.presentationVariant);
 }
@@ -152,8 +209,9 @@ GameObject buildReplicatedObject(SimContext& ctx, const game_engine::NetGameObje
     obj.animations = ctx.resources.bulletAnims;
     obj.data.bullet = snap.data.bullet;
   } else {
-    const auto& entityRes = ctx.resources.m_currLevel->texCharacterMap.at(snap.spriteType);
-    obj.animations = entityRes.anims;
+    if (const EntityResources* entityRes = findEntityResources(ctx.resources, snap.spriteType)) {
+      obj.animations = entityRes->anims;
+    }
 
     if (snap.type == ObjectClass::Player) {
       obj.data.player = snap.data.player;
@@ -196,6 +254,7 @@ GameObject buildReplicatedObject(SimContext& ctx, const game_engine::NetGameObje
   }
 
   applyReplicatedAnimation(obj, snap);
+  syncReplicatedCollider(obj);
   applyPresentation(ctx.resources, obj);
   return obj;
 }
@@ -243,6 +302,7 @@ void updateReplicatedObject(
   }
 
   applyReplicatedAnimation(obj, snap);
+  syncReplicatedCollider(obj);
   applyPresentation(ctx.resources, obj);
 }
 
@@ -340,6 +400,32 @@ void reconcileReplicatedBullets(
       ctx.gameState.bullets.end(),
       [&seen](const GameObject& obj) { return !seen.contains(obj.id); }),
     ctx.gameState.bullets.end());
+}
+
+bool syncAuthoritativeLevel(
+  SimContext& ctx,
+  const game_engine::NetGameStateSnapshot& snapshot,
+  bool& levelChanged) {
+  levelChanged = false;
+  if (ctx.gameState.currentLevelId == snapshot.levelId &&
+      ctx.resources.m_currLevel &&
+      ctx.resources.m_currLevelIdx == snapshot.levelId) {
+    return true;
+  }
+
+  const auto resumeView = ctx.gameState.currentView;
+  if (!game::switchToLevel(ctx.engine, ctx.resources, snapshot.levelId)) {
+    SDL_Log("Failed to synchronize client to authoritative level %u", static_cast<unsigned>(snapshot.levelId));
+    return false;
+  }
+
+  levelChanged = true;
+  if (resumeView == UIManager::GameView::MultiplayerRespawnWait) {
+    ctx.gameState.currentView = UIManager::GameView::MultiplayerRespawnWait;
+  } else {
+    ctx.gameState.currentView = UIManager::GameView::Playing;
+  }
+  return true;
 }
 
 void applyAuthoritativeSnapshot(
@@ -448,20 +534,60 @@ GameObject* findPlayerById(game_engine::GameState& gameState, uint32_t playerID)
   return nullptr;
 }
 
+void playLocalMultiplayerFireAudio(
+  game_engine::Engine& engine,
+  game::GameResources& resources,
+  game_engine::GameState& gameState,
+  float deltaTime) {
+  resources.whooshCooldown.step(deltaTime);
+
+  auto* client = engine.getGameClient();
+  if (!client || !client->IsRegistered()) {
+    return;
+  }
+
+  GameObject* localPlayer = findPlayerById(gameState, client->GetPlayerID());
+  if (!localPlayer || localPlayer->objClass != ObjectClass::Player) {
+    return;
+  }
+
+  if (localPlayer->data.player.state == PlayerState::dead) {
+    return;
+  }
+
+  const auto& localInput = engine.getLocalInput();
+  if (!localInput.fireHeld || !resources.audioShoot || !resources.whooshCooldown.isTimedOut()) {
+    return;
+  }
+
+  if (localPlayer->data.player.manaPoints <= 10) {
+    return;
+  }
+
+  resources.whooshCooldown.reset();
+  MIX_PlayAudio(resources.mixer, resources.audioShoot);
+}
+
 void playSimulationAudio(
   game::GameResources& resources,
   const AudioStateMap& before,
   game_engine::GameState& gameState,
   uint32_t localPlayerID,
-  float deltaTime) {
+  float deltaTime,
+  bool playLocalShotAudioFromStateDiff = false) {
   resources.stepAudioCooldown.step(deltaTime);
-  resources.whooshCooldown.step(deltaTime);
 
   GameObject* localPlayer = findPlayerById(gameState, localPlayerID);
+  bool localPlayerWasSwinging = false;
   if (localPlayer) {
     const auto beforeIt = before.find({ObjectClass::Player, localPlayerID});
     if (beforeIt != before.end()) {
       const auto& prev = beforeIt->second;
+      localPlayerWasSwinging =
+        prev.playerState == PlayerState::swingWeapon ||
+        prev.currentAnimation == ANIM_SWING ||
+        prev.currentAnimation == ANIM_RUN_ATTACK ||
+        prev.currentAnimation == ANIM_SWING_2;
       if (!prev.jumpImpulseApplied && localPlayer->data.player.jumpImpulseApplied && resources.audioJump) {
         MIX_PlayAudio(resources.mixer, resources.audioJump);
       }
@@ -475,10 +601,9 @@ void playSimulationAudio(
         MIX_PlayAudio(resources.mixer, resources.audioSword1);
       }
 
-      if (localPlayer->data.player.manaPoints < prev.manaPoints &&
-          resources.audioShoot &&
-          resources.whooshCooldown.isTimedOut()) {
-        resources.whooshCooldown.reset();
+      if (playLocalShotAudioFromStateDiff &&
+          localPlayer->data.player.manaPoints < prev.manaPoints &&
+          resources.audioShoot) {
         MIX_PlayAudio(resources.mixer, resources.audioShoot);
       }
 
@@ -500,6 +625,8 @@ void playSimulationAudio(
   bool bulletCollided = false;
   bool enemyDamaged = false;
   bool enemyDied = false;
+  bool enemyDamagedByMelee = false;
+  bool localPlayerDied = false;
 
   AudioStateMap after = captureAudioState(gameState);
   for (const auto& [key, prev] : before) {
@@ -516,14 +643,30 @@ void playSimulationAudio(
     }
     if (key.first == ObjectClass::Enemy && curr.healthPoints < prev.healthPoints) {
       enemyDamaged = true;
+      if (localPlayer &&
+          (localPlayer->data.player.state == PlayerState::swingWeapon || localPlayerWasSwinging)) {
+        enemyDamagedByMelee = true;
+      }
       if (curr.enemyState == EnemyState::dead) {
         enemyDied = true;
       }
     }
+    if (key.first == ObjectClass::Player &&
+        key.second == localPlayerID &&
+        prev.playerState != PlayerState::dead &&
+        curr.playerState == PlayerState::dead) {
+      localPlayerDied = true;
+    }
   }
 
+  if (localPlayerDied && resources.audioEnemyDie) {
+    MIX_PlayAudio(resources.mixer, resources.audioEnemyDie);
+  }
   if (enemyDied && resources.audioEnemyDie) {
     MIX_PlayAudio(resources.mixer, resources.audioEnemyDie);
+  }
+  if (enemyDamagedByMelee && resources.boneImpactHitTrack) {
+    MIX_PlayTrack(resources.boneImpactHitTrack, 0);
   } else if (enemyDamaged && resources.enemyProjectileHitTrack) {
     MIX_PlayTrack(resources.enemyProjectileHitTrack, 0);
   } else if (bulletCollided && resources.hitTrack) {
@@ -560,25 +703,69 @@ public:
 
     if (engine.isMultiplayerActive()) {
       if (auto* client = engine.getGameClient()) {
+        if (ctx.gameState.currentView == UIManager::GameView::Playing ||
+            ctx.gameState.currentView == UIManager::GameView::PauseMenu ||
+            ctx.gameState.currentView == UIManager::GameView::MultiplayerRespawnWait) {
+          engine.setAudioSoundtrack(
+            resources.m_currLevel ? resources.m_currLevel->backgroundTrack : nullptr);
+        }
+        playLocalMultiplayerFireAudio(engine, resources, ctx.gameState, deltaTime);
+
+        if (engine.isHostMode()) {
+          if (const auto nextLevel = engine.consumePendingHostLevelTransition()) {
+            if (!game::switchToLevel(engine, resources, *nextLevel)) {
+              SDL_Log(
+                "Failed to switch host to authoritative level %u",
+                static_cast<unsigned>(*nextLevel));
+              return;
+            }
+            ctx.gameState.currentView = UIManager::GameView::Playing;
+            engine.synchronizeHostAuthoritativeState(true);
+            engine.broadcastHostSnapshot();
+            game_engine::NetGameStateSnapshot hostSnapshot;
+            if (engine.copyHostSnapshot(hostSnapshot)) {
+              applyAuthoritativeSnapshot(
+                ctx,
+                hostSnapshot,
+                client->GetPlayerID(),
+                true);
+              if (ctx.gameState.playerIndex >= 0) {
+                updateMapViewport(ctx, engine.getPlayer());
+              }
+              if (client->NeedsFullRebuild()) {
+                client->MarkFullRebuildApplied();
+              }
+            }
+          }
+        }
+
         const AudioStateMap before = captureAudioState(ctx.gameState);
         client->ProcessServerMessages();
         game_engine::NetGameStateSnapshot latestSnapshot;
         if (client->CopyLatestSnapshot(latestSnapshot)) {
-          const bool forceFullRebuild = client->NeedsFullRebuild();
+          bool levelChanged = false;
+          if (!syncAuthoritativeLevel(ctx, latestSnapshot, levelChanged)) {
+            return;
+          }
+
+          const bool forceFullRebuild = client->NeedsFullRebuild() || levelChanged;
           applyAuthoritativeSnapshot(
             ctx,
             latestSnapshot,
             client->GetPlayerID(),
             forceFullRebuild);
-          if (forceFullRebuild) {
+          if (client->NeedsFullRebuild()) {
             client->MarkFullRebuildApplied();
           }
-          playSimulationAudio(resources, before, ctx.gameState, client->GetPlayerID(), deltaTime);
+          playSimulationAudio(resources, before, ctx.gameState, client->GetPlayerID(), deltaTime, false);
           if (ctx.gameState.playerIndex >= 0) {
             auto& player = engine.getPlayer();
             updateMapViewport(ctx, player);
             if (player.data.player.state == PlayerState::dead && player.currentAnimation == -1) {
               ctx.gameState.currentView = UIManager::GameView::GameOver;
+              ctx.engine.setAudioSoundtrack(
+                ctx.resources.m_currLevel ? ctx.resources.m_currLevel->gameOverAudioTrack : nullptr,
+                0);
             } else if (ctx.gameState.currentView == UIManager::GameView::MultiplayerRespawnWait &&
                        player.data.player.state != PlayerState::dead) {
               ctx.gameState.currentView = UIManager::GameView::Playing;
@@ -610,7 +797,7 @@ public:
       hooks.projectileViewport = ctx.gameState.mapViewport;
       game_engine::stepGameplaySimulation(ctx.gameState, playerInputs, deltaTime, hooks);
       refreshPresentation(resources, ctx.gameState);
-      playSimulationAudio(resources, before, ctx.gameState, engine.getPlayer().id, deltaTime);
+      playSimulationAudio(resources, before, ctx.gameState, engine.getPlayer().id, deltaTime, true);
       updateMapViewport(ctx, engine.getPlayer());
     }
 

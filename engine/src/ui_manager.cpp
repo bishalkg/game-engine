@@ -568,7 +568,6 @@ namespace UIManager {
       if (ImGui::Button("Try Again")) {
         act.restartLevel = true;
         act.stopGameOverSoundTrack = true;
-        act.nextView = GameView::Playing;
       }
       ImGui::End();
       return act;

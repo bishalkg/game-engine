@@ -4,6 +4,7 @@
 #include <array>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -281,6 +282,7 @@ namespace game_engine {
       std::unique_ptr<DiscoveryHostService> m_discoveryHost = nullptr;
       std::unique_ptr<DiscoveryBrowserService> m_discoveryBrowser = nullptr;
       std::thread m_serverLoopThd;
+      std::atomic<bool> m_serverLoopRunning{false};
       std::thread m_levelLoadThd;
       NetGameInput m_localInput{};
       uint32_t m_localInputSeq = 0;
@@ -325,6 +327,10 @@ namespace game_engine {
       void submitLocalInput(NetGameInput input);
       void flushLocalInput(float deltaTime);
       void restartMultiplayerSession();
+      void synchronizeHostAuthoritativeState(bool refreshSpawnPositions = false);
+      std::optional<LevelIndex> consumePendingHostLevelTransition();
+      void broadcastHostSnapshot();
+      bool copyHostSnapshot(NetGameStateSnapshot& out) const;
       std::vector<DiscoveredSessionInfo> copyDiscoveredSessions() const;
       bool selectDiscoveredSession(size_t index);
       bool hasSelectedJoinTarget() const;

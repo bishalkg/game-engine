@@ -57,12 +57,6 @@ private:
       shouldInterpolate = !isLocalPlayer;
     }
 
-    if (engine.isMultiplayerActive() && obj.dynamic &&
-        obj.currentAnimation >= 0 &&
-        obj.currentAnimation < static_cast<int>(obj.animations.size())) {
-      obj.animations[obj.currentAnimation].step(deltaTime);
-    }
-
     if (!obj.renderPositionInitialized) {
       obj.renderPosition = obj.position;
       obj.renderPositionInitialized = true;
@@ -75,7 +69,11 @@ private:
 
     float frameW = obj.spritePixelW;
     float frameH = obj.spritePixelH;
-    float srcX = (obj.currentAnimation != -1)
+    const bool hasActiveAnimation =
+      obj.currentAnimation >= 0 &&
+      obj.currentAnimation < static_cast<int>(obj.animations.size()) &&
+      obj.animations[obj.currentAnimation].getFrameCount() > 0;
+    float srcX = hasActiveAnimation
                    ? obj.animations[obj.currentAnimation].currentFrame() * frameW
                    : (obj.spriteFrame - 1) * frameW;
 

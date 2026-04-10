@@ -137,6 +137,7 @@ void GameServer::OnMessage(
 }
 
 GameObject* GameServer::findPlayerById(uint32_t playerID) {
+  std::scoped_lock lock(m_stateMu);
   if (!m_authCtx || !m_authCtx->state) {
     return nullptr;
   }
@@ -155,6 +156,7 @@ GameObject* GameServer::findPlayerById(uint32_t playerID) {
 }
 
 void GameServer::applyPlayerInputs() {
+  std::scoped_lock lock(m_stateMu);
   while (!m_playerInputQueue.empty()) {
     const NetGameInput input = m_playerInputQueue.pop_front();
     if (!m_authCtx) {
@@ -173,6 +175,7 @@ void GameServer::applyPlayerInputs() {
 }
 
 void GameServer::step(float deltaTime) {
+  std::scoped_lock lock(m_stateMu);
   if (!m_authCtx || !m_authCtx->state) {
     return;
   }
@@ -181,7 +184,14 @@ void GameServer::step(float deltaTime) {
   ++m_authCtx->serverTick;
   state.m_stateLastUpdatedAt = m_authCtx->serverTick;
 
-  stepGameplaySimulation(state, m_authCtx->latestPlayerInputs, deltaTime);
+  GameplaySimulationHooks hooks;
+  hooks.onPortalTriggered = [this](LevelIndex nextLevel) {
+    std::scoped_lock lock(m_pendingLevelTransitionMu);
+    if (!m_pendingLevelTransition.has_value()) {
+      m_pendingLevelTransition = nextLevel;
+    }
+  };
+  stepGameplaySimulation(state, m_authCtx->latestPlayerInputs, deltaTime, hooks);
 
   for (auto& [playerID, input] : m_authCtx->latestPlayerInputs) {
     input.jumpPressed = false;
@@ -199,6 +209,7 @@ void GameServer::step(float deltaTime) {
 }
 
 void GameServer::refreshSnapshot() {
+  std::scoped_lock lock(m_stateMu);
   if (!m_authCtx || !m_authCtx->state) {
     return;
   }
@@ -216,7 +227,17 @@ void GameServer::broadcastSnapshot() {
   BroadcastToClients(msg);
 }
 
-void GameServer::resetAuthoritativeState(GameState&& initialState) {
+bool GameServer::copyCurrentSnapshot(NetGameStateSnapshot& out) const {
+  std::scoped_lock lock(m_stateMu);
+  if (!m_authCtx || !m_authCtx->state) {
+    return false;
+  }
+  out = m_currGameSnapshot;
+  return true;
+}
+
+void GameServer::resetAuthoritativeState(GameState&& initialState, bool refreshSpawnPositions) {
+  std::scoped_lock lock(m_stateMu);
   if (!m_authCtx) {
     m_authCtx = std::make_unique<AuthoritativeContext>(std::move(initialState));
     refreshSnapshot();
@@ -227,6 +248,10 @@ void GameServer::resetAuthoritativeState(GameState&& initialState) {
   m_authCtx->latestPlayerInputs.clear();
   while (!m_playerInputQueue.empty()) {
     m_playerInputQueue.pop_front();
+  }
+  {
+    std::scoped_lock lock(m_pendingLevelTransitionMu);
+    m_pendingLevelTransition.reset();
   }
 
   auto& state = *m_authCtx->state;
@@ -261,10 +286,15 @@ void GameServer::resetAuthoritativeState(GameState&& initialState) {
   std::sort(roster.begin(), roster.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
 
   for (std::size_t idx = 0; idx < roster.size(); ++idx) {
+    if (refreshSpawnPositions) {
+      m_playerSessions[roster[idx].first].spawnPosition = templatePlayer.position;
+      m_playerSessions[roster[idx].first].spawnPosition.x += 48.0f * static_cast<float>(idx);
+    }
+
     GameObject player = cloneGameObject(templatePlayer);
     player.id = roster[idx].first;
     player.spriteType = roster[idx].second.spriteType;
-    player.position = roster[idx].second.spawnPosition;
+    player.position = m_playerSessions[roster[idx].first].spawnPosition;
     player.velocity = glm::vec2(0.0f);
     player.acceleration = templatePlayer.acceleration;
     player.data.player = PlayerData();
@@ -287,6 +317,7 @@ void GameServer::resetAuthoritativeState(GameState&& initialState) {
 }
 
 bool GameServer::registerPlayer(uint32_t playerID, SpriteType spriteType) {
+  std::scoped_lock lock(m_stateMu);
   if (!m_authCtx || !m_authCtx->state) {
     return false;
   }
@@ -348,6 +379,7 @@ bool GameServer::registerPlayer(uint32_t playerID, SpriteType spriteType) {
 }
 
 bool GameServer::respawnPlayer(uint32_t playerID) {
+  std::scoped_lock lock(m_stateMu);
   if (!m_authCtx || !m_authCtx->state) {
     return false;
   }
@@ -389,6 +421,7 @@ bool GameServer::respawnPlayer(uint32_t playerID) {
 }
 
 void GameServer::removePlayer(uint32_t playerID) {
+  std::scoped_lock lock(m_stateMu);
   if (!m_authCtx || !m_authCtx->state) {
     return;
   }
@@ -409,6 +442,22 @@ void GameServer::removePlayer(uint32_t playerID) {
   m_authCtx->latestPlayerInputs.erase(playerID);
   m_playerSessions.erase(playerID);
   broadcastSnapshot();
+}
+
+bool GameServer::HasPendingLevelTransition() const {
+  std::scoped_lock lock(m_pendingLevelTransitionMu);
+  return m_pendingLevelTransition.has_value();
+}
+
+std::optional<LevelIndex> GameServer::ConsumePendingLevelTransition() {
+  std::scoped_lock lock(m_pendingLevelTransitionMu);
+  if (!m_pendingLevelTransition.has_value()) {
+    return std::nullopt;
+  }
+
+  const LevelIndex nextLevel = *m_pendingLevelTransition;
+  m_pendingLevelTransition.reset();
+  return nextLevel;
 }
 
 } // namespace game_engine
