@@ -253,6 +253,7 @@ namespace UIManager {
     };
     act.stopBackgroundTrack = true;
     place("##single", [&]{
+      act.startSinglePlayer = true;
       // act.nextView = GameView::CutScene;
       act.nextView = GameView::CharacterSelect;
       // act.nextView = GameView::Playing; // need to set this one the cutscene is done
@@ -478,14 +479,81 @@ namespace UIManager {
       ImGui::Begin("MultiPlayer Menu", nullptr, flags);
       if (ImGui::Button("Host A Game", defaultButtonSize)) {
         act.startMultiPlayerHost = true;
-        act.nextView = UIManager::GameView::Playing;
+        act.nextView = UIManager::GameView::CharacterSelect;
       }
       if (ImGui::Button("Join A Game", defaultButtonSize)) {
         act.startMultiPlayerClient = true;
-        act.nextView = UIManager::GameView::Playing;
+        act.nextView = UIManager::GameView::MultiplayerBrowse;
       }
       if (ImGui::Button("Back to Menu", defaultButtonSize)) {
         act.nextView = UIManager::GameView::MainMenu;
+      }
+      ImGui::End();
+      return act;
+  }
+
+  UIActions UI_Manager::drawMultiplayerBrowse(const UISnapshots& snaps, ImGuiWindowFlags flags) {
+      UIActions act;
+      act.blockMainGameDraw = true;
+      act.blockGameplayUpdates = true;
+      clearRenderer(sdlState);
+      ImGui::Begin("Available Games", nullptr, flags);
+      ImGui::TextUnformatted("Available LAN Games");
+      if (!snaps.multiplayerStatus.empty()) {
+        ImGui::TextWrapped("%s", snaps.multiplayerStatus.c_str());
+      }
+      ImGui::Separator();
+
+      if (snaps.multiplayerSessions.empty()) {
+        ImGui::TextUnformatted("No ready hosts found yet.");
+      } else {
+        for (size_t idx = 0; idx < snaps.multiplayerSessions.size(); ++idx) {
+          const auto& session = snaps.multiplayerSessions[idx];
+          const std::string buttonLabel =
+            "Join " + session.hostName + "##session_" + std::to_string(idx);
+          if (ImGui::Button(buttonLabel.c_str(), ImVec2(300, 0))) {
+            act.selectedSessionIndex = idx;
+            act.nextView = UIManager::GameView::CharacterSelect;
+          }
+          ImGui::Text(
+            "%s  |  %s  |  %u player(s)",
+            session.hostAddress.c_str(),
+            session.levelName.c_str(),
+            session.playerCount);
+          ImGui::Spacing();
+        }
+      }
+
+      if (ImGui::Button("Back", defaultButtonSize)) {
+        act.nextView = UIManager::GameView::MultiPlayerOptionsMenu;
+      }
+      ImGui::End();
+      return act;
+  }
+
+  UIActions UI_Manager::drawMultiplayerHostWaiting(const UISnapshots& snaps, ImGuiWindowFlags flags) {
+      UIActions act;
+      act.blockMainGameDraw = true;
+      act.blockGameplayUpdates = true;
+      clearRenderer(sdlState);
+      ImGui::Begin("Hosting", nullptr, flags);
+      ImGui::TextUnformatted("Starting LAN host...");
+      if (!snaps.multiplayerStatus.empty()) {
+        ImGui::TextWrapped("%s", snaps.multiplayerStatus.c_str());
+      }
+      ImGui::End();
+      return act;
+  }
+
+  UIActions UI_Manager::drawMultiplayerRespawnWait(const UISnapshots& snaps, ImGuiWindowFlags flags) {
+      UIActions act;
+      act.blockMainGameDraw = true;
+      act.blockGameplayUpdates = true;
+      clearRenderer(sdlState);
+      ImGui::Begin("Respawning", nullptr, flags);
+      ImGui::TextUnformatted("Respawning...");
+      if (!snaps.multiplayerStatus.empty()) {
+        ImGui::TextWrapped("%s", snaps.multiplayerStatus.c_str());
       }
       ImGui::End();
       return act;
@@ -500,7 +568,6 @@ namespace UIManager {
       if (ImGui::Button("Try Again")) {
         act.restartLevel = true;
         act.stopGameOverSoundTrack = true;
-        act.nextView = GameView::Playing;
       }
       ImGui::End();
       return act;
@@ -569,6 +636,9 @@ namespace UIManager {
         case GameView::InventoryMenu: return drawPausedMenu(snaps, flags);
         case GameView::PauseMenu: return drawPausedMenu(snaps, flags); // same as inventory menu because pauses game
         case GameView::MultiPlayerOptionsMenu: return drawMultiplayerOptionsMenu(snaps, flags);
+        case GameView::MultiplayerBrowse: return drawMultiplayerBrowse(snaps, flags);
+        case GameView::MultiplayerHostWaiting: return drawMultiplayerHostWaiting(snaps, flags);
+        case GameView::MultiplayerRespawnWait: return drawMultiplayerRespawnWait(snaps, flags);
         case GameView::CutScene:
         {
           bool playNextScene = snaps.advanceToNextScene; // user hit return/enter, force advance to next scene
@@ -587,7 +657,6 @@ namespace UIManager {
           } else {
             std::cout << "cutscene complete" << std::endl;
             act.nextView = GameView::Playing; // need to set this one the cutscene is done
-            act.startSinglePlayer = true;
             return act;
           }
 

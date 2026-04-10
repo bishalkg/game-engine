@@ -6,6 +6,18 @@
 
 namespace {
 
+const char* levelName(LevelIndex levelId) {
+  switch (levelId) {
+    case LevelIndex::LEVEL_1:
+      return "Level 1";
+    case LevelIndex::LEVEL_2:
+      return "Level 2";
+    case LevelIndex::LEVEL_3:
+      return "Level 3";
+  }
+  return "Unknown";
+}
+
 class DefaultUIFlow final : public game::IUIFlow {
 public:
   UIManager::UIActions update(
@@ -16,10 +28,20 @@ public:
     auto& gameState = engine.getGameState();
     auto& sdlState = engine.getSDLState();
     auto& uiManager = resources.m_uiManager;
+    snaps.multiplayerSessions.clear();
+    snaps.multiplayerStatus.clear();
 
-    auto& player = engine.getPlayer();
-    snaps.playerHP = player.data.player.healthPoints;
-    snaps.playerMana = player.data.player.manaPoints;
+    if (gameState.playerLayer >= 0 &&
+        gameState.playerLayer < static_cast<int>(gameState.layers.size()) &&
+        gameState.playerIndex >= 0 &&
+        gameState.playerIndex < static_cast<int>(gameState.layers[gameState.playerLayer].size())) {
+      auto& player = engine.getPlayer();
+      snaps.playerHP = player.data.player.healthPoints;
+      snaps.playerMana = player.data.player.manaPoints;
+    } else {
+      snaps.playerHP = 0;
+      snaps.playerMana = 0;
+    }
     snaps.winDims = ImVec2(static_cast<float>(sdlState.logW), static_cast<float>(sdlState.logH));
     snaps.debugMode = gameState.debugMode;
 
@@ -48,6 +70,25 @@ public:
         snaps.deltaTime = deltaTime;
         snaps.cutscene = &resources.pauseMenuScene;
         snaps.cutSceneID = -2;
+        break;
+      }
+      case UIManager::GameView::MultiplayerBrowse: {
+        snaps.deltaTime = deltaTime;
+        snaps.multiplayerStatus = engine.getMultiplayerStatus();
+        for (const auto& session : engine.copyDiscoveredSessions()) {
+          snaps.multiplayerSessions.push_back(UIManager::MultiplayerSessionDisplay{
+            .hostName = session.hostName,
+            .hostAddress = session.hostAddress,
+            .levelName = levelName(session.levelId),
+            .playerCount = session.playerCount,
+          });
+        }
+        break;
+      }
+      case UIManager::GameView::MultiplayerHostWaiting:
+      case UIManager::GameView::MultiplayerRespawnWait: {
+        snaps.deltaTime = deltaTime;
+        snaps.multiplayerStatus = engine.getMultiplayerStatus();
         break;
       }
       case UIManager::GameView::CutScene: {
@@ -98,13 +139,24 @@ public:
     if (actions.quitGame) {
       engine.requestQuit();
     }
+    if (actions.selectedSessionIndex) {
+      (void)engine.selectDiscoveredSession(*actions.selectedSessionIndex);
+    }
     if (actions.selectedPlayerSprite) {
       gameState.selectedPlayerSprite = *actions.selectedPlayerSprite;
       if (resources.m_currLevel) {
         (void)game::switchToLevel(engine, resources, resources.m_currLevelIdx);
+        if (engine.isHostMode()) {
+          gameState.currentView = UIManager::GameView::MultiplayerHostWaiting;
+        } else if (engine.isClientMode()) {
+          gameState.currentView = UIManager::GameView::Playing;
+        }
       }
     }
-    if (actions.nextView) {
+    if (actions.nextView == UIManager::GameView::MainMenu && engine.isMultiplayerActive()) {
+      engine.setRunModeSinglePlayer();
+    }
+    if (actions.nextView && !(actions.selectedPlayerSprite && engine.isMultiplayerActive())) {
       gameState.currentView = *actions.nextView;
     }
     if (actions.adjustVolume && resources.mixer) {
@@ -114,7 +166,15 @@ public:
       }
     }
     if (actions.restartLevel && resources.m_currLevel) {
-      (void)game::switchToLevel(engine, resources, resources.m_currLevelIdx);
+      if (engine.isHostMode()) {
+        if (game::switchToLevel(engine, resources, resources.m_currLevelIdx)) {
+          engine.restartMultiplayerSession();
+        }
+      } else if (engine.isClientMode()) {
+        engine.restartMultiplayerSession();
+      } else {
+        (void)game::switchToLevel(engine, resources, resources.m_currLevelIdx);
+      }
     }
   }
 };

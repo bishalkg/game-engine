@@ -8,6 +8,8 @@
     {
       "name": "default",
       "hidden": false,
+      "displayName": "Default",
+      "description": "Local macOS configure preset with SDL and Homebrew dependency prefixes.",
       "generator": "Unix Makefiles",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
@@ -15,9 +17,29 @@
         "CMAKE_CXX_STANDARD": "23",
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS":  { "type": "BOOL", "value": true },
-        "CMAKE_PREFIX_PATH": "/Users/bishalgautam/SDL3-3.3/lib/cmake/SDL3;/Users/bishalgautam/SDL3-mixer-3.1.0/lib/cmake/SDL3_mixer;/Users/bishalgautam/SDL3-image-3.3/lib/cmake/SDL3_image;/Users/bishalgautam/SDL3_ttf-custom/lib/cmake/SDL3_ttf;/opt/homebrew/Cellar/glm/1.0.2/share/glm",
+        "CMAKE_PREFIX_PATH": "/Users/bishalgautam/SDL3-3.3/lib/cmake/SDL3;/Users/bishalgautam/SDL3-mixer-3.1.0/lib/cmake/SDL3_mixer;/Users/bishalgautam/SDL3-image-3.3/lib/cmake/SDL3_image;/Users/bishalgautam/SDL3_ttf-custom/lib/cmake/SDL3_ttf;/opt/homebrew/opt/glm/share/glm",
         "IMGUI_DIR": "${sourceDir}/vendor/imgui"
       }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "game",
+      "displayName": "Build Game",
+      "configurePreset": "default",
+      "targets": [
+        "game"
+      ],
+      "jobs": 2
+    },
+    {
+      "name": "bundle",
+      "displayName": "Build Bundle",
+      "configurePreset": "default",
+      "targets": [
+        "bundle_game"
+      ],
+      "jobs": 2
     }
   ]
 }

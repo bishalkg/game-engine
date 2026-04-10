@@ -148,7 +148,7 @@ namespace net
         {
           auto msg = m_qMessagesIn.pop_front();
 
-          std::cout << "ProcessIncomingMessages:" << msg << std::endl;
+          // std::cout << "ProcessIncomingMessages:" << msg << std::endl;
 
           OnMessage(msg.remote, msg.msg);
 

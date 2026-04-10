@@ -31,9 +31,23 @@ std::vector<UIAction> UIController::fromEngineActions(const UIManager::UIActions
 
   if (actions.startMultiPlayerClient.has_value() && *actions.startMultiPlayerClient) out.push_back({UIActionType::StartMultiPlayerClient});
 
-  if (actions.selectedPlayerSprite.has_value()) out.push_back({UIActionType::SelectPlayerCharacter, 0.0f, actions.selectedPlayerSprite, std::nullopt});
+  if (actions.selectedPlayerSprite.has_value()) {
+    UIAction action{UIActionType::SelectPlayerCharacter};
+    action.selectedPlayerSprite = actions.selectedPlayerSprite;
+    out.push_back(action);
+  }
 
-  if (actions.nextView.has_value()) out.push_back({UIActionType::NextView, 0.0f, std::nullopt, actions.nextView});
+  if (actions.selectedSessionIndex.has_value()) {
+    UIAction action{UIActionType::SelectMultiplayerSession};
+    action.selectedSessionIndex = actions.selectedSessionIndex;
+    out.push_back(action);
+  }
+
+  if (actions.nextView.has_value()) {
+    UIAction action{UIActionType::NextView};
+    action.nextView = actions.nextView;
+    out.push_back(action);
+  }
 
   if (actions.quitGame) out.push_back({UIActionType::QuitGame});
 
@@ -62,6 +76,7 @@ UIManager::UIActions UIController::toEngineActions(const std::vector<UIAction>& 
       case UIActionType::StartMultiPlayerHost: out.startMultiPlayerHost = true; break;
       case UIActionType::StartMultiPlayerClient: out.startMultiPlayerClient = true; break;
       case UIActionType::SelectPlayerCharacter: out.selectedPlayerSprite = action.selectedPlayerSprite; break;
+      case UIActionType::SelectMultiplayerSession: out.selectedSessionIndex = action.selectedSessionIndex; break;
       case UIActionType::NextView: out.nextView = action.nextView; break;
       case UIActionType::QuitGame: out.quitGame = true; break;
     }

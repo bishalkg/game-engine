@@ -4,6 +4,8 @@
 #include <array>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -12,6 +14,7 @@
 #include <glm/glm.hpp>
 
 #include "engine/gameobject.h"
+#include "engine/net/lan_discovery.h"
 #include "engine/net/game_server.h" // needs complete type for unique_ptr destructor
 #include "engine/net/game_client.h"
 #include "engine/level_types.h"
@@ -95,6 +98,7 @@ namespace game_engine {
     GameState(GameState&& other) noexcept
       : m_loadProgress(other.m_loadProgress.load()),
         currentView(other.currentView),
+        currentLevelId(other.currentLevelId),
         m_stateLastUpdatedAt(other.m_stateLastUpdatedAt),
         layers(std::move(other.layers)),
         bullets(std::move(other.bullets)),
@@ -112,6 +116,7 @@ namespace game_engine {
       if (this != &other) {
         m_loadProgress.store(other.m_loadProgress.load());
         currentView         = other.currentView;
+        currentLevelId      = other.currentLevelId;
         m_stateLastUpdatedAt= other.m_stateLastUpdatedAt;
         layers              = std::move(other.layers);
         bullets             = std::move(other.bullets);
@@ -130,6 +135,7 @@ namespace game_engine {
       std::atomic<uint8_t> m_loadProgress = 100;
 
       UIManager::GameView currentView;
+      LevelIndex currentLevelId{LevelIndex::LEVEL_1};
 
       uint64_t m_stateLastUpdatedAt; // when the gameState was last updated, by local or by server msg
 
@@ -174,6 +180,8 @@ namespace game_engine {
 
       game_engine::NetGameStateSnapshot extractNetSnapshot() const {
         NetGameStateSnapshot snapshot;
+        snapshot.serverTick = m_stateLastUpdatedAt;
+        snapshot.levelId = currentLevelId;
         snapshot.m_stateLastUpdatedAt = m_stateLastUpdatedAt;
 
         for (size_t layerIdx = 0; layerIdx < layers.size(); ++layerIdx) {
@@ -183,15 +191,28 @@ namespace game_engine {
                 s.id = obj.id;
                 s.layer = static_cast<uint32_t>(layerIdx);
                 s.type = obj.objClass;
+                s.spriteType = obj.spriteType;
                 s.position = obj.position;
                 s.velocity = obj.velocity;
                 s.acceleration = obj.acceleration;
                 s.direction = obj.direction;
                 s.maxSpeedX = obj.maxSpeedX;
-                s.currentAnimation = static_cast<uint32_t>(obj.currentAnimation);
+                s.currentAnimation =
+                  obj.currentAnimation >= 0 ? static_cast<uint32_t>(obj.currentAnimation) : UINT32_MAX;
                 s.grounded = obj.grounded;
                 s.shouldFlash = obj.shouldFlash;
                 s.spriteFrame = static_cast<uint32_t>(obj.spriteFrame);
+                s.animElapsed =
+                  obj.currentAnimation >= 0 &&
+                      obj.currentAnimation < static_cast<int>(obj.animations.size())
+                    ? obj.animations[obj.currentAnimation].getElapsed()
+                    : 0.0f;
+                s.animTimedOut =
+                  obj.currentAnimation >= 0 &&
+                      obj.currentAnimation < static_cast<int>(obj.animations.size())
+                    ? obj.animations[obj.currentAnimation].isDone()
+                    : false;
+                s.presentationVariant = obj.presentationVariant;
                 s.data = obj.data; // union to be handled in encodeNetGameStateSnapshot
                 snapshot.m_gameObjects[{obj.objClass, obj.id}] = s;
               };
@@ -204,15 +225,28 @@ namespace game_engine {
           s.id = obj.id;
           s.layer = static_cast<uint32_t>(playerLayer);
           s.type = obj.objClass;
+          s.spriteType = obj.spriteType;
           s.position = obj.position;
           s.velocity = obj.velocity;
           s.acceleration = obj.acceleration;
           s.direction = obj.direction;
           s.maxSpeedX = obj.maxSpeedX;
-          s.currentAnimation = static_cast<uint32_t>(obj.currentAnimation);
+          s.currentAnimation =
+            obj.currentAnimation >= 0 ? static_cast<uint32_t>(obj.currentAnimation) : UINT32_MAX;
           s.grounded = obj.grounded;
           s.shouldFlash = obj.shouldFlash;
           s.spriteFrame = static_cast<uint32_t>(obj.spriteFrame);
+          s.animElapsed =
+            obj.currentAnimation >= 0 &&
+                obj.currentAnimation < static_cast<int>(obj.animations.size())
+              ? obj.animations[obj.currentAnimation].getElapsed()
+              : 0.0f;
+          s.animTimedOut =
+            obj.currentAnimation >= 0 &&
+                obj.currentAnimation < static_cast<int>(obj.animations.size())
+              ? obj.animations[obj.currentAnimation].isDone()
+              : false;
+          s.presentationVariant = obj.presentationVariant;
           snapshot.m_gameObjects[{obj.objClass, obj.id}] = s;
           // }
         };
@@ -245,8 +279,19 @@ namespace game_engine {
       std::unique_ptr<GameServer> m_gameServer = nullptr; // only create if gameType==Host
       bool isConnectedToServer = false;
       std::unique_ptr<GameClient> m_gameClient = nullptr; // only create if gameType!=SinglePlayer
+      std::unique_ptr<DiscoveryHostService> m_discoveryHost = nullptr;
+      std::unique_ptr<DiscoveryBrowserService> m_discoveryBrowser = nullptr;
       std::thread m_serverLoopThd;
+      std::atomic<bool> m_serverLoopRunning{false};
       std::thread m_levelLoadThd;
+      NetGameInput m_localInput{};
+      uint32_t m_localInputSeq = 0;
+      float m_inputSendAccumulator = 0.0f;
+      std::string m_selectedJoinHost = "127.0.0.1";
+      uint16_t m_selectedJoinPort = GAME_SERVER_PORT;
+      bool m_hasSelectedJoinTarget = false;
+      bool m_serverReadyForDiscovery = false;
+      std::string m_multiplayerStatus;
 
 
     public:
@@ -275,9 +320,26 @@ namespace game_engine {
       void stopAudioSoundtrack(MIX_Track* track);
 
       // Networking
-      void buildAuthoritativeStateForServer();
+      std::unique_ptr<GameServer> buildAuthoritativeStateForServer();
       bool handleMultiplayerConnections();
       void runGameServerLoopThread();
+      void resetMultiplayerNetworkingState();
+      void submitLocalInput(NetGameInput input);
+      void flushLocalInput(float deltaTime);
+      void restartMultiplayerSession();
+      void synchronizeHostAuthoritativeState(bool refreshSpawnPositions = false);
+      std::optional<LevelIndex> consumePendingHostLevelTransition();
+      void broadcastHostSnapshot();
+      bool copyHostSnapshot(NetGameStateSnapshot& out) const;
+      std::vector<DiscoveredSessionInfo> copyDiscoveredSessions() const;
+      bool selectDiscoveredSession(size_t index);
+      bool hasSelectedJoinTarget() const;
+      bool isServerReadyForDiscovery() const;
+      const std::string& getMultiplayerStatus() const;
+      const NetGameInput& getLocalInput() const;
+      GameClient* getGameClient();
+      const GameClient* getGameClient() const;
+      bool isMultiplayerActive() const;
       // MIX_PauseTrack(track) / MIX_ResumeTrack(track)
 
       // getters

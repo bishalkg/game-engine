@@ -12,8 +12,16 @@
 
 namespace game {
 
+// IGameRules is defined in the engine and requires us to implement its methods (onInit, onEvent, onUpdate, onRender, onShutdown) which are called at appropriate places in the game engines game loop
 class GameRules : public eng::IGameRules {
 public:
+  // With explicit, only direct construction is allowed:
+
+  // GameRules rules(font);      // OK
+  // GameRules rules{font};      // OK
+
+  // GameRules rules = font;     // not allowed
+  // f(font);                    // not allowed
   explicit GameRules(
     TTF_Font* font,
     std::unique_ptr<IBootstrap> bootstrap = nullptr,
@@ -22,6 +30,7 @@ public:
     std::unique_ptr<ISimulationSystem> simulationSystem = nullptr,
     std::unique_ptr<IRenderSystem> renderSystem = nullptr);
 
+  // “there is no valid GameRules constructor with exactly these 5 arguments.” = delete is a C++ way to explicitly ban a function or overload.
   GameRules(
     std::unique_ptr<IBootstrap>,
     std::unique_ptr<IInputSystem>,

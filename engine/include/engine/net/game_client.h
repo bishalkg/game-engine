@@ -1,146 +1,162 @@
 #pragma once
-#include "net/net_client.h"
-#include "engine/net/game_net_common.h"
 
+#include "engine/net/game_net_common.h"
+#include "net/net_client.h"
 
 namespace game_engine {
 
+class GameClient : public net::client_interface<GameMsgHeaders> {
+public:
+  GameClient() = default;
+  ~GameClient() = default;
 
-  class GameClient : public net::client_interface<GameMsgHeaders> {
-    public:
+  bool IsClientValidated() const {
+    return m_isClientValidated;
+  }
 
-      GameClient() = default;
-      ~GameClient() = default;
+  bool IsRegistered() const {
+    return m_isRegistered;
+  }
 
-    private:
-      // tuple of object type and objectID
-      // need this behind a mutex.
-      // the idea is the client queue will dequeue and update the clients mapObjects state as snapshots come in
-      // the game engine can then read from this mapObjects during its render loop (updateAllObjects) to update the actual game state
-      std::mutex m_gameStateMu;
-      NetGameStateSnapshot m_latestSnapshot;
-      // std::unordered_map<std::tuple<ObjectType, uint32_t>, NetGameObjectSnapshot> m_gameObjects;
-      // uint64_t m_stateLastUpdatedAt; // when the gameState was last updated
-      uint32_t nPlayerID = 0;
-      NetGameObjectSnapshot descPlayer;
+  uint32_t GetPlayerID() const {
+    return m_playerID;
+  }
 
-      bool bWaitingForConnection = true;
-      bool m_isClientValidated = false;
+  bool NeedsFullRebuild() const {
+    return m_needsFullRebuild;
+  }
 
+  void MarkFullRebuildApplied() {
+    m_needsFullRebuild = false;
+  }
 
-    public:
-      bool OnUserCreate()
-      {
+  bool IsRespawnPending() const {
+    return m_respawnRequested;
+  }
 
-        if (Connect("127.0.0.1", 60000))
-        {
-          return true;
+  void ProcessServerMessages() {
+    if (!IsConnected()) {
+      return;
+    }
+
+    bool haveNewSnapshot = false;
+    NetGameStateSnapshot newestSnapshot;
+    uint64_t newestTick = m_latestServerTickReceived;
+
+    while (!Incoming().empty()) {
+      auto msg = Incoming().pop_front().msg;
+
+      switch (msg.header.id) {
+        case GameMsgHeaders::Client_Accepted: {
+          m_isClientValidated = true;
+          break;
         }
-
-        return false;
-      }
-
-      bool IsClientValidated() const {
-        return m_isClientValidated;
-      }
-
-      // Client calls this in game loop to read in messages from the server
-      bool OnUserUpdate(float fElapsedTime)
-      {
-        // Check for incoming network messages from server
-        if (IsConnected())
-        {
-          while (!Incoming().empty())
-          {
-            auto msg = Incoming().pop_front().msg;
-
-            switch (msg.header.id)
-            {
-            case(GameMsgHeaders::Client_Accepted):
-            {
-              std::cout << "Server accepted client - you're in!\n";
-              m_isClientValidated = true;
-
-              // net::message<GameMsgHeaders> msg;
-              // msg.header.id = GameMsgHeaders::Client_RegisterWithServer;
-              // descPlayer.vPos = 3.0f;
-              // msg << descPlayer;
-              // Send(msg);
-              break;
-            }
-
-            case(GameMsgHeaders::Client_AssignID):
-            {
-              // Server is assigning us OUR id
-              msg >> nPlayerID;
-              std::cout << "Assigned Client ID = " << nPlayerID << "\n";
-              break;
-            }
-
-            case(GameMsgHeaders::Game_AddPlayer):
-            {
-              // NetGameObjectSnapshot desc;
-              // msg >> desc;
-              // mapObjects.insert_or_assign(desc.id, desc);
-
-              // if (desc.id == nPlayerID)
-              // {
-              //   // Now we exist in game world
-              //   bWaitingForConnection = false;
-              // }
-              break;
-            }
-
-            case(GameMsgHeaders::Game_RemovePlayer):
-            {
-              uint32_t nRemovalID = 0;
-              msg >> nRemovalID;
-              m_latestSnapshot.m_gameObjects.erase(std::pair(ObjectClass::Player, nRemovalID));
-              break;
-            }
-
-            case(GameMsgHeaders::Game_Snapshot):
-            {
-              // TODO deserealize the gameSnapshot and set it onto mapObjects and other private variables...We will need a mutex for reading the data so that it doesnt
-              // get updated as we are reading it to set the client data
-
-              // NetGameObjectSnapshot desc;
-              // msg >> desc;
-              // mapObjects.insert_or_assign(desc.id, desc);
-              swapGameStateWithNew(msg);
-              break;
-            }
-
-
-            }
+        case GameMsgHeaders::Client_AssignID: {
+          net::ByteReader reader(msg.body);
+          m_playerID = reader.read_u32();
+          m_isRegistered = true;
+          break;
+        }
+        case GameMsgHeaders::Game_Snapshot: {
+          NetGameStateSnapshot latestSnapshot;
+          latestSnapshot.deserealizeNetGameStateSnapshot(msg.body);
+          if (latestSnapshot.serverTick >= newestTick) {
+            newestTick = latestSnapshot.serverTick;
+            newestSnapshot = std::move(latestSnapshot);
+            haveNewSnapshot = true;
           }
+          break;
         }
-
-        if (bWaitingForConnection)
-        {
-          // Clear(olc::DARK_BLUE);
-          // DrawString({ 10,10 }, "Waiting To Connect...", olc::WHITE);
-          return true;
+        case GameMsgHeaders::Game_RemovePlayer: {
+          net::ByteReader reader(msg.body);
+          const uint32_t playerID = reader.read_u32();
+          std::scoped_lock lock(m_gameStateMu);
+          m_latestSnapshot.m_gameObjects.erase({ObjectClass::Player, playerID});
+          break;
         }
-
-        return false;
-
-      };
-
-    private:
-      void swapGameStateWithNew(net::message<game_engine::GameMsgHeaders>& msg) {
-        std::scoped_lock lock(m_gameStateMu);
-        NetGameStateSnapshot latestSnapshot;
-        // TODO actual deserealization
-        // msg >> latestSnapshot;
-        // m_latestSnapshot = latestSnapshot;
+        default:
+          break;
       }
+    }
 
-  };
+    if (haveNewSnapshot) {
+      std::scoped_lock lock(m_gameStateMu);
+      if (!m_hasSnapshot || newestSnapshot.serverTick >= m_latestSnapshot.serverTick) {
+      m_latestSnapshot = std::move(newestSnapshot);
+      m_hasSnapshot = true;
+      m_latestServerTickReceived = m_latestSnapshot.serverTick; // TODO why is this not newestSnapshot.serverTick
+        auto it = m_latestSnapshot.m_gameObjects.find({ObjectClass::Player, m_playerID});
+        if (it != m_latestSnapshot.m_gameObjects.end() &&
+            it->second.data.player.state != PlayerState::dead) {
+          m_respawnRequested = false;
+        }
+      }
+    }
+  }
 
+  void RegisterWithServer(SpriteType spriteType) {
+    if (!IsClientValidated() || m_isRegistered) {
+      return;
+    }
+
+    net::message<GameMsgHeaders> msg;
+    msg.header.id = GameMsgHeaders::Client_RegisterWithServer;
+    net::ByteWriter writer;
+    writer.write_enum(spriteType);
+    msg.body = std::move(writer.buff);
+    msg.header.bodySize = msg.body.size();
+    Send(msg);
+  }
+
+  void SendInput(const NetGameInput& input) {
+    if (!IsConnected() || !m_isRegistered) {
+      return;
+    }
+
+    net::message<GameMsgHeaders> msg;
+    msg.header.id = GameMsgHeaders::Game_PlayerInput;
+    msg.body = input.serealizeNetGameInput();
+    msg.header.bodySize = msg.body.size();
+    Send(msg);
+  }
+
+  bool CopyLatestSnapshot(NetGameStateSnapshot& out) const {
+    std::scoped_lock lock(m_gameStateMu);
+    if (!m_hasSnapshot) {
+      return false;
+    }
+    out = m_latestSnapshot;
+    return true;
+  }
+
+  void ClearLatestSnapshot() {
+    std::scoped_lock lock(m_gameStateMu);
+    m_latestSnapshot = NetGameStateSnapshot{};
+    m_hasSnapshot = false;
+    m_needsFullRebuild = true;
+  }
+
+  void RequestRespawn() {
+    if (IsConnected() && m_isRegistered && !m_respawnRequested) {
+      net::message<GameMsgHeaders> msg;
+      msg.header.id = GameMsgHeaders::Game_PlayerRespawnRequest;
+      Send(msg);
+      m_respawnRequested = true;
+    }
+
+    ClearLatestSnapshot();
+  }
+
+private:
+  mutable std::mutex m_gameStateMu;
+  NetGameStateSnapshot m_latestSnapshot;
+  uint32_t m_playerID = 0;
+  bool m_isClientValidated = false;
+  bool m_isRegistered = false;
+  bool m_hasSnapshot = false;
+  bool m_respawnRequested = false;
+  bool m_needsFullRebuild = true;
+  uint64_t m_latestServerTickReceived = 0;
 };
 
-// 1. write out the serealizer/deserealizer (done)
-// 1.a make gpt write unit tests for the serealizer deserealizers (done)
-// 2. write out the computation logic on the server (server should also have its own GameState like the client or use the snapshot? whichevers easier..) - Server needs to run its own simulation same as client, but only takes inputs from queue, computes the snapshots and broadcasts to all clients periodically
-// 3. client to use the read in snapshot to update objects in updateAllObjects
+} // namespace game_engine

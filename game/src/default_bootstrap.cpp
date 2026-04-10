@@ -20,6 +20,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
     GameState& gs;
     GameResources& res;
     int countModColliders = 0;
+    uint32_t nextDynamicId = 1;
 
     LayerVisitor(const SDLState& state, GameState& gs, GameResources& res)
       : state(state), gs(gs), res(res) {}
@@ -209,6 +210,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
             128,
             0,
             0);
+          enemy.id = nextDynamicId++;
           enemy.spriteType = spriteType;
 
           switch (spriteType) {
@@ -233,6 +235,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           enemy.position.y = feetY - (enemy.collider.y + enemy.collider.h);
           enemy.data.enemy = EnemyData();
           enemy.currentAnimation = res.ANIM_IDLE;
+          enemy.presentationVariant = PresentationVariant::Idle;
           enemy.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
           enemy.dynamic = true;
           enemy.maxSpeedX = 15;
@@ -252,6 +255,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
             texDim,
             0,
             0);
+          player.id = nextDynamicId++;
           player.spriteType = spriteType;
           player.drawScale = 1.5f;
 
@@ -287,6 +291,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           player.data.player = PlayerData();
           player.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
           player.currentAnimation = res.ANIM_IDLE;
+          player.presentationVariant = PresentationVariant::Idle;
           player.acceleration = glm::vec2(500, 0);
           player.maxSpeedX = 100;
           player.dynamic = true;
@@ -315,7 +320,10 @@ public:
     auto& gameState = engine.getGameState();
 
     resources.loadAllAssets(sdlState, gameState, headless);
-    if (!resources.m_currLevel ||
+    if (!resources.m_currLevel) {
+      return false;
+    }
+    if (!headless &&
         !resources.m_currLevel->texCharacterMap[SpriteType::Player_Knight].texIdle) {
       return false;
     }
@@ -341,6 +349,7 @@ bool switchToLevel(game_engine::Engine& engine, GameResources& resources, LevelI
   }
 
   GameState newGameState(sdlState);
+  newGameState.currentLevelId = levelId;
   newGameState.selectedPlayerSprite = gameState.selectedPlayerSprite;
   newGameState.currentView = UIManager::GameView::LevelLoading;
   if (!initAllTiles(engine, resources, newGameState)) {

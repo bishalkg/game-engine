@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 
+if(APPLE)
+  set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "" FORCE)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "14.4" CACHE STRING "" FORCE)
+endif()
+
 project(game_engine VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -37,6 +42,8 @@ target_link_libraries(imgui PUBLIC SDL3::SDL3)
 
 set(ENGINE_SOURCES
   engine/src/engine.cpp
+  engine/src/gameplay_simulation.cpp
+  engine/src/lan_discovery.cpp
   engine/src/ui_manager.cpp
   engine/src/game_server.cpp
   engine/src/tmx.cpp
@@ -103,10 +110,15 @@ target_include_directories(net_common_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(net_common_tests PRIVATE engine)
 
 if(APPLE)
+  set(APP_BUNDLE_NAME "JeetersCastle")
+  set(APP_BUNDLE_IDENTIFIER "com.bishalgautam.jeeterscastle")
+  set(APP_EXECUTABLE_NAME "JeetersCastle")
+
   set_target_properties(game PROPERTIES
     MACOSX_BUNDLE TRUE
-    MACOSX_BUNDLE_BUNDLE_NAME "Game"
-    MACOSX_BUNDLE_GUI_IDENTIFIER "com.bishalgautam.game"
+    OUTPUT_NAME "${APP_EXECUTABLE_NAME}"
+    MACOSX_BUNDLE_BUNDLE_NAME "${APP_BUNDLE_NAME}"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "${APP_BUNDLE_IDENTIFIER}"
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MacBundle.plist.in"
     MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"

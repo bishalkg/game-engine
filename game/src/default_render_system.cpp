@@ -1,7 +1,6 @@
 #include "game/default_systems.h"
 
 #include <cmath>
-#include <format>
 
 #include "engine/engine.h"
 
@@ -27,21 +26,20 @@ public:
 
       auto& player = engine.getPlayer();
       if (gameState.debugMode) {
+        char debugText[256];
+        SDL_snprintf(
+          debugText,
+          sizeof(debugText),
+          "State: %d  Direction: %.2f B: %zu, G: %d, Px: %.2f, Py: %.2f, VPx: %.2f",
+          static_cast<int>(player.data.player.state),
+          player.direction,
+          gameState.bullets.size(),
+          player.grounded ? 1 : 0,
+          player.position.x,
+          player.position.y,
+          gameState.mapViewport.x);
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_RenderDebugText(
-          renderer,
-          5,
-          5,
-          std::format(
-            "State: {}  Direction: {} B: {}, G: {}, Px: {}, Py:{}, VPx: {}",
-            static_cast<int>(player.data.player.state),
-            player.direction,
-            gameState.bullets.size(),
-            player.grounded,
-            player.position.x,
-            player.position.y,
-            gameState.mapViewport.x)
-            .c_str());
+        SDL_RenderDebugText(renderer, 5, 5, debugText);
       }
     }
   }
@@ -51,9 +49,31 @@ private:
     auto& gameState = engine.getGameState();
     auto& renderer = engine.getSDLState().renderer;
 
+    bool shouldInterpolate = false;
+    if (engine.isMultiplayerActive() && obj.dynamic) {
+      const auto* client = engine.getGameClient();
+      const bool isLocalPlayer =
+        client && obj.objClass == ObjectClass::Player && obj.id == client->GetPlayerID();
+      shouldInterpolate = !isLocalPlayer;
+    }
+
+    if (!obj.renderPositionInitialized) {
+      obj.renderPosition = obj.position;
+      obj.renderPositionInitialized = true;
+    } else if (shouldInterpolate) {
+      const float blend = std::clamp(deltaTime * 15.0f, 0.0f, 1.0f);
+      obj.renderPosition += (obj.position - obj.renderPosition) * blend;
+    } else {
+      obj.renderPosition = obj.position;
+    }
+
     float frameW = obj.spritePixelW;
     float frameH = obj.spritePixelH;
-    float srcX = (obj.currentAnimation != -1)
+    const bool hasActiveAnimation =
+      obj.currentAnimation >= 0 &&
+      obj.currentAnimation < static_cast<int>(obj.animations.size()) &&
+      obj.animations[obj.currentAnimation].getFrameCount() > 0;
+    float srcX = hasActiveAnimation
                    ? obj.animations[obj.currentAnimation].currentFrame() * frameW
                    : (obj.spriteFrame - 1) * frameW;
 
@@ -63,8 +83,8 @@ private:
     float drawH = frameH / obj.drawScale;
 
     SDL_FRect dst{
-      obj.position.x - gameState.mapViewport.x,
-      obj.position.y - gameState.mapViewport.y,
+      obj.renderPosition.x - gameState.mapViewport.x,
+      obj.renderPosition.y - gameState.mapViewport.y,
       drawW,
       drawH,
     };
@@ -79,9 +99,6 @@ private:
 
     if (obj.shouldFlash) {
       SDL_SetTextureColorModFloat(obj.texture, 1.0f, 1.0f, 1.0f);
-      if (obj.flashTimer.step(deltaTime)) {
-        obj.shouldFlash = false;
-      }
     }
 
     if (!gameState.debugMode) {
