@@ -271,6 +271,13 @@ bool game_engine::Engine::handleMultiplayerConnections() {
     return true;
   }
 
+  const auto returnClientToBrowse = [this]() {
+    resetMultiplayerNetworkingState();
+    m_gameType = Client;
+    m_gameState.currentView = UIManager::GameView::MultiplayerBrowse;
+    m_multiplayerStatus = "Host disconnected";
+  };
+
   if (m_gameType == Host) {
     if (!m_discoveryHost) {
       m_discoveryHost = std::make_unique<DiscoveryHostService>();
@@ -342,6 +349,14 @@ bool game_engine::Engine::handleMultiplayerConnections() {
   }
 
   if (m_gameClient) {
+    if (m_gameType == Client &&
+        isConnectedToServer &&
+        !m_gameClient->IsConnected() &&
+        (m_gameClient->IsRegistered() || m_gameClient->IsClientValidated())) {
+      returnClientToBrowse();
+      return true;
+    }
+
     if (!isConnectedToServer) {
       const std::string host = (m_gameType == Host) ? "127.0.0.1" : m_selectedJoinHost;
       const uint16_t port = (m_gameType == Host) ? GAME_SERVER_PORT : m_selectedJoinPort;
