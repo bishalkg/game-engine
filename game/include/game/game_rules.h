@@ -9,6 +9,7 @@
 #include "game/default_systems.h"
 #include "game/game_resources.h"
 #include "game/ui_controller.h"
+#include "progression_service.h"
 
 namespace game {
 
@@ -51,7 +52,9 @@ private:
   std::unique_ptr<ISimulationSystem> simulationSystem_;
   std::unique_ptr<IRenderSystem> renderSystem_;
   std::unique_ptr<GameResources> resources_;
+  std::unique_ptr<ProgressionService> progressionService_; // update this throughout the game
   TTF_Font* font_;
+
 
   game_engine::NetGameInput input_{};
   UIManager::UISnapshots snaps_{};
