@@ -11,17 +11,25 @@ GameRules::GameRules(
   std::unique_ptr<IInputSystem> inputSystem,
   std::unique_ptr<IUIFlow> uiFlow,
   std::unique_ptr<ISimulationSystem> simulationSystem,
-  std::unique_ptr<IRenderSystem> renderSystem)
+  std::unique_ptr<IRenderSystem> renderSystem,
+std::unique_ptr<ProgressionService> progressionService)
   : bootstrap_(bootstrap ? std::move(bootstrap) : createDefaultBootstrap()),
     inputSystem_(inputSystem ? std::move(inputSystem) : createDefaultInputSystem()),
     uiFlow_(uiFlow ? std::move(uiFlow) : createDefaultUIFlow()),
-    simulationSystem_(
-      simulationSystem ? std::move(simulationSystem) : createDefaultSimulationSystem()),
+    simulationSystem_(simulationSystem ? std::move(simulationSystem) : createDefaultSimulationSystem()),
+    progressionService_(progressionService ? std::move(progressionService) : createDefaultProgressionService()),
     renderSystem_(renderSystem ? std::move(renderSystem) : createDefaultRenderSystem()),
     font_(font) {}
 
 bool GameRules::onInit(game_engine::Engine& engine) {
   resources_ = std::make_unique<GameResources>(engine.getSDLState(), font_, engine.getMixer());
+
+  // TODO use progression service to get the save file bytes from the engine in the deserealize the ProgressionProfile
+  // engine.resolveSlotPath(slotName) -> path
+  // readSlot(slotName) -> bytes/result
+  // auto profileBytes = engine.LoadProfileFromSlot();
+  // progressionService_->initProfileFromBytes(profileBytes)
+  //progressionService_->getProfile(); // pass to boostrap the game world -> const ProgressionProfile& profile
 
   if (!bootstrap_->initialize(engine, *resources_, false)) {
     resources_.reset();

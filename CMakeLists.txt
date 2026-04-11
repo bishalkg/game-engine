@@ -89,6 +89,7 @@ add_executable(game
   game/src/default_ui_flow.cpp
   game/src/default_simulation_system.cpp
   game/src/default_render_system.cpp
+  game/src/progression_service.cpp
   game/src/level_manifest.cpp
 )
 
