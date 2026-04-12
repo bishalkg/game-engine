@@ -12,19 +12,21 @@ using game_engine::GameState;
 using game_engine::SDLState;
 using game::GameResources;
 using game::ProgressionProfile;
+using game::ProgressionService;
 
-bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameState) {
+bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameState, ProgressionService& progService) {
   SDLState& sdlState = engine.getSDLState();
 
   struct LayerVisitor {
     const SDLState& state;
     GameState& gs;
     GameResources& res;
+    ProgressionService& pserv;
     int countModColliders = 0;
     uint32_t nextDynamicId = 1;
 
-    LayerVisitor(const SDLState& state, GameState& gs, GameResources& res)
-      : state(state), gs(gs), res(res) {}
+    LayerVisitor(const SDLState& state, GameState& gs, GameResources& res, ProgressionService& pserv)
+      : state(state), gs(gs), res(res), pserv(pserv) {}
 
     const tmx::TileSet* pickTileset(uint32_t gid) {
       const tmx::TileSet* match = nullptr;
@@ -262,6 +264,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
 
           float wFrac = 0.30f;
           float hFrac = 0.40f;
+          bool ultOneUnlocked = false;
           player.colliderNorm = {.x = 0.10f, .y = 0.9f - hFrac, .w = wFrac, .h = hFrac};
           switch (spriteType) {
             case SpriteType::Player_Knight:
@@ -271,7 +274,12 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
               player.colliderNorm = {.x = 0.30f, .y = 0.5f, .w = wFrac, .h = 0.5f};
               break;
             case SpriteType::Player_Marie:
+              ultOneUnlocked = pserv.isUltUnlockedForChar(SpriteType::Player_Marie, 1);
+              // TODO populate ultOneUnlocked from progressionService
+
             case SpriteType::Player_Bonkfather:
+              ultOneUnlocked = pserv.isUltUnlockedForChar(SpriteType::Player_Bonkfather, 1);
+              // TODO populate ultOneUnlocked from progressionService
               player.colliderNorm = {.x = 0.30f, .y = 0.5f, .w = wFrac, .h = 0.5f};
               player.drawScale = 2.0f;
               break;
@@ -289,7 +297,8 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           player.position.x = centerX - drawW * 0.5f;
           player.position.y = feetY - drawH;
 
-          player.data.player = PlayerData();
+          player.data.player = PlayerData(); // TODO ultUnlocked to be constructed?
+          player.data.player.unlockedUltimateOne = ultOneUnlocked;
           player.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
           player.currentAnimation = res.ANIM_IDLE;
           player.presentationVariant = PresentationVariant::Idle;
@@ -306,7 +315,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
     }
   };
 
-  LayerVisitor visitor(sdlState, newGameState, resources);
+  LayerVisitor visitor(sdlState, newGameState, resources, progService);
   for (std::variant<tmx::Layer, tmx::ObjectGroup>& layer : resources.m_currLevel->map->layers) {
     std::visit(visitor, layer);
   }
@@ -316,12 +325,12 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
 
 class DefaultBootstrap final : public game::IBootstrap {
 public:
-  bool initialize(Engine& engine, GameResources& resources, const ProgressionProfile& profile, bool headless) override {
+  bool initialize(Engine& engine, GameResources& resources, ProgressionService& progService, bool headless) override {
     auto& sdlState = engine.getSDLState();
     auto& gameState = engine.getGameState();
 
     // TODO pass profile into loadAllAssets and populate values (level, player unlocked info etc.)
-    resources.loadAllAssets(sdlState, gameState, profile, headless); // loads levels and players etc.
+    resources.loadAllAssets(sdlState, gameState, progService, headless); // loads levels and players etc.
     if (!resources.m_currLevel) {
       return false;
     }
@@ -330,7 +339,7 @@ public:
       return false;
     }
 
-    return initAllTiles(engine, resources, gameState);
+    return initAllTiles(engine, resources, gameState, progService);
   }
 };
 
@@ -338,7 +347,7 @@ public:
 
 namespace game {
 
-bool switchToLevel(game_engine::Engine& engine, GameResources& resources, LevelIndex levelId) {
+bool switchToLevel(game_engine::Engine& engine, GameResources& resources, ProgressionService& progService, LevelIndex levelId) {
   auto& gameState = engine.getGameState();
   auto& sdlState = engine.getSDLState();
 
@@ -346,20 +355,31 @@ bool switchToLevel(game_engine::Engine& engine, GameResources& resources, LevelI
   gameState.setLevelLoadProgress(0);
   gameState.setLevelLoadProgress(10);
 
-  if (!resources.loadLevel(levelId, sdlState, gameState, resources.m_masterAudioGain, false)) {
+  if (!resources.loadLevel(levelId, sdlState, gameState, progService, resources.m_masterAudioGain, false)) {
     return false;
+  }
+
+  auto oldLevel = gameState.currentLevelId;
+  if (oldLevel == LevelIndex::LEVEL_1 && levelId == LevelIndex::LEVEL_2) {
+    progService.markLevelComplete(oldLevel);
+    progService.unlockUltimateForChar(gameState.selectedPlayerSprite, 1); // TODO testing only
   }
 
   GameState newGameState(sdlState);
   newGameState.currentLevelId = levelId;
   newGameState.selectedPlayerSprite = gameState.selectedPlayerSprite;
   newGameState.currentView = UIManager::GameView::LevelLoading;
-  if (!initAllTiles(engine, resources, newGameState)) {
+  if (!initAllTiles(engine, resources, newGameState, progService)) {
     return false;
   }
 
+
   gameState = std::move(newGameState);
   gameState.setLevelLoadProgress(100);
+
+  // TODO for testing
+  engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
+
   return true;
 }
 

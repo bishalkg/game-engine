@@ -19,6 +19,6 @@ std::unique_ptr<ISimulationSystem> createDefaultSimulationSystem();
 std::unique_ptr<IRenderSystem> createDefaultRenderSystem();
 
 // Shared helper for UI flow and bootstrap-level transitions.
-bool switchToLevel(game_engine::Engine& engine, GameResources& resources, LevelIndex levelId);
+bool switchToLevel(game_engine::Engine& engine, GameResources& resources, ProgressionService& progService, LevelIndex levelId);
 
 } // namespace game

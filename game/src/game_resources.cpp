@@ -1,9 +1,9 @@
-#include "game/game_resources.h"
-
 #include <algorithm>
 #include <filesystem>
 
 #include "engine/engine.h"
+#include "game/game_resources.h"
+
 
 namespace game {
 
@@ -65,9 +65,13 @@ bool GameResources::loadLevel(
   const LevelIndex levelId,
   game_engine::SDLState& state,
   game_engine::GameState& gs,
+  ProgressionService& progService,
   float masterAudioGain,
   bool headless) {
   unloadLevel();
+
+  progService.initLevelIfNotExists(levelId);
+
   gs.setLevelLoadProgress(20);
 
   m_currLevelIdx = levelId;
@@ -334,7 +338,7 @@ void GameResources::unloadLevel() {
 void GameResources::loadAllAssets(
   game_engine::SDLState& state,
   game_engine::GameState& gs,
-  const ProgressionProfile& profile,
+  ProgressionService& progService,
   bool headless) {
 
   // TODO this all needs to go in an audioManager
@@ -358,8 +362,10 @@ void GameResources::loadAllAssets(
   std::tie(audioJump, jumpTrack) =
     loadAudioChunk("data/audio/movement/jump.wav", chunkAudioGain);
 
-  // TODO loadLevel should be based on the players fileSave
-  const bool lvlLoaded = loadLevel(LevelIndex::LEVEL_1, state, gs, m_masterAudioGain, headless);
+  const bool lvlLoaded = loadLevel(
+    progService.getLastCompletedLevel(), state,
+    gs, progService, m_masterAudioGain, headless
+  );
   if (!lvlLoaded) {
     return;
   }

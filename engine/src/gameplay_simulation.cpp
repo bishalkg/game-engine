@@ -373,6 +373,7 @@ void updateDynamicObject(
     const bool canSwing =
       player.state != PlayerState::swingWeapon && player.state != PlayerState::ultimate;
     const bool canStartUltimate =
+      player.unlockedUltimateOne &&
       player.ultimatePressedThisFrame &&
       player.state != PlayerState::dead &&
       player.state != PlayerState::hurt &&

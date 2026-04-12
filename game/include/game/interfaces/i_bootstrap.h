@@ -6,6 +6,7 @@ class Engine;
 
 namespace game {
   struct ProgressionProfile; // forward declare to avoid import
+  struct ProgressionService;
   struct GameResources;
 
 struct IBootstrap {
@@ -13,7 +14,7 @@ struct IBootstrap {
   virtual bool initialize(
     game_engine::Engine& engine,
     GameResources& resources,
-    const ProgressionProfile& profile,
+    ProgressionService& progService,
     bool headless = false) = 0;
 };
 

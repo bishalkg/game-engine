@@ -29,12 +29,12 @@ bool GameRules::onInit(game_engine::Engine& engine) {
   if (!profileBytes.empty()) {
     progressionService_->deserealizeSaveState(profileBytes);
   }
-  const ProgressionProfile& profile = progressionService_->getProfile();  // pass to boostrap the game world
+  // const ProgressionProfile& profile = progressionService_->getProfile();  // pass to boostrap the game world
 
   // TODO this writes to slot path
-  engine.writeToSlotPath("slot_1", progressionService_->serealizeSaveState());
+  // engine.writeToSlotPath("slot_1", progressionService_->serealizeSaveState());
 
-  if (!bootstrap_->initialize(engine, *resources_, profile, false)) { // TODO add progressionProfile to initialize interface
+  if (!bootstrap_->initialize(engine, *resources_, *progressionService_, false)) { // TODO add progressionProfile to initialize interface
     resources_.reset();
     return false;
   }
@@ -59,7 +59,7 @@ void GameRules::onUpdate(game_engine::Engine& engine, float deltaTime) {
 
   lastEngineActions_ = uiController_.toEngineActions(gameActions);
 
-  uiFlow_->apply(engine, *resources_, lastEngineActions_);
+  uiFlow_->apply(engine, *resources_, *progressionService_, lastEngineActions_);
 
   if (engine.isMultiplayerActive()) {
     if (!engine.handleMultiplayerConnections()) {
@@ -77,7 +77,7 @@ void GameRules::onUpdate(game_engine::Engine& engine, float deltaTime) {
     engine.flushLocalInput(deltaTime);
   }
 
-  simulationSystem_->update(engine, *resources_, deltaTime, lastEngineActions_);
+  simulationSystem_->update(engine, *resources_, *progressionService_, deltaTime, lastEngineActions_);
 
   input_.jumpPressed = false;
   input_.meleePressed = false;

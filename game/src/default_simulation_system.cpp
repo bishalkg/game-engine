@@ -16,6 +16,7 @@ struct SimContext {
   game_engine::Engine& engine;
   game_engine::GameState& gameState;
   game::GameResources& resources;
+  game::ProgressionService& progService;
 };
 
 struct AudioObjectState {
@@ -433,7 +434,7 @@ bool syncAuthoritativeLevel(
   }
 
   const auto resumeView = ctx.gameState.currentView;
-  if (!game::switchToLevel(ctx.engine, ctx.resources, snapshot.levelId)) {
+  if (!game::switchToLevel(ctx.engine, ctx.resources, ctx.progService, snapshot.levelId)) {
     SDL_Log("Failed to synchronize client to authoritative level %u", static_cast<unsigned>(snapshot.levelId));
     return false;
   }
@@ -721,9 +722,10 @@ public:
   void update(
     game_engine::Engine& engine,
     game::GameResources& resources,
+    game::ProgressionService& progService,
     float deltaTime,
     const UIManager::UIActions& actions) override {
-    SimContext ctx{engine, engine.getGameState(), resources};
+    SimContext ctx{engine, engine.getGameState(), resources, progService};
 
     if (ctx.gameState.currentView == UIManager::GameView::LevelLoading) {
       return;
@@ -741,7 +743,7 @@ public:
 
         if (engine.isHostMode()) {
           if (const auto nextLevel = engine.consumePendingHostLevelTransition()) {
-            if (!game::switchToLevel(engine, resources, *nextLevel)) {
+            if (!game::switchToLevel(engine, resources, progService, *nextLevel)) {
               SDL_Log(
                 "Failed to switch host to authoritative level %u",
                 static_cast<unsigned>(*nextLevel));
@@ -819,7 +821,7 @@ public:
 
       game_engine::GameplaySimulationHooks hooks;
       hooks.onPortalTriggered = [&](LevelIndex nextLevel) {
-        game::switchToLevel(engine, resources, nextLevel);
+        game::switchToLevel(engine, resources, progService, nextLevel);
       };
       hooks.cullProjectilesByViewport = true;
       hooks.projectileViewport = ctx.gameState.mapViewport;

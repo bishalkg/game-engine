@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include "net/net_message.h"
+#include "engine/level_types.h"
 
 
 namespace game {
@@ -14,12 +15,14 @@ namespace game {
 };
 
   struct LevelProgressRecord {
-    uint32_t id;
+    // uint32_t lvlid;
+    LevelIndex lvlid;
     bool complete;
   };
 
   struct CharacterProgressRecord {
-    uint32_t id;
+    // uint32_t spriteType;
+    SpriteType spriteType;
     bool unlockedUltOne;
     bool unlockedUltTwo;
   };
@@ -73,6 +76,17 @@ namespace game {
       // bool ProgressionService::saveProfile();
 
       const ProgressionProfile& getProfile() const;
+
+      LevelIndex getLastCompletedLevel() const;
+      void initLevelIfNotExists(LevelIndex lvlId);
+      void markLevelComplete(LevelIndex lvlId);
+      void initCharIfNotExists(SpriteType spriteType);
+      void unlockUltimateForChar(SpriteType spriteType, uint32_t ultID);
+      bool isUltUnlockedForChar(SpriteType spriteType, uint32_t ultID);
+
+      // void addItem();
+      // void consumeItem();
+      // void equiptItem();
 
 
     private:
@@ -132,13 +146,6 @@ namespace game {
 
       //     // read bytes onto ProgressionProfile
       // }
-
-
-      void markLevelComplete(int lvlId);
-      void unlockUltimateForChar(int charID, int ultID);
-      // void addItem();
-      // void consumeItem();
-      // void equiptItem();
 
 
   };

@@ -22,6 +22,7 @@ struct IUIFlow {
   virtual void apply(
     game_engine::Engine& engine,
     GameResources& resources,
+    ProgressionService& progService,
     const UIManager::UIActions& actions) = 0;
 };
 

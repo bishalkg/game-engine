@@ -18,6 +18,98 @@ namespace game {
   }
 
 
+  LevelIndex ProgressionService::getLastCompletedLevel() const {
+    LevelIndex lvl = LevelIndex::LEVEL_1;
+    for (const LevelProgressRecord& lvlData : m_Profile.level_records) {
+      if (lvlData.lvlid > lvl && lvlData.complete) {
+        lvl = lvlData.lvlid;
+      }
+    }
+    return lvl;
+  }
+
+  void ProgressionService::initLevelIfNotExists(LevelIndex lvlId) {
+    bool exists = false;
+    for (const LevelProgressRecord& lvlData : m_Profile.level_records) {
+      if (lvlData.lvlid == lvlId) {
+        exists = true;
+        break;
+      }
+    }
+
+    if (!exists) {
+      m_Profile.level_records.push_back(LevelProgressRecord{lvlId, false});
+    }
+
+  };
+
+  // call inside switchToLevel:
+  // this can happen manually clicking the level
+  // or can happen by entering the portal through progression
+  void ProgressionService::markLevelComplete(LevelIndex lvlId) {
+    initLevelIfNotExists(lvlId);
+    for (LevelProgressRecord& lvlData : m_Profile.level_records) {
+      if (lvlId == lvlData.lvlid) {
+        std::cout << "mark level complete" << std::endl;
+        lvlData.complete = true;
+        break;
+      }
+    }
+  };
+
+  void ProgressionService::initCharIfNotExists(SpriteType spriteType) {
+    bool exists = false;
+    for (const CharacterProgressRecord& charRec : m_Profile.char_records) {
+      if (charRec.spriteType == spriteType) {
+        exists = true;
+        break;
+      }
+    }
+
+    if (!exists) {
+      std::cout << "init char, did not exist" << std::endl;
+      m_Profile.char_records.push_back(CharacterProgressRecord{spriteType, false, false});
+    }
+
+  };
+
+  void ProgressionService::unlockUltimateForChar(SpriteType spriteType, uint32_t ultID) {
+    initCharIfNotExists(spriteType);
+    for (CharacterProgressRecord& charRec : m_Profile.char_records) {
+      if (charRec.spriteType == spriteType) {
+        switch (ultID) { // TODO make ULT into enum
+          case 1:
+            charRec.unlockedUltOne = true;
+            std::cout << "unlocked ult for char" << std::endl;
+            break;
+          case 2:
+            charRec.unlockedUltTwo = true;
+            break;
+          default:
+        }
+      }
+    }
+  }
+
+  bool ProgressionService::isUltUnlockedForChar(SpriteType spriteType, uint32_t ultID) {
+    for (CharacterProgressRecord& charRec : m_Profile.char_records) {
+      if (charRec.spriteType == spriteType) {
+        switch (ultID) {
+          case 1:
+            std::cout << "unlocked ult for char " << charRec.unlockedUltOne << std::endl;
+            return charRec.unlockedUltOne;
+          case 2:
+            std::cout << "unlocked ult for char " << charRec.unlockedUltOne << std::endl;
+            return charRec.unlockedUltTwo;
+          default:
+        }
+      }
+    }
+    return false;
+  }
+
+
+
   // SaveStorage
   // SaveResult
   // resolveSlotPath(slotName) -> path
@@ -38,14 +130,14 @@ namespace game {
     bytes.write_enum(ProfileChunkType::LevelProgress);
     bytes.write_u32(m_Profile.level_records.size());
     for (const LevelProgressRecord& lvlRec : m_Profile.level_records) {
-      bytes.write_u32(lvlRec.id);
+      bytes.write_u32(static_cast<uint32_t>(lvlRec.lvlid));
       bytes.write_bool(lvlRec.complete);
     }
 
     bytes.write_enum(ProfileChunkType::CharacterProgress);
     bytes.write_u32(m_Profile.char_records.size());
     for (const CharacterProgressRecord& charRec : m_Profile.char_records) {
-      bytes.write_u32(charRec.id);
+      bytes.write_u32(static_cast<uint32_t>(charRec.spriteType));
       bytes.write_bool(charRec.unlockedUltOne);
       bytes.write_bool(charRec.unlockedUltTwo);
     }
@@ -102,7 +194,7 @@ namespace game {
       m_Profile.level_records.clear();
       m_Profile.level_records.resize(levelRecordLen);
       for (size_t i = 0; i < levelRecordLen; ++i) {
-        m_Profile.level_records[i].id = r.read_u32();
+        m_Profile.level_records[i].lvlid = static_cast<LevelIndex>(r.read_u32());
         m_Profile.level_records[i].complete = r.read_bool();
       }
 
@@ -114,7 +206,7 @@ namespace game {
       m_Profile.char_records.clear();
       m_Profile.char_records.resize(charRecordLen);
       for (size_t i = 0; i < charRecordLen; ++i) {
-        m_Profile.char_records[i].id = r.read_u32();
+        m_Profile.char_records[i].spriteType = static_cast<SpriteType>(r.read_u32());
         m_Profile.char_records[i].unlockedUltOne = r.read_bool();
         m_Profile.char_records[i].unlockedUltTwo = r.read_bool();
       }
@@ -134,14 +226,6 @@ namespace game {
 
       auto end_magic = r.read_u32();
       if (end_magic != MAGIC) throw std::runtime_error("bad end magic number!");
-  }
-
-
-  void ProgressionService::markLevelComplete(int lvlId) {
-    // TODO
-  }
-  void ProgressionService::unlockUltimateForChar(int charID, int ultID) {
-    // TODO
   }
   // void addItem();
   // void consumeItem();
