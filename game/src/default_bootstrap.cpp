@@ -11,6 +11,7 @@ using game_engine::Engine;
 using game_engine::GameState;
 using game_engine::SDLState;
 using game::GameResources;
+using game::ProgressionProfile;
 
 bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameState) {
   SDLState& sdlState = engine.getSDLState();
@@ -315,11 +316,12 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
 
 class DefaultBootstrap final : public game::IBootstrap {
 public:
-  bool initialize(Engine& engine, GameResources& resources, bool headless) override {
+  bool initialize(Engine& engine, GameResources& resources, const ProgressionProfile& profile, bool headless) override {
     auto& sdlState = engine.getSDLState();
     auto& gameState = engine.getGameState();
 
-    resources.loadAllAssets(sdlState, gameState, headless);
+    // TODO pass profile into loadAllAssets and populate values (level, player unlocked info etc.)
+    resources.loadAllAssets(sdlState, gameState, profile, headless); // loads levels and players etc.
     if (!resources.m_currLevel) {
       return false;
     }

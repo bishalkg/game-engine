@@ -334,7 +334,10 @@ void GameResources::unloadLevel() {
 void GameResources::loadAllAssets(
   game_engine::SDLState& state,
   game_engine::GameState& gs,
+  const ProgressionProfile& profile,
   bool headless) {
+
+  // TODO this all needs to go in an audioManager
   m_masterAudioGain = mixer ? MIX_GetMasterGain(mixer) : 0.0f;
   const float chunkAudioGain = m_masterAudioGain * 3.0f;
 
@@ -355,11 +358,14 @@ void GameResources::loadAllAssets(
   std::tie(audioJump, jumpTrack) =
     loadAudioChunk("data/audio/movement/jump.wav", chunkAudioGain);
 
+  // TODO loadLevel should be based on the players fileSave
   const bool lvlLoaded = loadLevel(LevelIndex::LEVEL_1, state, gs, m_masterAudioGain, headless);
   if (!lvlLoaded) {
     return;
   }
 
+
+  // TODO need to move these elsewhere
   bulletAnims.resize(2);
   bulletAnims[ANIM_BULLET_MOVING] = Animation(9, 1.0f);
   bulletAnims[ANIM_BULLET_HIT] = Animation(4, 0.15f);

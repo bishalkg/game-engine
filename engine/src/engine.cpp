@@ -1,6 +1,9 @@
 #include "engine/engine.h"
 #include "engine/igame_rules.h"
 #include "engine/net/game_server.h"
+#include <fstream>
+#include <filesystem>
+#include <cstdlib>
 
 namespace {
 
@@ -617,6 +620,66 @@ void game_engine::Engine::runGameServerLoopThread() {
   }
   m_serverLoopRunning.store(false);
 }
+
+
+// File IO for SaveFiles
+std::filesystem::path game_engine::Engine::getSaveRootDir() {
+  const char* home = std::getenv("HOME");
+  if (!home) {
+    std::cout << "HOME does not exist" << std::endl; // TODO handle
+    return {};
+  }
+  return std::filesystem::path(home) / "Library" / "Application Support" / "JeetersCastle";
+}
+
+std::filesystem::path game_engine::Engine::resolveSlotPath(const std::string& slotName) {
+  return getSaveRootDir() / "saves" / (slotName + ".sav");
+}
+
+std::vector<uint8_t> game_engine::Engine::readSlot(const std::string& slotName) {
+
+  std::vector<uint8_t> data;
+
+  const std::filesystem::path filePath = resolveSlotPath(slotName);
+  std::ifstream saveFileStream(filePath, std::ios::binary);
+  if (!saveFileStream.is_open())
+    std::cout << "failed to open " << filePath << '\n';
+    return data;
+
+  std::error_code ec;
+  uint64_t fileSize = std::filesystem::file_size(filePath, ec);
+  if (ec || fileSize == 0) {
+    if (ec) {
+      std::cout << "error: " << ec.message() << std::endl;
+    }
+    return data;
+  }
+
+  data.resize(fileSize);
+  saveFileStream.read(reinterpret_cast<char*>(data.data()), data.size());
+  if (!saveFileStream) {
+    data.clear();
+    return data;
+  }
+  saveFileStream.close(); // optional; handled auto
+
+  return data;
+
+}
+
+bool game_engine::Engine::writeToSlotPath(const std::string& slotName, const std::vector<uint8_t>& profileBytes) {
+  std::filesystem::path filePath = resolveSlotPath(slotName);
+  std::filesystem::create_directories(getSaveRootDir() / "saves"); // ensure dir exists
+
+  std::ofstream saveFileStream(filePath, std::ios::binary | std::ios::trunc);
+  if (!saveFileStream) return false;
+
+  saveFileStream.write(reinterpret_cast<const char *>(profileBytes.data()), profileBytes.size());
+  saveFileStream.close(); // optional; handled auto
+  return static_cast<bool>(saveFileStream);
+}
+
+
 bool game_engine::Engine::initWindowAndRenderer(int width, int height, int logW, int logH) {
 
   m_sdlState.width = width;

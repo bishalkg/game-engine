@@ -30,7 +30,7 @@ namespace game {
   std::vector<std::uint8_t> ProgressionService::serealizeSaveState() const
   {
 
-    //       net::ByteWriter w;
+    net::ByteWriter bytes;
 
     // format reccomendation:
     // file header (magic, schema, fileType, endianess)
@@ -52,9 +52,7 @@ namespace game {
     // w.write_u64(m_stateLastUpdatedAt);
 
     // througout the game, mutate the saveState so that when user hits save we can serealize and have the engine save the new state without having to gather all the scattered data here
-
-
-
+    return bytes.buff;
   }
 
 
@@ -64,6 +62,7 @@ namespace game {
       net::ByteReader r(bytes);
 
       // read bytes onto ProgressionProfile
+      // m_Profile =
   }
 
 

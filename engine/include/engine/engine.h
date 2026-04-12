@@ -342,6 +342,14 @@ namespace game_engine {
       bool isMultiplayerActive() const;
       // MIX_PauseTrack(track) / MIX_ResumeTrack(track)
 
+
+      // File IO for Save Files
+      std::filesystem::path getSaveRootDir();
+      std::filesystem::path resolveSlotPath(const std::string& slotName);
+      std::vector<uint8_t> readSlot(const std::string& slotName);
+      bool writeToSlotPath(const std::string& slotName, const std::vector<uint8_t>& profileBytes);
+
+
       // getters
       GameObject &getPlayer();
       SDLState &getSDLState();

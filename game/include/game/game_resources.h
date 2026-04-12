@@ -23,6 +23,8 @@ struct GameState;
 
 namespace game {
 
+  struct ProgressionProfile;
+
 struct EntityResources {
   SDL_Texture *texIdle{}, *texWalk{}, *texRun{}, *texSlide{}, *texAttack{}, *texJump{}, *texHit{},
     *texDie{}, *texShoot{}, *texRunShoot{}, *texSlideShoot{}, *texRunAttack{}, *texAttack2{},
@@ -137,7 +139,7 @@ struct GameResources {
 
   void unloadLevel();
 
-  void loadAllAssets(game_engine::SDLState& state, game_engine::GameState& gs, bool headless);
+  void loadAllAssets(game_engine::SDLState& state, game_engine::GameState& gs, const ProgressionProfile& profile, bool headless);
 
   void unload();
 };
