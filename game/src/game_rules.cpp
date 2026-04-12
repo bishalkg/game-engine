@@ -26,8 +26,13 @@ bool GameRules::onInit(game_engine::Engine& engine) {
 
   // TODO use progression service to get the save file bytes from the engine in the deserealize the ProgressionProfile
   const std::vector<uint8_t> profileBytes = engine.readSlot("slot_1"); // TODO fixed slot for now
-  progressionService_->initProfileFromBytes(profileBytes);
+  if (!profileBytes.empty()) {
+    progressionService_->deserealizeSaveState(profileBytes);
+  }
   const ProgressionProfile& profile = progressionService_->getProfile();  // pass to boostrap the game world
+
+  // TODO this writes to slot path
+  engine.writeToSlotPath("slot_1", progressionService_->serealizeSaveState());
 
   if (!bootstrap_->initialize(engine, *resources_, profile, false)) { // TODO add progressionProfile to initialize interface
     resources_.reset();

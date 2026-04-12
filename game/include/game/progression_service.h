@@ -7,22 +7,26 @@
 
 namespace game {
 
+  enum class ProfileChunkType : std::uint32_t {
+    LevelProgress,
+    CharacterProgress,
+    InventoryProgress
+};
 
   struct LevelProgressRecord {
-    int32_t id;
+    uint32_t id;
     bool complete;
-
   };
 
   struct CharacterProgressRecord {
-    int32_t id;
+    uint32_t id;
     bool unlockedUltOne;
     bool unlockedUltTwo;
   };
 
   struct InventoryItemRecord {
-    int32_t id;
-    int32_t amount;
+    uint32_t id;
+    uint32_t amount;
   };
 
 
@@ -31,6 +35,7 @@ namespace game {
 
     // todo will be inefficient to update them like this
     // use a map of ID -> Record instead?
+    uint64_t lastSaveWrittenAt;
     std::vector<LevelProgressRecord> level_records;
     std::vector<CharacterProgressRecord> char_records;
     std::vector<InventoryItemRecord> item_records;
@@ -61,7 +66,11 @@ namespace game {
     public:
       ProgressionService() = default;
 
-      void initProfileFromBytes(std::vector<uint8_t> bytes);
+      std::vector<std::uint8_t> serealizeSaveState() const;
+
+      void deserealizeSaveState(const std::vector<std::uint8_t>& bytes);
+
+      // bool ProgressionService::saveProfile();
 
       const ProgressionProfile& getProfile() const;
 
@@ -89,7 +98,6 @@ namespace game {
       // writeSlot(slotName, bytes) -> result
       // resolveSlotPath(slotName) -> path
       // serialize the save state and send it to engine.writeSlot(slotName, bytes) -> bool for error or not
-      std::vector<std::uint8_t> serealizeSaveState() const;
       // {
 
       //   //       net::ByteWriter w;
@@ -118,9 +126,6 @@ namespace game {
 
 
       // }
-
-
-      void deserealizeSaveState(const std::vector<std::uint8_t>& bytes);
       // {
 
       //     net::ByteReader r(bytes);

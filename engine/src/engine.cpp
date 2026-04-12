@@ -2,7 +2,6 @@
 #include "engine/igame_rules.h"
 #include "engine/net/game_server.h"
 #include <fstream>
-#include <filesystem>
 #include <cstdlib>
 
 namespace {
@@ -642,9 +641,10 @@ std::vector<uint8_t> game_engine::Engine::readSlot(const std::string& slotName) 
 
   const std::filesystem::path filePath = resolveSlotPath(slotName);
   std::ifstream saveFileStream(filePath, std::ios::binary);
-  if (!saveFileStream.is_open())
+  if (!saveFileStream.is_open()) {
     std::cout << "failed to open " << filePath << '\n';
     return data;
+  }
 
   std::error_code ec;
   uint64_t fileSize = std::filesystem::file_size(filePath, ec);
