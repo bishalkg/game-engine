@@ -350,6 +350,7 @@ namespace game {
 bool switchToLevel(game_engine::Engine& engine, GameResources& resources, ProgressionService& progService, LevelIndex levelId) {
   auto& gameState = engine.getGameState();
   auto& sdlState = engine.getSDLState();
+  const auto oldLevel = gameState.currentLevelId;
 
   gameState.currentView = UIManager::GameView::LevelLoading;
   gameState.setLevelLoadProgress(0);
@@ -359,7 +360,6 @@ bool switchToLevel(game_engine::Engine& engine, GameResources& resources, Progre
     return false;
   }
 
-  auto oldLevel = gameState.currentLevelId;
   if (oldLevel == LevelIndex::LEVEL_1 && levelId == LevelIndex::LEVEL_2) {
     progService.markLevelComplete(oldLevel);
     progService.unlockUltimateForChar(gameState.selectedPlayerSprite, 1); // TODO testing only

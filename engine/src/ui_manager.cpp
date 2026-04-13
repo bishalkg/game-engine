@@ -448,12 +448,9 @@ namespace UIManager {
 
       place("##marie", [&]{
         act.selectedPlayerSprite = SpriteType::Player_Marie;
-        act.nextView = GameView::CutScene; // TODO hook this up to the next levels cutscene
-
       });
       place("##bonkfather", [&]{
         act.selectedPlayerSprite = SpriteType::Player_Bonkfather;
-        act.nextView = GameView::CutScene;
       });
 
       ImGui::PopStyleVar(2);

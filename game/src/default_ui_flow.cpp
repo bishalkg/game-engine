@@ -55,6 +55,10 @@ public:
         const uint8_t progress = gameState.getLevelLoadProgress();
         snaps.loading.progress01 = std::clamp(progress * 0.01f, 0.0f, 1.0f);
         snaps.loading.done = (progress >= 100);
+        if (resources.m_currLevel && !resources.m_currLevel->cutscenes.empty()) {
+          snaps.cutscene = &resources.m_currLevel->cutscenes;
+          snaps.cutSceneID = static_cast<int>(resources.m_currLevel->lvlIdx);
+        }
         break;
       }
       case UIManager::GameView::MainMenu: {

@@ -19,13 +19,29 @@ namespace game {
 
 
   LevelIndex ProgressionService::getLastCompletedLevel() const {
-    LevelIndex lvl = LevelIndex::LEVEL_1;
+    LevelIndex highestCompleted = LevelIndex::LEVEL_1;
+    bool hasCompletedLevel = false;
     for (const LevelProgressRecord& lvlData : m_Profile.level_records) {
-      if (lvlData.lvlid > lvl && lvlData.complete) {
-        lvl = lvlData.lvlid;
+      if (lvlData.complete && (!hasCompletedLevel || lvlData.lvlid > highestCompleted)) {
+        highestCompleted = lvlData.lvlid;
+        hasCompletedLevel = true;
       }
     }
-    return lvl;
+
+    if (!hasCompletedLevel) {
+      return LevelIndex::LEVEL_1;
+    }
+
+    switch (highestCompleted) {
+      case LevelIndex::LEVEL_1:
+        return LevelIndex::LEVEL_2;
+      case LevelIndex::LEVEL_2:
+        return LevelIndex::LEVEL_3;
+      case LevelIndex::LEVEL_3:
+        return LevelIndex::LEVEL_3;
+    }
+
+    return LevelIndex::LEVEL_1;
   }
 
   void ProgressionService::initLevelIfNotExists(LevelIndex lvlId) {
