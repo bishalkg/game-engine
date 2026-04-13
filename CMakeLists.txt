@@ -1,11 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 
 if(APPLE)
-  set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "" FORCE)
+  set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "" FORCE)
   set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "" FORCE)
 endif()
-
-# set(CMAKE_OSX_DEPLOYMENT_TARGET "14.4" CACHE STRING "" FORCE)
 project(game_engine VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -15,7 +13,7 @@ find_package(SDL3 REQUIRED CONFIG)
 find_package(SDL3_mixer REQUIRED CONFIG)
 find_package(SDL3_image REQUIRED CONFIG)
 find_package(SDL3_ttf REQUIRED CONFIG)
-find_package(glm REQUIRED CONFIG)
+find_path(GLM_INCLUDE_DIR glm/glm.hpp REQUIRED)
 
 # link asio as vendor
 set(ASIO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/asio)
@@ -60,6 +58,7 @@ target_include_directories(engine
     ${CMAKE_CURRENT_SOURCE_DIR}/engine/include/engine/net
     ${CMAKE_CURRENT_SOURCE_DIR}/game/include
     ${CMAKE_CURRENT_SOURCE_DIR}/game/include/game
+    ${GLM_INCLUDE_DIR}
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
   PRIVATE
@@ -72,7 +71,6 @@ target_link_libraries(engine
     SDL3_image::SDL3_image
     SDL3_mixer::SDL3_mixer
     SDL3_ttf::SDL3_ttf
-    glm::glm
     imgui
     asio
 )
