@@ -9,11 +9,6 @@ namespace game_engine {
 
 struct GameState;
 
-enum class HitStopStrength : uint8_t {
-  Normal,
-  Heavy,
-};
-
 enum class EnemyImpactType : uint8_t {
   Melee,
   Projectile,

@@ -34,8 +34,8 @@ using AudioStateMap =
   std::unordered_map<game_engine::GameObjectKey, AudioObjectState, game_engine::GameObjectKeyHash>;
 
 using game_engine::GameObjectKey;
-using game_engine::HitStopStrength;
 using game_engine::LocalHitStopTarget;
+using game_engine::NetHitStopEvent;
 
 struct LayeredDynamicKey {
   uint32_t layer = 0;
@@ -437,18 +437,13 @@ bool syncAuthoritativeLevel(
     return true;
   }
 
-  const auto resumeView = ctx.gameState.currentView;
   if (!game::switchToLevel(ctx.engine, ctx.resources, ctx.progService, snapshot.levelId)) {
     SDL_Log("Failed to synchronize client to authoritative level %u", static_cast<unsigned>(snapshot.levelId));
     return false;
   }
 
   levelChanged = true;
-  if (resumeView == UIManager::GameView::MultiplayerRespawnWait) {
-    ctx.gameState.currentView = UIManager::GameView::MultiplayerRespawnWait;
-  } else {
-    ctx.gameState.currentView = UIManager::GameView::Playing;
-  }
+  ctx.gameState.currentView = UIManager::GameView::Playing;
   return true;
 }
 
@@ -614,8 +609,16 @@ void startLocalHitStop(
   game_engine::GameState& gameState,
   GameObjectKey attackerKey,
   GameObjectKey victimKey,
-  float durationSeconds) {
+  float durationSeconds,
+  uint32_t sequence = 0) {
+  if (sequence != 0 && sequence <= gameState.localHitStop.lastSequence) {
+    return;
+  }
+
   gameState.localHitStop.remainingSeconds = durationSeconds;
+  if (sequence != 0) {
+    gameState.localHitStop.lastSequence = sequence;
+  }
   for (auto& target : gameState.localHitStop.targets) {
     target = {};
   }
@@ -635,6 +638,21 @@ void startLocalHitStop(
   if (targetIndex == 0) {
     gameState.localHitStop.remainingSeconds = 0.0f;
   }
+}
+
+void startReplicatedHitStop(
+  game_engine::GameState& gameState,
+  const NetHitStopEvent& event) {
+  if (!event.active) {
+    return;
+  }
+
+  startLocalHitStop(
+    gameState,
+    {event.attackerClass, event.attackerId},
+    {event.victimClass, event.victimId},
+    game_engine::hitStopDurationSeconds(event.strength),
+    event.sequence);
 }
 
 void stepLocalHitStop(game_engine::GameState& gameState, float deltaTime) {
@@ -825,6 +843,7 @@ public:
     float deltaTime,
     const UIManager::UIActions& actions) override {
     SimContext ctx{engine, engine.getGameState(), resources, progService};
+    const UIManager::GameView previousView = ctx.gameState.currentView;
     stepLocalHitStop(ctx.gameState, deltaTime);
 
     if (ctx.gameState.currentView == UIManager::GameView::LevelLoading) {
@@ -834,8 +853,7 @@ public:
     if (engine.isMultiplayerActive()) {
       if (auto* client = engine.getGameClient()) {
         if (ctx.gameState.currentView == UIManager::GameView::Playing ||
-            ctx.gameState.currentView == UIManager::GameView::PauseMenu ||
-            ctx.gameState.currentView == UIManager::GameView::MultiplayerRespawnWait) {
+            ctx.gameState.currentView == UIManager::GameView::PauseMenu) {
           engine.setAudioSoundtrack(
             resources.m_currLevel ? resources.m_currLevel->backgroundTrack : nullptr);
         }
@@ -859,6 +877,7 @@ public:
                 hostSnapshot,
                 client->GetPlayerID(),
                 true);
+              startReplicatedHitStop(ctx.gameState, hostSnapshot.hitStopEvent);
               if (ctx.gameState.playerIndex >= 0) {
                 updateMapViewport(ctx, engine.getPlayer());
               }
@@ -884,6 +903,7 @@ public:
             latestSnapshot,
             client->GetPlayerID(),
             forceFullRebuild);
+          startReplicatedHitStop(ctx.gameState, latestSnapshot.hitStopEvent);
           if (client->NeedsFullRebuild()) {
             client->MarkFullRebuildApplied();
           }
@@ -893,10 +913,12 @@ public:
             updateMapViewport(ctx, player);
             if (player.data.player.state == PlayerState::dead && player.currentAnimation == -1) {
               ctx.gameState.currentView = UIManager::GameView::GameOver;
-              ctx.engine.setAudioSoundtrack(
-                ctx.resources.m_currLevel ? ctx.resources.m_currLevel->gameOverAudioTrack : nullptr,
-                0);
-            } else if (ctx.gameState.currentView == UIManager::GameView::MultiplayerRespawnWait &&
+              if (previousView != UIManager::GameView::GameOver) {
+                ctx.engine.setAudioSoundtrack(
+                  ctx.resources.m_currLevel ? ctx.resources.m_currLevel->gameOverAudioTrack : nullptr,
+                  0);
+              }
+            } else if (ctx.gameState.currentView == UIManager::GameView::GameOver &&
                        player.data.player.state != PlayerState::dead) {
               ctx.gameState.currentView = UIManager::GameView::Playing;
             }
@@ -938,11 +960,15 @@ public:
       updateMapViewport(ctx, engine.getPlayer());
     }
 
-    if (ctx.gameState.currentView == UIManager::GameView::GameOver) {
+    const bool enteredGameOver =
+      ctx.gameState.currentView == UIManager::GameView::GameOver &&
+      previousView != UIManager::GameView::GameOver;
+    if (enteredGameOver) {
       engine.setAudioSoundtrack(
         resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr,
         0);
-    } else if (ctx.gameState.evaluateGameOver()) {
+    } else if (ctx.gameState.currentView != UIManager::GameView::GameOver &&
+               ctx.gameState.evaluateGameOver()) {
       engine.setAudioSoundtrack(
         resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr,
         0);

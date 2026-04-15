@@ -67,6 +67,7 @@ namespace game_engine {
 
   struct LocalHitStopState {
     float remainingSeconds = 0.0f;
+    uint32_t lastSequence = 0;
     std::array<LocalHitStopTarget, 2> targets{};
   };
 

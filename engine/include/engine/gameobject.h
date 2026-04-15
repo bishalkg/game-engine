@@ -42,6 +42,11 @@ enum class PresentationVariant : std::uint32_t {
   ProjectileHit,
 };
 
+enum class HitStopStrength : uint8_t {
+  Normal,
+  Heavy,
+};
+
 struct PlayerData {
   PlayerState state;
   Timer damageTimer;

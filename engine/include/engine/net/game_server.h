@@ -45,6 +45,9 @@ public:
   mutable std::recursive_mutex m_stateMu;
   mutable std::mutex m_pendingLevelTransitionMu;
   std::optional<LevelIndex> m_pendingLevelTransition;
+  NetHitStopEvent m_latestHitStopEvent;
+  bool m_hitStopEventDirty = false;
+  uint32_t m_nextHitStopSequence = 1;
 
 protected:
   bool OnClientConnect(std::shared_ptr<net::connection<GameMsgHeaders>> client) override;

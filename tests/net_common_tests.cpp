@@ -71,6 +71,13 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   snap.serverTick = 100;
   snap.levelId = LevelIndex::LEVEL_2;
   snap.m_stateLastUpdatedAt = 42;
+  snap.hitStopEvent.sequence = 7;
+  snap.hitStopEvent.active = true;
+  snap.hitStopEvent.attackerClass = ObjectClass::Player;
+  snap.hitStopEvent.attackerId = 1;
+  snap.hitStopEvent.victimClass = ObjectClass::Enemy;
+  snap.hitStopEvent.victimId = 2;
+  snap.hitStopEvent.strength = HitStopStrength::Heavy;
 
   NetGameObjectSnapshot player{};
   player.id = 1;
@@ -207,6 +214,13 @@ void testNetGameStateSnapshotRoundTrip() {
   assert(decoded.serverTick == snap.serverTick);
   assert(decoded.levelId == snap.levelId);
   assert(decoded.m_stateLastUpdatedAt == snap.m_stateLastUpdatedAt);
+  assert(decoded.hitStopEvent.sequence == snap.hitStopEvent.sequence);
+  assert(decoded.hitStopEvent.active == snap.hitStopEvent.active);
+  assert(decoded.hitStopEvent.attackerClass == snap.hitStopEvent.attackerClass);
+  assert(decoded.hitStopEvent.attackerId == snap.hitStopEvent.attackerId);
+  assert(decoded.hitStopEvent.victimClass == snap.hitStopEvent.victimClass);
+  assert(decoded.hitStopEvent.victimId == snap.hitStopEvent.victimId);
+  assert(decoded.hitStopEvent.strength == snap.hitStopEvent.strength);
   assert(decoded.m_gameObjects.size() == snap.m_gameObjects.size());
 
   for (auto& [key, obj] : snap.m_gameObjects) {
@@ -413,7 +427,7 @@ void testUltimateOnlyHitsEnemyOncePerCast() {
   auto state = makeGameplayState();
   state.layers[0].push_back(makeFloor());
   state.layers[1].push_back(makePlayer());
-  state.layers[1].push_back(makeEnemy(8.0f, 20));
+  state.layers[1].push_back(makeEnemy(8.0f, 100));
   state.layers[1][0].data.player.ultimatePoints = 100;
   state.layers[1][0].data.player.unlockedUltimateOne = true;
 
@@ -421,14 +435,14 @@ void testUltimateOnlyHitsEnemyOncePerCast() {
   inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .ultimatePressed = true});
 
   game_engine::stepGameplaySimulation(state, inputs, 0.05f);
-  assert(state.layers[1][1].data.enemy.healthPoints == 20);
+  assert(state.layers[1][1].data.enemy.healthPoints == 100);
 
   inputs[1].ultimatePressed = false;
   game_engine::stepGameplaySimulation(state, inputs, 1.35f);
-  assert(state.layers[1][1].data.enemy.healthPoints == 10);
+  assert(state.layers[1][1].data.enemy.healthPoints == 50);
 
   game_engine::stepGameplaySimulation(state, inputs, 0.05f);
-  assert(state.layers[1][1].data.enemy.healthPoints == 10);
+  assert(state.layers[1][1].data.enemy.healthPoints == 50);
 }
 
 void testUltimateColliderResetsAfterAnimation() {
@@ -501,12 +515,61 @@ void testEnemyKnockbackDelayedUntilHitStopEnds() {
   game_engine::stepGameplaySimulation(
     state,
     inputs,
-    game_engine::hitStopDurationSeconds(game_engine::HitStopStrength::Normal));
+    game_engine::hitStopDurationSeconds(HitStopStrength::Normal));
 
   assert(enemy.data.enemy.hitStopRemainingSeconds == 0.0f);
   assert(!enemy.data.enemy.hasPendingKnockback);
   assert(enemy.velocity.x > 0.0f);
   assert(enemy.position.x > impactX);
+}
+
+void testSwingingPlayerDoesNotSlideThroughHurtEnemy() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(12.0f, 100));
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
+  inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .meleePressed = true});
+
+  game_engine::stepGameplaySimulation(state, inputs, 0.05f);
+
+  auto& player = state.layers[1][0];
+  auto& enemy = state.layers[1][1];
+  player.velocity.x = 20.0f;
+  player.position.x = enemy.position.x - 1.0f;
+
+  inputs[1].meleePressed = false;
+  game_engine::stepGameplaySimulation(state, inputs, 0.01f);
+
+  assert(player.position.x < enemy.position.x);
+  assert(std::fabs(player.velocity.x) < 1e-5f);
+}
+
+void testAirborneSwingDoesNotSideTeleportAroundEnemy() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(12.0f, 100));
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
+  inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .meleePressed = true});
+
+  game_engine::stepGameplaySimulation(state, inputs, 0.05f);
+
+  auto& player = state.layers[1][0];
+  auto& enemy = state.layers[1][1];
+  const float beforeX = player.position.x;
+  player.grounded = true;
+  player.velocity.x = 20.0f;
+  player.velocity.y = 40.0f;
+  player.position.x = enemy.position.x - 1.0f;
+  player.position.y = enemy.position.y - 20.0f;
+
+  inputs[1].meleePressed = false;
+  game_engine::stepGameplaySimulation(state, inputs, 0.01f);
+
+  assert(player.position.x > beforeX);
 }
 
 void testProjectileHitUsesDelayedEnemyKnockback() {
@@ -527,7 +590,7 @@ void testProjectileHitUsesDelayedEnemyKnockback() {
   game_engine::stepGameplaySimulation(
     state,
     {},
-    game_engine::hitStopDurationSeconds(game_engine::HitStopStrength::Normal));
+    game_engine::hitStopDurationSeconds(HitStopStrength::Normal));
 
   assert(enemy.velocity.x > 0.0f);
 }
@@ -536,7 +599,7 @@ void testUltimateHitUsesDelayedEnemyKnockback() {
   auto state = makeGameplayState();
   state.layers[0].push_back(makeFloor());
   state.layers[1].push_back(makePlayer());
-  state.layers[1].push_back(makeEnemy(8.0f, 20));
+  state.layers[1].push_back(makeEnemy(8.0f, 100));
   state.layers[1][0].data.player.ultimatePoints = 100;
   state.layers[1][0].data.player.unlockedUltimateOne = true;
 
@@ -549,7 +612,7 @@ void testUltimateHitUsesDelayedEnemyKnockback() {
 
   auto& enemy = state.layers[1][1];
   assert(enemy.data.enemy.state == EnemyState::hurt);
-  assert(enemy.data.enemy.healthPoints == 10);
+  assert(enemy.data.enemy.healthPoints == 50);
   assert(enemy.data.enemy.hitStopRemainingSeconds > 0.0f);
   assert(enemy.data.enemy.hasPendingKnockback);
   assert(std::fabs(enemy.velocity.x) < 1e-5f);
@@ -557,7 +620,7 @@ void testUltimateHitUsesDelayedEnemyKnockback() {
   game_engine::stepGameplaySimulation(
     state,
     inputs,
-    game_engine::hitStopDurationSeconds(game_engine::HitStopStrength::Heavy));
+    game_engine::hitStopDurationSeconds(HitStopStrength::Heavy));
 
   assert(enemy.velocity.x > 0.0f);
 }
@@ -631,6 +694,8 @@ int main(){
   testUltimateOnlyHitsEnemyOncePerCast();
   testUltimateColliderResetsAfterAnimation();
   testEnemyKnockbackDelayedUntilHitStopEnds();
+  testSwingingPlayerDoesNotSlideThroughHurtEnemy();
+  testAirborneSwingDoesNotSideTeleportAroundEnemy();
   testProjectileHitUsesDelayedEnemyKnockback();
   testUltimateHitUsesDelayedEnemyKnockback();
   testFatalEnemyHitDisablesColliderImmediately();

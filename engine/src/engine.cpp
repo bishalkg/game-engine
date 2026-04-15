@@ -420,6 +420,7 @@ void game_engine::Engine::resetMultiplayerNetworkingState() {
   m_hasSelectedJoinTarget = false;
   isConnectedToServer = false;
   m_serverLoopRunning.store(false);
+  m_gameState.localHitStop = {};
   m_localInput = NetGameInput{};
   m_localInputSeq = 0;
   m_inputSendAccumulator = 0.0f;
@@ -508,14 +509,12 @@ void game_engine::Engine::restartMultiplayerSession() {
 
   if (isHostMode() && m_gameServer) {
     synchronizeHostAuthoritativeState();
-    m_gameState.currentView = UIManager::GameView::MultiplayerRespawnWait;
     m_gameServer->broadcastSnapshot();
     return;
   }
 
   if (isClientMode() && m_gameClient) {
     m_gameClient->RequestRespawn();
-    m_gameState.currentView = UIManager::GameView::MultiplayerRespawnWait;
   }
 }
 

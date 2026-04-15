@@ -72,6 +72,24 @@ void resetPlayerRuntimeStatePreservingUnlocks(PlayerData& playerData) {
   playerData.unlockedUltimateOne = unlockedUltimateOne;
 }
 
+void markPlayerDeadFromFall(GameObject& player) {
+  if (player.objClass != ObjectClass::Player ||
+      player.data.player.state == PlayerState::dead) {
+    return;
+  }
+
+  player.data.player.healthPoints = 0;
+  player.data.player.state = PlayerState::dead;
+  player.presentationVariant = PresentationVariant::Die;
+  player.currentAnimation = ANIM_DIE;
+  if (player.currentAnimation >= 0 &&
+      player.currentAnimation < static_cast<int>(player.animations.size())) {
+    player.animations[player.currentAnimation].reset();
+  }
+  player.spriteFrame = 1;
+  player.velocity = glm::vec2(0.0f);
+}
+
 } // namespace
 
 GameServer::GameServer(uint16_t nPort, std::unique_ptr<AuthoritativeContext> authCtx)
@@ -200,7 +218,27 @@ void GameServer::step(float deltaTime) {
       m_pendingLevelTransition = nextLevel;
     }
   };
+  hooks.onHitConfirmed =
+    [this](GameObjectKey attacker, GameObjectKey victim, HitStopStrength strength) {
+      m_latestHitStopEvent.sequence = m_nextHitStopSequence++;
+      m_latestHitStopEvent.active = true;
+      m_latestHitStopEvent.attackerClass = attacker.first;
+      m_latestHitStopEvent.attackerId = attacker.second;
+      m_latestHitStopEvent.victimClass = victim.first;
+      m_latestHitStopEvent.victimId = victim.second;
+      m_latestHitStopEvent.strength = strength;
+      m_hitStopEventDirty = true;
+    };
   stepGameplaySimulation(state, m_authCtx->latestPlayerInputs, deltaTime, hooks);
+
+  for (auto& [playerID, session] : m_playerSessions) {
+    (void)session;
+    if (GameObject* player = findPlayerById(playerID)) {
+      if (!player->grounded && player->position.y > 1500.0f) {
+        markPlayerDeadFromFall(*player);
+      }
+    }
+  }
 
   for (auto& [playerID, input] : m_authCtx->latestPlayerInputs) {
     input.jumpPressed = false;
@@ -226,6 +264,12 @@ void GameServer::refreshSnapshot() {
   m_currGameSnapshot = m_authCtx->state->extractNetSnapshot();
   m_currGameSnapshot.serverTick = m_authCtx->serverTick;
   m_currGameSnapshot.levelId = m_authCtx->state->currentLevelId;
+  if (m_hitStopEventDirty) {
+    m_currGameSnapshot.hitStopEvent = m_latestHitStopEvent;
+    m_hitStopEventDirty = false;
+  } else {
+    m_currGameSnapshot.hitStopEvent.active = false;
+  }
 }
 
 void GameServer::broadcastSnapshot() {
@@ -259,6 +303,9 @@ void GameServer::resetAuthoritativeState(GameState&& initialState, bool refreshS
   while (!m_playerInputQueue.empty()) {
     m_playerInputQueue.pop_front();
   }
+  m_latestHitStopEvent = {};
+  m_hitStopEventDirty = false;
+  m_nextHitStopSequence = 1;
   {
     std::scoped_lock lock(m_pendingLevelTransitionMu);
     m_pendingLevelTransition.reset();

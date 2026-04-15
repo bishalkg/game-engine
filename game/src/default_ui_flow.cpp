@@ -94,8 +94,7 @@ public:
         }
         break;
       }
-      case UIManager::GameView::MultiplayerHostWaiting:
-      case UIManager::GameView::MultiplayerRespawnWait: {
+      case UIManager::GameView::MultiplayerHostWaiting: {
         snaps.deltaTime = deltaTime;
         snaps.multiplayerStatus = engine.getMultiplayerStatus();
         break;

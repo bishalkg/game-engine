@@ -836,6 +836,12 @@ void updateDynamicObject(
           obj.acceleration = glm::vec2(30.0f, 0.0f);
           setAnimation(obj, ANIM_RUN, false);
           setPresentation(obj, PresentationVariant::Run);
+          if (enemy.attackTimer.step(deltaTime)) {
+            enemy.state = EnemyState::attack;
+            setAnimationAndPresentation(obj, ANIM_SWING, PresentationVariant::Swing);
+            enemy.attackTimer.reset();
+            widenColliderForSwing(obj);
+          }
         } else {
           obj.acceleration = glm::vec2(0.0f);
           obj.velocity.x = 0.0f;
@@ -927,6 +933,31 @@ void collisionResponse(
     objA.velocity.x = 0.0f;
   };
 
+  const auto isMovingTowardEnemySide = [&]() {
+    if (objA.velocity.x > 0.0f && objA.position.x <= objB.position.x) {
+      return true;
+    }
+    if (objA.velocity.x < 0.0f && objA.position.x >= objB.position.x) {
+      return true;
+    }
+    return false;
+  };
+
+  const auto shouldBlockSwingPassThrough = [&]() {
+    if (!(rectC.w < rectC.h && isMovingTowardEnemySide())) {
+      return false;
+    }
+
+    const SDL_FRect rectA = collisionRect(objA, objB.objClass);
+    const SDL_FRect rectB = collisionRect(objB, objA.objClass);
+    const float enemyMiddleTop = rectB.y + rectB.h * 0.25f;
+    const float enemyMiddleBottom = rectB.y + rectB.h * 0.75f;
+    const bool overlapsEnemyMiddleBand =
+      rectA.y < enemyMiddleBottom && (rectA.y + rectA.h) > enemyMiddleTop;
+
+    return overlapsEnemyMiddleBand;
+  };
+
   if (objA.objClass == ObjectClass::Player) {
     switch (objB.objClass) {
       case ObjectClass::Level:
@@ -944,7 +975,7 @@ void collisionResponse(
               const DamageEnemyResult result = damageEnemy(
                 state,
                 objB,
-                10,
+                50,
                 objA.id,
                 objA.data.player.activeUltimateCastId,
                 true,
@@ -976,9 +1007,9 @@ void collisionResponse(
                 {objA.objClass, objA.id},
                 {objB.objClass, objB.id},
                 HitStopStrength::Normal);
-              if (rectC.w < rectC.h) {
-                blockHorizontalPassThrough();
-              }
+            }
+            if (shouldBlockSwingPassThrough()) {
+              blockHorizontalPassThrough();
             }
           } else {
             objA.velocity = glm::vec2(50.0f, 0.0f) * -objA.direction;
