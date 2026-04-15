@@ -55,6 +55,10 @@ public:
         const uint8_t progress = gameState.getLevelLoadProgress();
         snaps.loading.progress01 = std::clamp(progress * 0.01f, 0.0f, 1.0f);
         snaps.loading.done = (progress >= 100);
+        if (resources.m_currLevel && !resources.m_currLevel->cutscenes.empty()) {
+          snaps.cutscene = &resources.m_currLevel->cutscenes;
+          snaps.cutSceneID = static_cast<int>(resources.m_currLevel->lvlIdx);
+        }
         break;
       }
       case UIManager::GameView::MainMenu: {
@@ -121,6 +125,7 @@ public:
   void apply(
     game_engine::Engine& engine,
     game::GameResources& resources,
+    game::ProgressionService& progService,
     const UIManager::UIActions& actions) override {
     auto& gameState = engine.getGameState();
 
@@ -150,7 +155,7 @@ public:
     if (actions.selectedPlayerSprite) {
       gameState.selectedPlayerSprite = *actions.selectedPlayerSprite;
       if (resources.m_currLevel) {
-        (void)game::switchToLevel(engine, resources, resources.m_currLevelIdx);
+        (void)game::switchToLevel(engine, resources, progService, resources.m_currLevelIdx);
         if (engine.isHostMode()) {
           gameState.currentView = UIManager::GameView::MultiplayerHostWaiting;
         } else if (engine.isClientMode()) {
@@ -172,13 +177,13 @@ public:
     }
     if (actions.restartLevel && resources.m_currLevel) {
       if (engine.isHostMode()) {
-        if (game::switchToLevel(engine, resources, resources.m_currLevelIdx)) {
+        if (game::switchToLevel(engine, resources, progService, resources.m_currLevelIdx)) {
           engine.restartMultiplayerSession();
         }
       } else if (engine.isClientMode()) {
         engine.restartMultiplayerSession();
       } else {
-        (void)game::switchToLevel(engine, resources, resources.m_currLevelIdx);
+        (void)game::switchToLevel(engine, resources, progService, resources.m_currLevelIdx);
       }
     }
   }

@@ -11,19 +11,25 @@ GameRules::GameRules(
   std::unique_ptr<IInputSystem> inputSystem,
   std::unique_ptr<IUIFlow> uiFlow,
   std::unique_ptr<ISimulationSystem> simulationSystem,
-  std::unique_ptr<IRenderSystem> renderSystem)
+  std::unique_ptr<IRenderSystem> renderSystem,
+std::unique_ptr<ProgressionService> progressionService)
   : bootstrap_(bootstrap ? std::move(bootstrap) : createDefaultBootstrap()),
     inputSystem_(inputSystem ? std::move(inputSystem) : createDefaultInputSystem()),
     uiFlow_(uiFlow ? std::move(uiFlow) : createDefaultUIFlow()),
-    simulationSystem_(
-      simulationSystem ? std::move(simulationSystem) : createDefaultSimulationSystem()),
+    simulationSystem_(simulationSystem ? std::move(simulationSystem) : createDefaultSimulationSystem()),
+    progressionService_(progressionService ? std::move(progressionService) : createDefaultProgressionService()),
     renderSystem_(renderSystem ? std::move(renderSystem) : createDefaultRenderSystem()),
     font_(font) {}
 
 bool GameRules::onInit(game_engine::Engine& engine) {
   resources_ = std::make_unique<GameResources>(engine.getSDLState(), font_, engine.getMixer());
 
-  if (!bootstrap_->initialize(engine, *resources_, false)) {
+  const std::vector<uint8_t> profileBytes = engine.readSlot("slot_1"); // TODO fixed slot for now
+  if (!profileBytes.empty()) {
+    progressionService_->deserealizeSaveState(profileBytes);
+  }
+
+  if (!bootstrap_->initialize(engine, *resources_, *progressionService_, false)) {
     resources_.reset();
     return false;
   }
@@ -48,7 +54,7 @@ void GameRules::onUpdate(game_engine::Engine& engine, float deltaTime) {
 
   lastEngineActions_ = uiController_.toEngineActions(gameActions);
 
-  uiFlow_->apply(engine, *resources_, lastEngineActions_);
+  uiFlow_->apply(engine, *resources_, *progressionService_, lastEngineActions_);
 
   if (engine.isMultiplayerActive()) {
     if (!engine.handleMultiplayerConnections()) {
@@ -66,7 +72,7 @@ void GameRules::onUpdate(game_engine::Engine& engine, float deltaTime) {
     engine.flushLocalInput(deltaTime);
   }
 
-  simulationSystem_->update(engine, *resources_, deltaTime, lastEngineActions_);
+  simulationSystem_->update(engine, *resources_, *progressionService_, deltaTime, lastEngineActions_);
 
   input_.jumpPressed = false;
   input_.meleePressed = false;

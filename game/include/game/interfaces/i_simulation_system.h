@@ -15,6 +15,7 @@ struct ISimulationSystem {
   virtual void update(
     game_engine::Engine& engine,
     GameResources& resources,
+    game::ProgressionService& progService,
     float deltaTime,
     const UIManager::UIActions& actions) = 0;
 };

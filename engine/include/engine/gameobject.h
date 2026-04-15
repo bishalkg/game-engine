@@ -62,6 +62,7 @@ struct PlayerData {
   bool queuedFollowupSwing = false;
   bool meleePressedThisFrame = false;
   bool ultimatePressedThisFrame = false;
+  bool unlockedUltimateOne = false;
   int meleeDamage = 50;
   uint32_t activeUltimateCastId = 0;
   uint32_t nextUltimateCastId = 1;
@@ -72,7 +73,7 @@ struct PlayerData {
       healthRecoveryTimer(0.2f),
       ultimateRecoveryTimer(1.0f),
       weaponTimer(0.1f),
-      jumpWindupTimer(0.00f) {
+      jumpWindupTimer(0.00f) { //unlockedUltimateOne(ultOneUnlocked)
     state = PlayerState::idle;
     healthPoints = maxHealthPoints = 100;
     manaPoints = maxManaPoints = 100;

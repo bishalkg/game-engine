@@ -15,6 +15,7 @@
 #include "engine/level_types.h"
 #include "engine/tmx.h"
 #include "engine/ui_manager.h"
+#include "game/progression_service.h"
 
 namespace game_engine {
 struct SDLState;
@@ -22,6 +23,9 @@ struct GameState;
 }
 
 namespace game {
+
+  // struct ProgressionProfile;
+  // class ProgressionService;
 
 struct EntityResources {
   SDL_Texture *texIdle{}, *texWalk{}, *texRun{}, *texSlide{}, *texAttack{}, *texJump{}, *texHit{},
@@ -132,12 +136,13 @@ struct GameResources {
     LevelIndex levelId,
     game_engine::SDLState& state,
     game_engine::GameState& gs,
+    ProgressionService& progService,
     float masterAudioGain,
     bool headless);
 
   void unloadLevel();
 
-  void loadAllAssets(game_engine::SDLState& state, game_engine::GameState& gs, bool headless);
+  void loadAllAssets(game_engine::SDLState& state, game_engine::GameState& gs,   ProgressionService& progService, bool headless);
 
   void unload();
 };

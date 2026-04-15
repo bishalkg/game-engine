@@ -100,7 +100,7 @@ namespace net
     void write_bytes(const void* p, size_t n) {
       const uint8_t* d = static_cast<const std::uint8_t*>(p);
       // insert(iterator_pos, input first byte ptr, +1 past last byte)
-      // and this copies byte by byte to d
+      // and this copies byte by byte to the end of buff, the bytes of d
       buff.insert(buff.end(), d, d+n);
     };
 
@@ -196,8 +196,8 @@ namespace net
     // advance index i forward size of the data that was copied
     void read_bytes(void* out, size_t sz) {
       if (i + sz > n) throw std::runtime_error("buffer underflow");
-      std::memcpy(out, p+i, sz);
-      i += sz;
+      std::memcpy(out, p+i, sz); // (dest, src, size)
+      i += sz; // move pointer to next chunk of data
     };
 
     // the input to the ByteWrite will deconstruct the struct and write byte by byte each type

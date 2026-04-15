@@ -1,9 +1,9 @@
-#include "game/game_resources.h"
-
 #include <algorithm>
 #include <filesystem>
 
 #include "engine/engine.h"
+#include "game/game_resources.h"
+
 
 namespace game {
 
@@ -65,9 +65,13 @@ bool GameResources::loadLevel(
   const LevelIndex levelId,
   game_engine::SDLState& state,
   game_engine::GameState& gs,
+  ProgressionService& progService,
   float masterAudioGain,
   bool headless) {
   unloadLevel();
+
+  progService.initLevelIfNotExists(levelId);
+
   gs.setLevelLoadProgress(20);
 
   m_currLevelIdx = levelId;
@@ -334,7 +338,10 @@ void GameResources::unloadLevel() {
 void GameResources::loadAllAssets(
   game_engine::SDLState& state,
   game_engine::GameState& gs,
+  ProgressionService& progService,
   bool headless) {
+
+  // TODO this all needs to go in an audioManager
   m_masterAudioGain = mixer ? MIX_GetMasterGain(mixer) : 0.0f;
   const float chunkAudioGain = m_masterAudioGain * 3.0f;
 
@@ -355,11 +362,16 @@ void GameResources::loadAllAssets(
   std::tie(audioJump, jumpTrack) =
     loadAudioChunk("data/audio/movement/jump.wav", chunkAudioGain);
 
-  const bool lvlLoaded = loadLevel(LevelIndex::LEVEL_1, state, gs, m_masterAudioGain, headless);
+  const bool lvlLoaded = loadLevel(
+    progService.getLastCompletedLevel(), state,
+    gs, progService, m_masterAudioGain, headless
+  );
   if (!lvlLoaded) {
     return;
   }
 
+
+  // TODO need to move these elsewhere
   bulletAnims.resize(2);
   bulletAnims[ANIM_BULLET_MOVING] = Animation(9, 1.0f);
   bulletAnims[ANIM_BULLET_HIT] = Animation(4, 0.15f);

@@ -8,6 +8,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <filesystem>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -341,6 +342,14 @@ namespace game_engine {
       const GameClient* getGameClient() const;
       bool isMultiplayerActive() const;
       // MIX_PauseTrack(track) / MIX_ResumeTrack(track)
+
+
+      // File IO for Save Files
+      std::filesystem::path getSaveRootDir();
+      std::filesystem::path resolveSlotPath(const std::string& slotName);
+      std::vector<uint8_t> readSlot(const std::string& slotName);
+      bool writeToSlotPath(const std::string& slotName, const std::vector<uint8_t>& profileBytes);
+
 
       // getters
       GameObject &getPlayer();

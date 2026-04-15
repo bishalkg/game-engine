@@ -9,6 +9,7 @@
 #include "game/default_systems.h"
 #include "game/game_resources.h"
 #include "game/ui_controller.h"
+#include "game/progression_service.h"
 
 namespace game {
 
@@ -28,7 +29,8 @@ public:
     std::unique_ptr<IInputSystem> inputSystem = nullptr,
     std::unique_ptr<IUIFlow> uiFlow = nullptr,
     std::unique_ptr<ISimulationSystem> simulationSystem = nullptr,
-    std::unique_ptr<IRenderSystem> renderSystem = nullptr);
+    std::unique_ptr<IRenderSystem> renderSystem = nullptr,
+    std::unique_ptr<ProgressionService> progressionService = nullptr);
 
   // “there is no valid GameRules constructor with exactly these 5 arguments.” = delete is a C++ way to explicitly ban a function or overload.
   GameRules(
@@ -36,7 +38,8 @@ public:
     std::unique_ptr<IInputSystem>,
     std::unique_ptr<IUIFlow>,
     std::unique_ptr<ISimulationSystem>,
-    std::unique_ptr<IRenderSystem>) = delete;
+    std::unique_ptr<IRenderSystem>,
+    std::unique_ptr<ProgressionService>) = delete;
 
   bool onInit(game_engine::Engine& engine) override;
   void onEvent(game_engine::Engine& engine, const SDL_Event& event) override;
@@ -51,7 +54,9 @@ private:
   std::unique_ptr<ISimulationSystem> simulationSystem_;
   std::unique_ptr<IRenderSystem> renderSystem_;
   std::unique_ptr<GameResources> resources_;
+  std::unique_ptr<ProgressionService> progressionService_; // update this throughout the game
   TTF_Font* font_;
+
 
   game_engine::NetGameInput input_{};
   UIManager::UISnapshots snaps_{};
