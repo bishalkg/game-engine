@@ -161,6 +161,7 @@ namespace game_engine {
             w.write_u32(static_cast<uint32_t>(obj.data.player.healthPoints));
             w.write_u32(static_cast<uint32_t>(obj.data.player.manaPoints));
             w.write_u32(static_cast<uint32_t>(obj.data.player.ultimatePoints));
+            w.write_bool(obj.data.player.unlockedUltimateOne);
             break;
           }
           case ObjectClass::Projectile: {
@@ -230,6 +231,7 @@ namespace game_engine {
             obj.data.player.healthPoints = r.read_u32();
             obj.data.player.manaPoints = r.read_u32();
             obj.data.player.ultimatePoints = r.read_u32();
+            obj.data.player.unlockedUltimateOne = r.read_bool();
             break;
           }
           case ObjectClass::Projectile: {

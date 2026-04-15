@@ -66,6 +66,12 @@ GameObject cloneGameObject(const GameObject& src) {
   return dst;
 }
 
+void resetPlayerRuntimeStatePreservingUnlocks(PlayerData& playerData) {
+  const bool unlockedUltimateOne = playerData.unlockedUltimateOne;
+  playerData = PlayerData();
+  playerData.unlockedUltimateOne = unlockedUltimateOne;
+}
+
 } // namespace
 
 GameServer::GameServer(uint16_t nPort, std::unique_ptr<AuthoritativeContext> authCtx)
@@ -89,8 +95,9 @@ void GameServer::OnClientDisconnect(std::shared_ptr<net::connection<GameMsgHeade
   if (!client) {
     return;
   }
-  removePlayer(client->GetID());
-  m_vGarbageIDs.push_back(client->GetID());
+  if (removePlayer(client->GetID())) {
+    m_vGarbageIDs.push_back(client->GetID());
+  }
 }
 
 void GameServer::OnMessage(
@@ -117,7 +124,9 @@ void GameServer::OnMessage(
       break;
     }
     case GameMsgHeaders::Client_UnregisterWithServer:
-      removePlayer(client->GetID());
+      if (removePlayer(client->GetID())) {
+        broadcastSnapshot();
+      }
       break;
     case GameMsgHeaders::Game_PlayerInput: {
       NetGameInput input;
@@ -298,7 +307,7 @@ void GameServer::resetAuthoritativeState(GameState&& initialState, bool refreshS
     player.position = m_playerSessions[roster[idx].first].spawnPosition;
     player.velocity = glm::vec2(0.0f);
     player.acceleration = templatePlayer.acceleration;
-    player.data.player = PlayerData();
+    player.data.player = templatePlayer.data.player;
     player.currentAnimation = ANIM_IDLE;
     player.presentationVariant = PresentationVariant::Idle;
     if (player.currentAnimation >= 0 &&
@@ -347,7 +356,7 @@ bool GameServer::registerPlayer(uint32_t playerID, SpriteType spriteType) {
     const glm::vec2 spawnPosition = templatePlayer->position;
     templatePlayer->id = playerID;
     templatePlayer->spriteType = spriteType;
-    templatePlayer->data.player = PlayerData();
+    resetPlayerRuntimeStatePreservingUnlocks(templatePlayer->data.player);
     templatePlayer->velocity = glm::vec2(0.0f);
     templatePlayer->currentAnimation = ANIM_IDLE;
     templatePlayer->presentationVariant = PresentationVariant::Idle;
@@ -366,7 +375,7 @@ bool GameServer::registerPlayer(uint32_t playerID, SpriteType spriteType) {
   newPlayer.spriteType = spriteType;
   newPlayer.position.x += 48.0f * static_cast<float>(m_playerSessions.size());
   newPlayer.velocity = glm::vec2(0.0f);
-  newPlayer.data.player = PlayerData();
+  resetPlayerRuntimeStatePreservingUnlocks(newPlayer.data.player);
   newPlayer.currentAnimation = ANIM_IDLE;
   newPlayer.presentationVariant = PresentationVariant::Idle;
   state.layers[state.playerLayer].push_back(std::move(newPlayer));
@@ -398,7 +407,7 @@ bool GameServer::respawnPlayer(uint32_t playerID) {
   sessionIt->second.lifecycle = PlayerSessionState::respawning;
   player->position = sessionIt->second.spawnPosition;
   player->velocity = glm::vec2(0.0f);
-  player->data.player = PlayerData();
+  resetPlayerRuntimeStatePreservingUnlocks(player->data.player);
   player->shouldFlash = false;
   player->flashTimer.reset();
   player->grounded = false;
@@ -421,15 +430,17 @@ bool GameServer::respawnPlayer(uint32_t playerID) {
   return true;
 }
 
-void GameServer::removePlayer(uint32_t playerID) {
+bool GameServer::removePlayer(uint32_t playerID) {
   std::scoped_lock lock(m_stateMu);
   if (!m_authCtx || !m_authCtx->state) {
-    return;
+    return false;
   }
 
+  bool changed = false;
   auto& state = *m_authCtx->state;
   if (state.playerLayer >= 0 && state.playerLayer < static_cast<int>(state.layers.size())) {
     auto& layer = state.layers[state.playerLayer];
+    const auto oldSize = layer.size();
     layer.erase(
       std::remove_if(
         layer.begin(),
@@ -438,11 +449,12 @@ void GameServer::removePlayer(uint32_t playerID) {
           return obj.objClass == ObjectClass::Player && obj.id == playerID;
         }),
       layer.end());
+    changed = changed || layer.size() != oldSize;
   }
 
-  m_authCtx->latestPlayerInputs.erase(playerID);
-  m_playerSessions.erase(playerID);
-  broadcastSnapshot();
+  changed = m_authCtx->latestPlayerInputs.erase(playerID) > 0 || changed;
+  changed = m_playerSessions.erase(playerID) > 0 || changed;
+  return changed;
 }
 
 bool GameServer::HasPendingLevelTransition() const {

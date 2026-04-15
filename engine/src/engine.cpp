@@ -416,6 +416,8 @@ void game_engine::Engine::resetMultiplayerNetworkingState() {
     m_discoveryHost.reset();
   }
   if (m_gameClient) {
+    m_gameClient->UnregisterFromServer();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
     m_gameClient.reset();
   }
   if (m_gameServer) {

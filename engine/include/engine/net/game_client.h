@@ -120,6 +120,22 @@ public:
     Send(msg);
   }
 
+  void UnregisterFromServer() {
+    if (!IsConnected() || !m_isRegistered) {
+      return;
+    }
+
+    net::message<GameMsgHeaders> msg;
+    msg.header.id = GameMsgHeaders::Client_UnregisterWithServer;
+    Send(msg);
+
+    m_isRegistered = false;
+    m_isClientValidated = false;
+    m_playerID = 0;
+    m_respawnRequested = false;
+    ClearLatestSnapshot();
+  }
+
   bool CopyLatestSnapshot(NetGameStateSnapshot& out) const {
     std::scoped_lock lock(m_gameStateMu);
     if (!m_hasSnapshot) {

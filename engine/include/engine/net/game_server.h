@@ -62,7 +62,7 @@ public:
   void resetAuthoritativeState(GameState&& initialState, bool refreshSpawnPositions = false);
   bool registerPlayer(uint32_t playerID, SpriteType spriteType);
   bool respawnPlayer(uint32_t playerID);
-  void removePlayer(uint32_t playerID);
+  bool removePlayer(uint32_t playerID);
   bool HasPendingLevelTransition() const;
   std::optional<LevelIndex> ConsumePendingLevelTransition();
 };
