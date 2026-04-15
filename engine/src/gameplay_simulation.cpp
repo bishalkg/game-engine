@@ -976,8 +976,10 @@ void collisionResponse(
                 {objA.objClass, objA.id},
                 {objB.objClass, objB.id},
                 HitStopStrength::Normal);
+              if (rectC.w < rectC.h) {
+                blockHorizontalPassThrough();
+              }
             }
-            blockHorizontalPassThrough();
           } else {
             objA.velocity = glm::vec2(50.0f, 0.0f) * -objA.direction;
           }
