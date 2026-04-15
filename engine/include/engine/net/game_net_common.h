@@ -21,7 +21,7 @@
 
 namespace game_engine {
 
-  static constexpr std::uint16_t VERSION = 1;
+  static constexpr std::uint16_t VERSION = 2;
   static constexpr std::uint16_t MSG_SNAPSHOT = 1;
 
   // use std::ByteWriter, ByteReader to write and read GameStateSnapshot
@@ -173,6 +173,10 @@ namespace game_engine {
             w.write_u32(static_cast<uint32_t>(obj.data.enemy.healthPoints));
             w.write_u32(static_cast<uint32_t>(obj.data.enemy.srcH));
             w.write_u32(static_cast<uint32_t>(obj.data.enemy.srcW));
+            w.write_float(obj.data.enemy.hitStopRemainingSeconds);
+            w.write_float(obj.data.enemy.pendingKnockbackDirection);
+            w.write_float(obj.data.enemy.pendingKnockbackMagnitude);
+            w.write_bool(obj.data.enemy.hasPendingKnockback);
             break;
           }
           case ObjectClass::Level: {
@@ -245,6 +249,10 @@ namespace game_engine {
             obj.data.enemy.healthPoints = r.read_u32();
             obj.data.enemy.srcH = r.read_u32();
             obj.data.enemy.srcW = r.read_u32();
+            obj.data.enemy.hitStopRemainingSeconds = r.read_float();
+            obj.data.enemy.pendingKnockbackDirection = r.read_float();
+            obj.data.enemy.pendingKnockbackMagnitude = r.read_float();
+            obj.data.enemy.hasPendingKnockback = r.read_bool();
             break;
           }
           case ObjectClass::Level: {

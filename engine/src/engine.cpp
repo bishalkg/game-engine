@@ -110,7 +110,25 @@ bool isMultiplayerBootstrapView(UIManager::GameView view) {
 } // namespace
 
 GameObject &game_engine::Engine::getPlayer() {
- return m_gameState.player(LAYER_IDX_CHARACTERS);
+  if (m_gameState.playerLayer >= 0 &&
+      m_gameState.playerLayer < static_cast<int>(m_gameState.layers.size()) &&
+      m_gameState.playerIndex >= 0 &&
+      m_gameState.playerIndex < static_cast<int>(m_gameState.layers[m_gameState.playerLayer].size()) &&
+      m_gameState.layers[m_gameState.playerLayer][m_gameState.playerIndex].objClass == ObjectClass::Player) {
+    return m_gameState.layers[m_gameState.playerLayer][m_gameState.playerIndex];
+  }
+
+  for (int layerIdx = 0; layerIdx < static_cast<int>(m_gameState.layers.size()); ++layerIdx) {
+    for (int objIdx = 0; objIdx < static_cast<int>(m_gameState.layers[layerIdx].size()); ++objIdx) {
+      if (m_gameState.layers[layerIdx][objIdx].objClass == ObjectClass::Player) {
+        m_gameState.playerLayer = layerIdx;
+        m_gameState.playerIndex = objIdx;
+        return m_gameState.layers[layerIdx][objIdx];
+      }
+    }
+  }
+
+  return m_gameState.player(LAYER_IDX_CHARACTERS);
 };
 
 game_engine::Engine::~Engine() {

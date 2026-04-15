@@ -42,7 +42,11 @@ bool equalSnapshots(const game_engine::NetGameObjectSnapshot& a,
       return a.data.enemy.state == b.data.enemy.state &&
              a.data.enemy.healthPoints == b.data.enemy.healthPoints &&
              a.data.enemy.srcH == b.data.enemy.srcH &&
-             a.data.enemy.srcW == b.data.enemy.srcW;
+             a.data.enemy.srcW == b.data.enemy.srcW &&
+             std::fabs(a.data.enemy.hitStopRemainingSeconds - b.data.enemy.hitStopRemainingSeconds) < 1e-5f &&
+             std::fabs(a.data.enemy.pendingKnockbackDirection - b.data.enemy.pendingKnockbackDirection) < 1e-5f &&
+             std::fabs(a.data.enemy.pendingKnockbackMagnitude - b.data.enemy.pendingKnockbackMagnitude) < 1e-5f &&
+             a.data.enemy.hasPendingKnockback == b.data.enemy.hasPendingKnockback;
     case ObjectClass::Projectile:
       return a.data.bullet.state == b.data.bullet.state;
     case ObjectClass::Level:
@@ -114,6 +118,10 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   enemy.data.enemy.healthPoints = 50;
   enemy.data.enemy.srcH = 16;
   enemy.data.enemy.srcW = 24;
+  enemy.data.enemy.hitStopRemainingSeconds = 0.05f;
+  enemy.data.enemy.pendingKnockbackDirection = -1.0f;
+  enemy.data.enemy.pendingKnockbackMagnitude = 90.0f;
+  enemy.data.enemy.hasPendingKnockback = true;
   snap.m_gameObjects[{enemy.type, enemy.id}] = enemy;
 
   NetGameObjectSnapshot bullet{};
@@ -270,6 +278,35 @@ GameObject makePlayer(uint32_t id = 1) {
   return player;
 }
 
+GameObject makeProjectile(
+  uint32_t id,
+  float x,
+  float y,
+  float direction,
+  uint32_t ownerPlayerId = 1) {
+  GameObject bullet(128, 128);
+  bullet.id = id;
+  bullet.objClass = ObjectClass::Projectile;
+  bullet.spriteType = SpriteType::Player_Bonkfather;
+  bullet.drawScale = 2.0f;
+  bullet.colliderNorm = {.x = 0.0f, .y = 0.40f, .w = 0.5f, .h = 0.1f};
+  bullet.applyScale();
+  bullet.data.bullet = BulletData();
+  bullet.data.bullet.ownerPlayerId = ownerPlayerId;
+  bullet.data.bullet.state = BulletState::moving;
+  bullet.dynamic = true;
+  bullet.position = glm::vec2(x, y);
+  bullet.direction = direction;
+  bullet.velocity.x = 200.0f * direction;
+  bullet.animations.resize(2);
+  bullet.animations[ANIM_IDLE] = Animation(9, 1.0f);
+  bullet.animations[ANIM_RUN] = Animation(4, 0.15f);
+  bullet.currentAnimation = ANIM_IDLE;
+  bullet.presentationVariant = PresentationVariant::ProjectileMoving;
+  bullet.spriteFrame = 1;
+  return bullet;
+}
+
 GameObject makeEnemy(float x, int health = 100) {
   GameObject enemy(128, 128);
   enemy.id = 2;
@@ -321,14 +358,14 @@ void testPassiveUltimateChargeGain() {
 
   game_engine::stepGameplaySimulation(state, {}, 1.0f);
 
-  assert(state.layers[1][0].data.player.ultimatePoints == 1);
+  assert(state.layers[1][0].data.player.ultimatePoints == 33);
 }
 
 void testKillRewardGainFromMelee() {
   auto state = makeGameplayState();
   state.layers[0].push_back(makeFloor());
   state.layers[1].push_back(makePlayer());
-  state.layers[1].push_back(makeEnemy(12.0f, 50));
+  state.layers[1].push_back(makeEnemy(12.0f, 10));
 
   std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
   inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .meleePressed = true});
@@ -344,6 +381,7 @@ void testUltimateRequiresFullMeter() {
   state.layers[0].push_back(makeFloor());
   state.layers[1].push_back(makePlayer());
   state.layers[1][0].data.player.ultimatePoints = 99;
+  state.layers[1][0].data.player.unlockedUltimateOne = true;
 
   std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
   inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .ultimatePressed = true});
@@ -360,6 +398,7 @@ void testUltimatePreventsDamage() {
   state.layers[0].push_back(makeHazard());
   state.layers[1].push_back(makePlayer());
   state.layers[1][0].data.player.ultimatePoints = 100;
+  state.layers[1][0].data.player.unlockedUltimateOne = true;
 
   std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
   inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .ultimatePressed = true});
@@ -374,21 +413,22 @@ void testUltimateOnlyHitsEnemyOncePerCast() {
   auto state = makeGameplayState();
   state.layers[0].push_back(makeFloor());
   state.layers[1].push_back(makePlayer());
-  state.layers[1].push_back(makeEnemy(8.0f, 200));
+  state.layers[1].push_back(makeEnemy(8.0f, 20));
   state.layers[1][0].data.player.ultimatePoints = 100;
+  state.layers[1][0].data.player.unlockedUltimateOne = true;
 
   std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
   inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .ultimatePressed = true});
 
   game_engine::stepGameplaySimulation(state, inputs, 0.05f);
-  assert(state.layers[1][1].data.enemy.healthPoints == 200);
+  assert(state.layers[1][1].data.enemy.healthPoints == 20);
 
   inputs[1].ultimatePressed = false;
   game_engine::stepGameplaySimulation(state, inputs, 1.35f);
-  assert(state.layers[1][1].data.enemy.healthPoints == 100);
+  assert(state.layers[1][1].data.enemy.healthPoints == 10);
 
   game_engine::stepGameplaySimulation(state, inputs, 0.05f);
-  assert(state.layers[1][1].data.enemy.healthPoints == 100);
+  assert(state.layers[1][1].data.enemy.healthPoints == 10);
 }
 
 void testUltimateColliderResetsAfterAnimation() {
@@ -396,6 +436,7 @@ void testUltimateColliderResetsAfterAnimation() {
   state.layers[0].push_back(makeFloor());
   state.layers[1].push_back(makePlayer());
   state.layers[1][0].data.player.ultimatePoints = 100;
+  state.layers[1][0].data.player.unlockedUltimateOne = true;
   const SDL_FRect baseCollider = state.layers[1][0].baseCollider;
 
   std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
@@ -411,17 +452,190 @@ void testUltimateColliderResetsAfterAnimation() {
   assert(closeRect(state.layers[1][0].collider, baseCollider));
 }
 
+void testEnemyHitStopSnapshotRoundTrip() {
+  using namespace game_engine;
+  auto snap = makeSnapshot();
+  auto bytes = snap.serealizeNetGameStateSnapshot();
+
+  NetGameStateSnapshot decoded{};
+  decoded.deserealizeNetGameStateSnapshot(bytes);
+
+  const auto enemyKey = std::make_pair(ObjectClass::Enemy, 2u);
+  assert(decoded.m_gameObjects.contains(enemyKey));
+  const auto& enemy = decoded.m_gameObjects.at(enemyKey).data.enemy;
+  assert(std::fabs(enemy.hitStopRemainingSeconds - 0.05f) < 1e-5f);
+  assert(std::fabs(enemy.pendingKnockbackDirection - (-1.0f)) < 1e-5f);
+  assert(std::fabs(enemy.pendingKnockbackMagnitude - 90.0f) < 1e-5f);
+  assert(enemy.hasPendingKnockback);
+}
+
+void testEnemyKnockbackDelayedUntilHitStopEnds() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(12.0f, 100));
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
+  inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .meleePressed = true});
+
+  game_engine::stepGameplaySimulation(state, inputs, 0.05f);
+
+  auto& player = state.layers[1][0];
+  auto& enemy = state.layers[1][1];
+  const float impactX = enemy.position.x;
+  assert(player.data.player.state == PlayerState::swingWeapon);
+  assert(enemy.data.enemy.state == EnemyState::hurt);
+  assert(enemy.data.enemy.healthPoints == 90);
+  assert(enemy.data.enemy.hitStopRemainingSeconds > 0.0f);
+  assert(enemy.data.enemy.hasPendingKnockback);
+  assert(std::fabs(enemy.velocity.x) < 1e-5f);
+
+  inputs[1].meleePressed = false;
+  game_engine::stepGameplaySimulation(state, inputs, 0.01f);
+
+  assert(player.data.player.state == PlayerState::swingWeapon);
+  assert(std::fabs(enemy.position.x - impactX) < 1e-4f);
+  assert(std::fabs(enemy.velocity.x) < 1e-5f);
+  player.position.x -= 100.0f;
+
+  game_engine::stepGameplaySimulation(
+    state,
+    inputs,
+    game_engine::hitStopDurationSeconds(game_engine::HitStopStrength::Normal));
+
+  assert(enemy.data.enemy.hitStopRemainingSeconds == 0.0f);
+  assert(!enemy.data.enemy.hasPendingKnockback);
+  assert(enemy.velocity.x > 0.0f);
+  assert(enemy.position.x > impactX);
+}
+
+void testProjectileHitUsesDelayedEnemyKnockback() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(12.0f, 100));
+  state.bullets.push_back(makeProjectile(9, 12.0f, 20.0f, 1.0f));
+
+  game_engine::stepGameplaySimulation(state, {}, 0.01f);
+
+  auto& enemy = state.layers[1][1];
+  assert(enemy.data.enemy.state == EnemyState::hurt);
+  assert(enemy.data.enemy.hitStopRemainingSeconds > 0.0f);
+  assert(enemy.data.enemy.hasPendingKnockback);
+  assert(std::fabs(enemy.velocity.x) < 1e-5f);
+
+  game_engine::stepGameplaySimulation(
+    state,
+    {},
+    game_engine::hitStopDurationSeconds(game_engine::HitStopStrength::Normal));
+
+  assert(enemy.velocity.x > 0.0f);
+}
+
+void testUltimateHitUsesDelayedEnemyKnockback() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(8.0f, 20));
+  state.layers[1][0].data.player.ultimatePoints = 100;
+  state.layers[1][0].data.player.unlockedUltimateOne = true;
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
+  inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .ultimatePressed = true});
+
+  game_engine::stepGameplaySimulation(state, inputs, 0.05f);
+  inputs[1].ultimatePressed = false;
+  game_engine::stepGameplaySimulation(state, inputs, 1.35f);
+
+  auto& enemy = state.layers[1][1];
+  assert(enemy.data.enemy.state == EnemyState::hurt);
+  assert(enemy.data.enemy.healthPoints == 10);
+  assert(enemy.data.enemy.hitStopRemainingSeconds > 0.0f);
+  assert(enemy.data.enemy.hasPendingKnockback);
+  assert(std::fabs(enemy.velocity.x) < 1e-5f);
+
+  game_engine::stepGameplaySimulation(
+    state,
+    inputs,
+    game_engine::hitStopDurationSeconds(game_engine::HitStopStrength::Heavy));
+
+  assert(enemy.velocity.x > 0.0f);
+}
+
+void testFatalEnemyHitDisablesColliderImmediately() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(12.0f, 10));
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
+  inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .meleePressed = true});
+
+  game_engine::stepGameplaySimulation(state, inputs, 0.05f);
+
+  auto& enemy = state.layers[1][1];
+  assert(enemy.data.enemy.state == EnemyState::dead);
+  assert(enemy.collider.w == 0.0f);
+  assert(enemy.collider.h == 0.0f);
+}
+
+void testDeadEnemyNoLongerBlocksPlayerCollision() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].back().position.x = 0.0f;
+  state.layers[1].push_back(makeEnemy(0.0f, 10));
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> hitInputs;
+  hitInputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .meleePressed = true});
+  game_engine::stepGameplaySimulation(state, hitInputs, 0.05f);
+
+  auto& player = state.layers[1][0];
+  const float beforeMove = player.position.x;
+  std::unordered_map<uint32_t, game_engine::NetGameInput> moveInputs;
+  moveInputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .rightHeld = true});
+  game_engine::stepGameplaySimulation(state, moveInputs, 0.1f);
+
+  assert(player.position.x > beforeMove);
+}
+
+void testDeadEnemyGetsPurgedAfterDeathAnimation() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(12.0f, 10));
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
+  inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .meleePressed = true});
+
+  game_engine::stepGameplaySimulation(state, inputs, 0.05f);
+  assert(state.layers[1].size() == 2);
+
+  inputs[1].meleePressed = false;
+  game_engine::stepGameplaySimulation(state, inputs, 1.0f);
+
+  assert(state.layers[1].size() == 1);
+  assert(state.layers[1][0].objClass == ObjectClass::Player);
+}
+
 } // namespace
 
 int main(){
   testNetGameInputRoundTrip();
   testNetGameStateSnapshotRoundTrip();
+  testEnemyHitStopSnapshotRoundTrip();
   testPassiveUltimateChargeGain();
   testKillRewardGainFromMelee();
   testUltimateRequiresFullMeter();
   testUltimatePreventsDamage();
   testUltimateOnlyHitsEnemyOncePerCast();
   testUltimateColliderResetsAfterAnimation();
+  testEnemyKnockbackDelayedUntilHitStopEnds();
+  testProjectileHitUsesDelayedEnemyKnockback();
+  testUltimateHitUsesDelayedEnemyKnockback();
+  testFatalEnemyHitDisablesColliderImmediately();
+  testDeadEnemyNoLongerBlocksPlayerCollision();
+  testDeadEnemyGetsPurgedAfterDeathAnimation();
   std::cout << "All net_common tests passed\n";
   return 0;
 }

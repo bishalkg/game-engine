@@ -6,6 +6,22 @@
 
 namespace {
 
+const game_engine::LocalHitStopTarget* findFrozenTarget(
+  const game_engine::GameState& gameState,
+  const GameObject& obj) {
+  if (gameState.localHitStop.remainingSeconds <= 0.0f) {
+    return nullptr;
+  }
+
+  for (const auto& target : gameState.localHitStop.targets) {
+    if (target.active && target.objClass == obj.objClass && target.id == obj.id) {
+      return &target;
+    }
+  }
+
+  return nullptr;
+}
+
 class DefaultRenderSystem final : public game::IRenderSystem {
 public:
   void render(
@@ -48,6 +64,8 @@ private:
   void drawObject(game_engine::Engine& engine, GameObject& obj, float deltaTime) {
     auto& gameState = engine.getGameState();
     auto& renderer = engine.getSDLState().renderer;
+    const auto* frozenTarget = findFrozenTarget(gameState, obj);
+    const bool isFrozen = frozenTarget != nullptr;
 
     bool shouldInterpolate = false;
     if (engine.isMultiplayerActive() && obj.dynamic) {
@@ -57,7 +75,8 @@ private:
       shouldInterpolate = !isLocalPlayer;
     }
 
-    if (!obj.renderPositionInitialized) {
+    if (isFrozen) {
+    } else if (!obj.renderPositionInitialized) {
       obj.renderPosition = obj.position;
       obj.renderPositionInitialized = true;
     } else if (shouldInterpolate) {
@@ -73,18 +92,22 @@ private:
       obj.currentAnimation >= 0 &&
       obj.currentAnimation < static_cast<int>(obj.animations.size()) &&
       obj.animations[obj.currentAnimation].getFrameCount() > 0;
-    float srcX = hasActiveAnimation
+    const int spriteFrame = isFrozen ? frozenTarget->frozenSpriteFrame : obj.spriteFrame;
+    float srcX = hasActiveAnimation && !isFrozen
                    ? obj.animations[obj.currentAnimation].currentFrame() * frameW
-                   : (obj.spriteFrame - 1) * frameW;
+                   : (spriteFrame - 1) * frameW;
 
     SDL_FRect src{srcX, 0, frameW, frameH};
 
     float drawW = frameW / obj.drawScale;
     float drawH = frameH / obj.drawScale;
 
+    const glm::vec2 renderPosition =
+      isFrozen ? frozenTarget->frozenRenderPosition : obj.renderPosition;
+
     SDL_FRect dst{
-      obj.renderPosition.x - gameState.mapViewport.x,
-      obj.renderPosition.y - gameState.mapViewport.y,
+      renderPosition.x - gameState.mapViewport.x,
+      renderPosition.y - gameState.mapViewport.y,
       drawW,
       drawH,
     };

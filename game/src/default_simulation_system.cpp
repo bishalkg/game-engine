@@ -33,6 +33,10 @@ struct AudioObjectState {
 using AudioStateMap =
   std::unordered_map<game_engine::GameObjectKey, AudioObjectState, game_engine::GameObjectKeyHash>;
 
+using game_engine::GameObjectKey;
+using game_engine::HitStopStrength;
+using game_engine::LocalHitStopTarget;
+
 struct LayeredDynamicKey {
   uint32_t layer = 0;
   ObjectClass objClass = ObjectClass::Level;
@@ -554,6 +558,101 @@ GameObject* findPlayerById(game_engine::GameState& gameState, uint32_t playerID)
   return nullptr;
 }
 
+GameObject* findObjectByKey(game_engine::GameState& gameState, GameObjectKey key) {
+  for (auto& layer : gameState.layers) {
+    for (auto& obj : layer) {
+      if (obj.objClass == key.first && obj.id == key.second) {
+        return &obj;
+      }
+    }
+  }
+
+  for (auto& bullet : gameState.bullets) {
+    if (bullet.objClass == key.first && bullet.id == key.second) {
+      return &bullet;
+    }
+  }
+
+  return nullptr;
+}
+
+int frozenImpactFrameFor(const GameObject& obj) {
+  const bool hasActiveAnimation =
+    obj.currentAnimation >= 0 &&
+    obj.currentAnimation < static_cast<int>(obj.animations.size()) &&
+    obj.animations[obj.currentAnimation].getFrameCount() > 0;
+  if (!hasActiveAnimation) {
+    return obj.spriteFrame;
+  }
+
+  if (obj.objClass == ObjectClass::Player) {
+    switch (obj.currentAnimation) {
+      case ANIM_SWING:
+      case ANIM_RUN_ATTACK:
+      case ANIM_SWING_2: {
+        const int frameCount = obj.animations[obj.currentAnimation].getFrameCount();
+        return std::max(1, (frameCount / 2) + 1);
+      }
+      default:
+        break;
+    }
+  }
+
+  return obj.animations[obj.currentAnimation].currentFrame() + 1;
+}
+
+void captureFrozenTarget(LocalHitStopTarget& out, GameObject& obj) {
+  out.active = true;
+  out.objClass = obj.objClass;
+  out.id = obj.id;
+  out.frozenRenderPosition =
+    obj.renderPositionInitialized ? obj.renderPosition : obj.position;
+  out.frozenSpriteFrame = frozenImpactFrameFor(obj);
+}
+
+void startLocalHitStop(
+  game_engine::GameState& gameState,
+  GameObjectKey attackerKey,
+  GameObjectKey victimKey,
+  float durationSeconds) {
+  gameState.localHitStop.remainingSeconds = durationSeconds;
+  for (auto& target : gameState.localHitStop.targets) {
+    target = {};
+  }
+
+  std::size_t targetIndex = 0;
+  if (attackerKey.first != ObjectClass::Projectile) {
+    if (GameObject* attacker = findObjectByKey(gameState, attackerKey)) {
+      captureFrozenTarget(gameState.localHitStop.targets[targetIndex++], *attacker);
+    }
+  }
+  if (targetIndex < gameState.localHitStop.targets.size()) {
+    if (GameObject* victim = findObjectByKey(gameState, victimKey)) {
+      captureFrozenTarget(gameState.localHitStop.targets[targetIndex++], *victim);
+    }
+  }
+
+  if (targetIndex == 0) {
+    gameState.localHitStop.remainingSeconds = 0.0f;
+  }
+}
+
+void stepLocalHitStop(game_engine::GameState& gameState, float deltaTime) {
+  if (gameState.localHitStop.remainingSeconds <= 0.0f) {
+    return;
+  }
+
+  gameState.localHitStop.remainingSeconds =
+    std::max(0.0f, gameState.localHitStop.remainingSeconds - deltaTime);
+  if (gameState.localHitStop.remainingSeconds > 0.0f) {
+    return;
+  }
+
+  for (auto& target : gameState.localHitStop.targets) {
+    target = {};
+  }
+}
+
 void playLocalMultiplayerFireAudio(
   game_engine::Engine& engine,
   game::GameResources& resources,
@@ -726,6 +825,7 @@ public:
     float deltaTime,
     const UIManager::UIActions& actions) override {
     SimContext ctx{engine, engine.getGameState(), resources, progService};
+    stepLocalHitStop(ctx.gameState, deltaTime);
 
     if (ctx.gameState.currentView == UIManager::GameView::LevelLoading) {
       return;
@@ -822,6 +922,13 @@ public:
       game_engine::GameplaySimulationHooks hooks;
       hooks.onPortalTriggered = [&](LevelIndex nextLevel) {
         game::switchToLevel(engine, resources, progService, nextLevel);
+      };
+      hooks.onHitConfirmed = [&](GameObjectKey attacker, GameObjectKey victim, HitStopStrength strength) {
+        startLocalHitStop(
+          ctx.gameState,
+          attacker,
+          victim,
+          game_engine::hitStopDurationSeconds(strength));
       };
       hooks.cullProjectilesByViewport = true;
       hooks.projectileViewport = ctx.gameState.mapViewport;
