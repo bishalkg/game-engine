@@ -57,6 +57,20 @@ namespace eng {
 
 namespace game_engine {
 
+  struct LocalHitStopTarget {
+    bool active = false;
+    ObjectClass objClass = ObjectClass::Level;
+    uint32_t id = 0;
+    glm::vec2 frozenRenderPosition{0.0f, 0.0f};
+    int frozenSpriteFrame = 1;
+  };
+
+  struct LocalHitStopState {
+    float remainingSeconds = 0.0f;
+    uint32_t lastSequence = 0;
+    std::array<LocalHitStopTarget, 2> targets{};
+  };
+
   // forward declare
   class GameClient;
 
@@ -110,7 +124,8 @@ namespace game_engine {
         mapViewport(other.mapViewport),
         bg2scroll(other.bg2scroll),
         bg3scroll(other.bg3scroll),
-        bg4scroll(other.bg4scroll)
+        bg4scroll(other.bg4scroll),
+        localHitStop(other.localHitStop)
     {}
 
     GameState& operator=(GameState&& other) noexcept {
@@ -129,6 +144,7 @@ namespace game_engine {
         bg2scroll           = other.bg2scroll;
         bg3scroll           = other.bg3scroll;
         bg4scroll           = other.bg4scroll;
+        localHitStop        = other.localHitStop;
       }
       return *this;
     }
@@ -150,6 +166,7 @@ namespace game_engine {
       int playerLayer, playerIndex;
       SDL_FRect mapViewport; // viewable part of map
       float bg2scroll, bg3scroll, bg4scroll;
+      LocalHitStopState localHitStop;
 
       GameState(const SDLState &state): bg2scroll(0), bg3scroll(0), bg4scroll(0), currentView(UIManager::GameView::MainMenu) {
         playerIndex = -1;

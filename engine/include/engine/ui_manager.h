@@ -29,7 +29,6 @@ namespace UIManager {
       MultiPlayerOptionsMenu, // this menu will show host or client buttons
       MultiplayerBrowse,
       MultiplayerHostWaiting,
-      MultiplayerRespawnWait,
   };
 
   struct MultiplayerSessionDisplay {
@@ -160,7 +159,6 @@ namespace UIManager {
       UIActions drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerBrowse(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerHostWaiting(const UISnapshots& snaps, ImGuiWindowFlags flags);
-      UIActions drawMultiplayerRespawnWait(const UISnapshots& snaps, ImGuiWindowFlags flags);
       float drawCustomSlider(const std::string& label, float currVal, float v_min, float v_max);
 
 

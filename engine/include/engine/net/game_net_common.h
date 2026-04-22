@@ -21,7 +21,7 @@
 
 namespace game_engine {
 
-  static constexpr std::uint16_t VERSION = 1;
+  static constexpr std::uint16_t VERSION = 3;
   static constexpr std::uint16_t MSG_SNAPSHOT = 1;
 
   // use std::ByteWriter, ByteReader to write and read GameStateSnapshot
@@ -114,10 +114,21 @@ namespace game_engine {
     }
   };
 
+  struct NetHitStopEvent {
+    uint32_t sequence = 0;
+    bool active = false;
+    ObjectClass attackerClass = ObjectClass::Level;
+    uint32_t attackerId = 0;
+    ObjectClass victimClass = ObjectClass::Level;
+    uint32_t victimId = 0;
+    HitStopStrength strength = HitStopStrength::Normal;
+  };
+
   struct NetGameStateSnapshot {
     uint64_t serverTick = 0;
     LevelIndex levelId = LevelIndex::LEVEL_1;
     uint64_t m_stateLastUpdatedAt; // when the gameState was last updated, by local or by server msg
+    NetHitStopEvent hitStopEvent;
     std::unordered_map<GameObjectKey, NetGameObjectSnapshot, GameObjectKeyHash> m_gameObjects;
     // std::vector<NetGameObjectSnapshot> m_gameObjects;
     // std::vector<NetGameObjectSnapshot> m_projectiles; // bullets
@@ -131,6 +142,13 @@ namespace game_engine {
       w.write_u64(serverTick);
       w.write_enum<LevelIndex>(levelId);
       w.write_u64(m_stateLastUpdatedAt);
+      w.write_u32(hitStopEvent.sequence);
+      w.write_bool(hitStopEvent.active);
+      w.write_enum<ObjectClass>(hitStopEvent.attackerClass);
+      w.write_u32(hitStopEvent.attackerId);
+      w.write_enum<ObjectClass>(hitStopEvent.victimClass);
+      w.write_u32(hitStopEvent.victimId);
+      w.write_enum<HitStopStrength>(hitStopEvent.strength);
 
       // write the unordered_map
       w.write_u32(m_gameObjects.size());
@@ -173,6 +191,10 @@ namespace game_engine {
             w.write_u32(static_cast<uint32_t>(obj.data.enemy.healthPoints));
             w.write_u32(static_cast<uint32_t>(obj.data.enemy.srcH));
             w.write_u32(static_cast<uint32_t>(obj.data.enemy.srcW));
+            w.write_float(obj.data.enemy.hitStopRemainingSeconds);
+            w.write_float(obj.data.enemy.pendingKnockbackDirection);
+            w.write_float(obj.data.enemy.pendingKnockbackMagnitude);
+            w.write_bool(obj.data.enemy.hasPendingKnockback);
             break;
           }
           case ObjectClass::Level: {
@@ -201,6 +223,13 @@ namespace game_engine {
       serverTick = r.read_u64();
       levelId = r.read_enum<LevelIndex>();
       m_stateLastUpdatedAt = r.read_u64();
+      hitStopEvent.sequence = r.read_u32();
+      hitStopEvent.active = r.read_bool();
+      hitStopEvent.attackerClass = r.read_enum<ObjectClass>();
+      hitStopEvent.attackerId = r.read_u32();
+      hitStopEvent.victimClass = r.read_enum<ObjectClass>();
+      hitStopEvent.victimId = r.read_u32();
+      hitStopEvent.strength = r.read_enum<HitStopStrength>();
 
       size_t length = r.read_u32(); // how many NetGameObjectSnapshot there are
 
@@ -245,6 +274,10 @@ namespace game_engine {
             obj.data.enemy.healthPoints = r.read_u32();
             obj.data.enemy.srcH = r.read_u32();
             obj.data.enemy.srcW = r.read_u32();
+            obj.data.enemy.hitStopRemainingSeconds = r.read_float();
+            obj.data.enemy.pendingKnockbackDirection = r.read_float();
+            obj.data.enemy.pendingKnockbackMagnitude = r.read_float();
+            obj.data.enemy.hasPendingKnockback = r.read_bool();
             break;
           }
           case ObjectClass::Level: {

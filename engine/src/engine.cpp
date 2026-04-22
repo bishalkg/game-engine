@@ -10,6 +10,9 @@ ObjectData cloneObjectData(const GameObject& src) {
   ObjectData data;
   switch (src.objClass) {
     case ObjectClass::Player:
+      // For a union, placement new is the standard correct way.
+      // use the memory at &data.player
+      // construct a PlayerData there by copy-constructing from src.data.player
       new (&data.player) PlayerData(src.data.player);
       break;
     case ObjectClass::Enemy:
@@ -80,7 +83,7 @@ game_engine::GameState cloneAuthoritativeGameState(
 
   dst.layers.reserve(src.layers.size());
   for (const auto& layer : src.layers) {
-    auto& newLayer = dst.layers.emplace_back();
+    auto& newLayer = dst.layers.emplace_back(); // add vector to back and return ref
     newLayer.reserve(layer.size());
     for (const auto& obj : layer) {
       newLayer.push_back(cloneGameObject(obj));
@@ -110,7 +113,25 @@ bool isMultiplayerBootstrapView(UIManager::GameView view) {
 } // namespace
 
 GameObject &game_engine::Engine::getPlayer() {
- return m_gameState.player(LAYER_IDX_CHARACTERS);
+  if (m_gameState.playerLayer >= 0 &&
+      m_gameState.playerLayer < static_cast<int>(m_gameState.layers.size()) &&
+      m_gameState.playerIndex >= 0 &&
+      m_gameState.playerIndex < static_cast<int>(m_gameState.layers[m_gameState.playerLayer].size()) &&
+      m_gameState.layers[m_gameState.playerLayer][m_gameState.playerIndex].objClass == ObjectClass::Player) {
+    return m_gameState.layers[m_gameState.playerLayer][m_gameState.playerIndex];
+  }
+
+  for (int layerIdx = 0; layerIdx < static_cast<int>(m_gameState.layers.size()); ++layerIdx) {
+    for (int objIdx = 0; objIdx < static_cast<int>(m_gameState.layers[layerIdx].size()); ++objIdx) {
+      if (m_gameState.layers[layerIdx][objIdx].objClass == ObjectClass::Player) {
+        m_gameState.playerLayer = layerIdx;
+        m_gameState.playerIndex = objIdx;
+        return m_gameState.layers[layerIdx][objIdx];
+      }
+    }
+  }
+
+  return m_gameState.player(LAYER_IDX_CHARACTERS);
 };
 
 game_engine::Engine::~Engine() {
@@ -262,7 +283,8 @@ void game_engine::Engine::run(eng::IGameRules& rules) {
 }
 
 std::unique_ptr<game_engine::GameServer> game_engine::Engine::buildAuthoritativeStateForServer() {
-  auto authState = cloneAuthoritativeGameState(m_gameState, m_sdlState);
+  GameState authState = cloneAuthoritativeGameState(m_gameState, m_sdlState);
+  // move authState contents to heap via AuthoritativeContext. local variable gets destroyed but thats ok, the contents have been moved.
   return std::make_unique<GameServer>(
     GAME_SERVER_PORT,
     std::make_unique<AuthoritativeContext>(std::move(authState)));
@@ -373,7 +395,10 @@ bool game_engine::Engine::handleMultiplayerConnections() {
       }
     }
 
+    // incoming game snapshots from server
     m_gameClient->ProcessServerMessages();
+
+
     if (m_gameClient->IsClientValidated() && !m_gameClient->IsRegistered()) {
       m_gameClient->RegisterWithServer(m_gameState.selectedPlayerSprite);
       m_multiplayerStatus = "Registering with server...";
@@ -381,6 +406,7 @@ bool game_engine::Engine::handleMultiplayerConnections() {
       m_multiplayerStatus = "Connected";
     }
   }
+
 
   if (m_gameType == Host) {
     const bool hostReady = m_gameClient && m_gameClient->IsRegistered();
@@ -390,10 +416,13 @@ bool game_engine::Engine::handleMultiplayerConnections() {
       m_discoveryHost->updateInfo("LAN Host", m_gameState.currentLevelId, playerCount, GAME_SERVER_PORT);
       m_discoveryHost->setReady(hostReady);
     }
+
+    // once host's server is ready start the game
     if (hostReady && m_gameState.currentView == UIManager::GameView::MultiplayerHostWaiting) {
       m_gameState.currentView = UIManager::GameView::Playing;
     }
   }
+
   return true;
 }
 
@@ -402,6 +431,7 @@ void game_engine::Engine::resetMultiplayerNetworkingState() {
   m_hasSelectedJoinTarget = false;
   isConnectedToServer = false;
   m_serverLoopRunning.store(false);
+  m_gameState.localHitStop = {};
   m_localInput = NetGameInput{};
   m_localInputSeq = 0;
   m_inputSendAccumulator = 0.0f;
@@ -447,6 +477,7 @@ void game_engine::Engine::submitLocalInput(NetGameInput input) {
     input.shouldSendMessage =
       input.leftHeld || input.rightHeld || input.fireHeld || input.jumpPressed ||
       input.meleePressed || input.ultimatePressed;
+
     m_localInput = input;
   }
 }
@@ -490,14 +521,12 @@ void game_engine::Engine::restartMultiplayerSession() {
 
   if (isHostMode() && m_gameServer) {
     synchronizeHostAuthoritativeState();
-    m_gameState.currentView = UIManager::GameView::MultiplayerRespawnWait;
     m_gameServer->broadcastSnapshot();
     return;
   }
 
   if (isClientMode() && m_gameClient) {
     m_gameClient->RequestRespawn();
-    m_gameState.currentView = UIManager::GameView::MultiplayerRespawnWait;
   }
 }
 

@@ -216,6 +216,73 @@ sequenceDiagram
   end
 ```
 
+## Networking Flow (LAN Discovery, Join, and Authoritative State)
+
+This project uses a lightweight UDP LAN discovery channel to populate a browse list, and a separate TCP connection for the real gameplay session. After joining, the client sends time-stamped input commands; the server queues/consumes those inputs during its tick, advances the authoritative simulation, and emits periodic authoritative state snapshots back to each client. The client reads snapshots, keeps a small buffer, and renders an interpolated view of the world.
+
+```mermaid
+sequenceDiagram
+  autonumber
+
+  participant UI as Client UI (Browse/Select/Play)
+  participant DiscC as DiscoveryBrowser (UDP :9001)
+  participant DiscH as DiscoveryHost (UDP :9001)
+  participant Host as Host Engine
+  participant TCP as GameServer (TCP :9000)
+  participant NetC as GameClient (TCP)
+  participant In as Input System
+  participant CInQ as Client Input Queue
+  participant SInQ as Server Input Queue (per client)
+  participant Sim as Server Simulation Tick
+  participant Snap as Snapshot Replication
+  participant Rend as Client Render/Interp
+
+  rect rgb(245,245,245)
+    Note over UI,DiscC: Browse LAN sessions (UDP discovery, no gameplay state)
+    UI->>DiscC: Enter browse screen
+
+    loop every ~750ms
+      DiscC->>DiscH: DiscoveryRequest { magic, version }
+      alt host not ready (server not accepting players yet)
+        DiscH-->>DiscC: (no reply)
+      else host ready
+        DiscH-->>DiscC: DiscoveryResponse { ready=true, hostName, hostIP, gamePort=9000, levelId, playerCount }
+        DiscC->>UI: Insert/update host in browse list (expire stale)
+      end
+    end
+  end
+
+  rect rgb(245,245,245)
+    Note over UI,NetC: Join and initial sync (TCP gameplay connection)
+    UI->>UI: Player selects host + chooses character
+    UI->>NetC: Connect(hostIP:9000)
+    NetC->>TCP: TCP connect
+    TCP-->>NetC: Client_Accepted
+    NetC->>TCP: RegisterWithServer(spriteType)
+    TCP-->>NetC: Client_AssignID
+    TCP-->>NetC: Game_Snapshot (initial full snapshot)
+  end
+
+  rect rgb(245,245,245)
+    Note over In,Rend: Continuous gameplay (inputs -> authoritative sim -> snapshots -> render)
+    loop while playing
+      In->>CInQ: Capture input for this frame (move/aim/actions)
+      CInQ->>NetC: Send InputCmd { clientId, inputSeq, clientTime, buttons/axes }
+      NetC->>TCP: InputCmd (TCP)
+
+      TCP->>SInQ: Enqueue input (per client)
+      Sim->>SInQ: Dequeue inputs up to tickTime
+      Sim->>Sim: Advance authoritative world state (collision/rules)
+      Sim->>Snap: Build snapshot { serverTick, entityStates... }
+      Snap-->>NetC: Game_Snapshot (periodic, authoritative)
+
+      NetC->>Rend: Receive snapshot + buffer by serverTick
+      Rend->>Rend: Interpolate/extrapolate for renderTime
+      Rend->>UI: Render world + UI from buffered snapshots
+    end
+  end
+```
+
 ## How To Start A New Game With This Engine
 
 ### Step-by-step

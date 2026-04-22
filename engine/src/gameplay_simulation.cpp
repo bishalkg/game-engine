@@ -207,6 +207,76 @@ void awardUltimateCharge(GameState& state, uint32_t playerID, int amount) {
   }
 }
 
+void emitHitConfirmed(
+  const GameplaySimulationHooks& hooks,
+  GameObjectKey attacker,
+  GameObjectKey victim,
+  HitStopStrength strength) {
+  if (hooks.onHitConfirmed) {
+    hooks.onHitConfirmed(attacker, victim, strength);
+  }
+}
+
+void clearEnemyPendingKnockback(GameObject& enemy) {
+  if (enemy.objClass != ObjectClass::Enemy) {
+    return;
+  }
+
+  enemy.data.enemy.pendingKnockbackDirection = 0.0f;
+  enemy.data.enemy.pendingKnockbackMagnitude = 0.0f;
+  enemy.data.enemy.hasPendingKnockback = false;
+}
+
+void queueEnemyHitImpact(
+  GameObject& enemy,
+  HitStopStrength strength,
+  float direction,
+  float magnitude) {
+  if (enemy.objClass != ObjectClass::Enemy) {
+    return;
+  }
+
+  auto& enemyData = enemy.data.enemy;
+  enemyData.hitStopRemainingSeconds =
+    std::max(enemyData.hitStopRemainingSeconds, hitStopDurationSeconds(strength));
+  enemyData.pendingKnockbackDirection = direction >= 0.0f ? 1.0f : -1.0f;
+  enemyData.pendingKnockbackMagnitude = std::max(0.0f, magnitude);
+  enemyData.hasPendingKnockback = enemyData.pendingKnockbackMagnitude > 0.0f;
+  enemy.velocity = glm::vec2(0.0f);
+  enemy.acceleration = glm::vec2(0.0f);
+}
+
+void clearDynamicCollider(GameObject& obj) {
+  obj.collider = SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+}
+
+bool stepEnemyHitStop(GameObject& enemy, float deltaTime) {
+  if (enemy.objClass != ObjectClass::Enemy) {
+    return false;
+  }
+
+  auto& enemyData = enemy.data.enemy;
+  if (enemyData.hitStopRemainingSeconds <= 0.0f) {
+    return false;
+  }
+
+  enemyData.hitStopRemainingSeconds =
+    std::max(0.0f, enemyData.hitStopRemainingSeconds - deltaTime);
+  enemy.velocity = glm::vec2(0.0f);
+  enemy.acceleration = glm::vec2(0.0f);
+
+  if (enemyData.hitStopRemainingSeconds > 0.0f) {
+    return true;
+  }
+
+  if (enemyData.hasPendingKnockback && enemyData.state != EnemyState::dead) {
+    enemy.velocity.x =
+      enemyData.pendingKnockbackDirection * enemyData.pendingKnockbackMagnitude;
+  }
+  clearEnemyPendingKnockback(enemy);
+  return false;
+}
+
 struct DamageEnemyResult {
   bool applied = false;
   bool killed = false;
@@ -218,7 +288,10 @@ DamageEnemyResult damageEnemy(
   int damage,
   uint32_t sourcePlayerId = 0,
   uint32_t sourceUltimateCastId = 0,
-  bool ignoreHurtCooldown = false) {
+  bool ignoreHurtCooldown = false,
+  HitStopStrength hitStopStrength = HitStopStrength::Normal,
+  float knockbackDirection = 0.0f,
+  float knockbackMagnitude = 0.0f) {
   DamageEnemyResult result{};
   if (enemy.objClass != ObjectClass::Enemy || enemy.data.enemy.state == EnemyState::dead) {
     return result;
@@ -239,19 +312,21 @@ DamageEnemyResult damageEnemy(
     enemy.data.enemy.lastUltimatePlayerId = sourcePlayerId;
     enemy.data.enemy.lastUltimateCastId = sourceUltimateCastId;
   }
-  enemy.direction *= -1.0f;
   enemy.shouldFlash = true;
   enemy.flashTimer.reset();
   enemy.data.enemy.state = EnemyState::hurt;
   setAnimationAndPresentation(enemy, ANIM_HIT, PresentationVariant::Hit);
   enemy.data.enemy.healthPoints -= damage;
   enemy.data.enemy.damageTimer.reset();
+  queueEnemyHitImpact(enemy, hitStopStrength, knockbackDirection, knockbackMagnitude);
 
   if (enemy.data.enemy.healthPoints <= 0) {
     enemy.data.enemy.healthPoints = 0;
     enemy.data.enemy.state = EnemyState::dead;
     setAnimationAndPresentation(enemy, ANIM_DIE, PresentationVariant::Die);
     enemy.velocity = glm::vec2(0.0f);
+    clearEnemyPendingKnockback(enemy);
+    clearDynamicCollider(enemy);
     result.killed = true;
     if (sourcePlayerId != 0) {
       awardUltimateCharge(state, sourcePlayerId, 33);
@@ -384,7 +459,7 @@ void updateDynamicObject(
     const auto resetSwingState = [&obj]() {
       obj.data.player.swingStage = PlayerSwingStage::None;
       obj.data.player.queuedFollowupSwing = false;
-      obj.data.player.meleeDamage = 50;
+      obj.data.player.meleeDamage = 10;
     };
 
     const auto restoreDefaultPlayerState = [&]() {
@@ -711,6 +786,7 @@ void updateDynamicObject(
     obj.data.bullet.liveTimer.step(deltaTime);
     switch (obj.data.bullet.state) {
       case BulletState::moving: {
+        // TODO: update lifetime of projectiles here
         setPresentation(obj, PresentationVariant::ProjectileMoving);
         const bool outsideViewport =
           hooks.cullProjectilesByViewport &&
@@ -736,9 +812,16 @@ void updateDynamicObject(
     }
   } else if (obj.objClass == ObjectClass::Enemy) {
     auto& enemy = obj.data.enemy;
+    const bool enemyFrozenByHitStop = stepEnemyHitStop(obj, deltaTime);
 
     switch (enemy.state) {
       case EnemyState::idle: {
+        if (enemyFrozenByHitStop) {
+          setAnimation(obj, ANIM_IDLE, false);
+          setPresentation(obj, PresentationVariant::Idle);
+          break;
+        }
+
         GameObject* target = findClosestLivingPlayer(state, obj);
         if (!target) {
           obj.acceleration = glm::vec2(0.0f);
@@ -754,7 +837,6 @@ void updateDynamicObject(
           obj.acceleration = glm::vec2(30.0f, 0.0f);
           setAnimation(obj, ANIM_RUN, false);
           setPresentation(obj, PresentationVariant::Run);
-
           if (enemy.attackTimer.step(deltaTime)) {
             enemy.state = EnemyState::attack;
             setAnimationAndPresentation(obj, ANIM_SWING, PresentationVariant::Swing);
@@ -770,6 +852,9 @@ void updateDynamicObject(
         break;
       }
       case EnemyState::attack:
+        if (enemyFrozenByHitStop) {
+          break;
+        }
         if (enemy.idleTimer.step(deltaTime)) {
           enemy.state = EnemyState::idle;
           setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
@@ -778,6 +863,9 @@ void updateDynamicObject(
         }
         break;
       case EnemyState::hurt:
+        if (enemyFrozenByHitStop) {
+          break;
+        }
         if (enemy.damageTimer.step(deltaTime)) {
           enemy.state = EnemyState::idle;
           setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
@@ -786,7 +874,7 @@ void updateDynamicObject(
         break;
       case EnemyState::dead:
         setPresentation(obj, PresentationVariant::Die);
-        obj.velocity.x = 0.0f;
+        obj.velocity = glm::vec2(0.0f);
         if (obj.currentAnimation != -1 && obj.animations[obj.currentAnimation].isDone()) {
           obj.currentAnimation = -1;
           obj.spriteFrame = 18;
@@ -808,7 +896,7 @@ void updateDynamicObject(
 
   obj.velocity += currDirection * obj.acceleration * deltaTime;
   if (std::abs(obj.velocity.x) > obj.maxSpeedX) {
-    obj.velocity.x = currDirection * obj.maxSpeedX;
+    obj.velocity.x = (obj.velocity.x < 0.0f ? -1.0f : 1.0f) * obj.maxSpeedX;
   }
   obj.position += obj.velocity * deltaTime;
 }
@@ -837,6 +925,40 @@ void collisionResponse(
     }
   };
 
+  const auto blockHorizontalPassThrough = [&]() {
+    if (objA.position.x <= objB.position.x) {
+      objA.position.x -= rectC.w + 0.1f;
+    } else {
+      objA.position.x += rectC.w + 0.1f;
+    }
+    objA.velocity.x = 0.0f;
+  };
+
+  const auto isMovingTowardEnemySide = [&]() {
+    if (objA.velocity.x > 0.0f && objA.position.x <= objB.position.x) {
+      return true;
+    }
+    if (objA.velocity.x < 0.0f && objA.position.x >= objB.position.x) {
+      return true;
+    }
+    return false;
+  };
+
+  const auto shouldBlockSwingPassThrough = [&]() {
+    if (!(rectC.w < rectC.h && isMovingTowardEnemySide())) {
+      return false;
+    }
+
+    const SDL_FRect rectA = collisionRect(objA, objB.objClass);
+    const SDL_FRect rectB = collisionRect(objB, objA.objClass);
+    const float enemyMiddleTop = rectB.y + rectB.h * 0.25f;
+    const float enemyMiddleBottom = rectB.y + rectB.h * 0.75f;
+    const bool overlapsEnemyMiddleBand =
+      rectA.y < enemyMiddleBottom && (rectA.y + rectA.h) > enemyMiddleTop;
+
+    return overlapsEnemyMiddleBand;
+  };
+
   if (objA.objClass == ObjectClass::Player) {
     switch (objB.objClass) {
       case ObjectClass::Level:
@@ -851,16 +973,45 @@ void collisionResponse(
         if (objB.data.enemy.state != EnemyState::dead) {
           if (objA.data.player.state == PlayerState::ultimate) {
             if (isUltimateDamageActive(objA)) {
-              damageEnemy(
+              const DamageEnemyResult result = damageEnemy(
                 state,
                 objB,
-                100,
+                50,
                 objA.id,
                 objA.data.player.activeUltimateCastId,
-                true);
+                true,
+                HitStopStrength::Heavy,
+                objA.direction,
+                enemyKnockbackMagnitude(EnemyImpactType::Ultimate));
+              if (result.applied) {
+                emitHitConfirmed(
+                  hooks,
+                  {objA.objClass, objA.id},
+                  {objB.objClass, objB.id},
+                  HitStopStrength::Heavy);
+              }
             }
           } else if (objA.data.player.state == PlayerState::swingWeapon) {
-            damageEnemy(state, objB, objA.data.player.meleeDamage, objA.id);
+            const DamageEnemyResult result = damageEnemy(
+              state,
+              objB,
+              objA.data.player.meleeDamage,
+              objA.id,
+              0,
+              false,
+              HitStopStrength::Normal,
+              objA.direction,
+              enemyKnockbackMagnitude(EnemyImpactType::Melee));
+            if (result.applied) {
+              emitHitConfirmed(
+                hooks,
+                {objA.objClass, objA.id},
+                {objB.objClass, objB.id},
+                HitStopStrength::Normal);
+            }
+            if (shouldBlockSwingPassThrough()) {
+              blockHorizontalPassThrough();
+            }
           } else {
             objA.velocity = glm::vec2(50.0f, 0.0f) * -objA.direction;
           }
@@ -885,7 +1036,23 @@ void collisionResponse(
     switch (objB.objClass) {
       case ObjectClass::Enemy:
         if (objB.data.enemy.state != EnemyState::dead) {
-          damageEnemy(state, objB, 10, objA.data.bullet.ownerPlayerId);
+          const DamageEnemyResult result = damageEnemy(
+            state,
+            objB,
+            10,
+            objA.data.bullet.ownerPlayerId,
+            0,
+            false,
+            HitStopStrength::Normal,
+            objA.direction,
+            enemyKnockbackMagnitude(EnemyImpactType::Projectile));
+          if (result.applied) {
+            emitHitConfirmed(
+              hooks,
+              {objA.objClass, objA.id},
+              {objB.objClass, objB.id},
+              HitStopStrength::Normal);
+          }
         } else {
           passthrough = true;
         }
@@ -1023,8 +1190,51 @@ void resolveBulletCollisions(
   }
 }
 
+void purgeFinishedDeadEnemies(GameState& state) {
+  for (auto& layer : state.layers) {
+    layer.erase(
+      std::remove_if(
+        layer.begin(),
+        layer.end(),
+        [](const GameObject& obj) {
+          return obj.objClass == ObjectClass::Enemy &&
+                 obj.data.enemy.state == EnemyState::dead &&
+                 obj.currentAnimation == -1;
+        }),
+      layer.end());
+  }
+}
+
 } // namespace
 
+float hitStopDurationSeconds(HitStopStrength strength) {
+  switch (strength) {
+    case HitStopStrength::Heavy:
+      return GameplayImpactTuning::heavyHitStopSeconds;
+    case HitStopStrength::Normal:
+    default:
+      return GameplayImpactTuning::normalHitStopSeconds;
+  }
+}
+
+uint16_t hitStopDurationMs(HitStopStrength strength) {
+  return static_cast<uint16_t>(std::lround(hitStopDurationSeconds(strength) * 1000.0f));
+}
+
+float enemyKnockbackMagnitude(EnemyImpactType impactType) {
+  switch (impactType) {
+    case EnemyImpactType::Projectile:
+      return GameplayImpactTuning::projectileEnemyKnockback;
+    case EnemyImpactType::Ultimate:
+      return GameplayImpactTuning::ultimateEnemyKnockback;
+    case EnemyImpactType::Melee:
+    default:
+      return GameplayImpactTuning::meleeEnemyKnockback;
+  }
+}
+
+// stepGameplaySimulation updates the servers authoritative game state using each players inputs
+// and also updates each enemy and bullet object
 void stepGameplaySimulation(
   GameState& state,
   const std::unordered_map<uint32_t, NetGameInput>& playerInputs,
@@ -1060,6 +1270,8 @@ void stepGameplaySimulation(
       state.bullets.end(),
       [](const GameObject& bullet) { return bullet.data.bullet.state == BulletState::inactive; }),
     state.bullets.end());
+
+  purgeFinishedDeadEnemies(state);
 }
 
 } // namespace game_engine

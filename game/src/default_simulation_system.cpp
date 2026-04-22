@@ -33,6 +33,10 @@ struct AudioObjectState {
 using AudioStateMap =
   std::unordered_map<game_engine::GameObjectKey, AudioObjectState, game_engine::GameObjectKeyHash>;
 
+using game_engine::GameObjectKey;
+using game_engine::LocalHitStopTarget;
+using game_engine::NetHitStopEvent;
+
 struct LayeredDynamicKey {
   uint32_t layer = 0;
   ObjectClass objClass = ObjectClass::Level;
@@ -433,18 +437,13 @@ bool syncAuthoritativeLevel(
     return true;
   }
 
-  const auto resumeView = ctx.gameState.currentView;
   if (!game::switchToLevel(ctx.engine, ctx.resources, ctx.progService, snapshot.levelId)) {
     SDL_Log("Failed to synchronize client to authoritative level %u", static_cast<unsigned>(snapshot.levelId));
     return false;
   }
 
   levelChanged = true;
-  if (resumeView == UIManager::GameView::MultiplayerRespawnWait) {
-    ctx.gameState.currentView = UIManager::GameView::MultiplayerRespawnWait;
-  } else {
-    ctx.gameState.currentView = UIManager::GameView::Playing;
-  }
+  ctx.gameState.currentView = UIManager::GameView::Playing;
   return true;
 }
 
@@ -552,6 +551,124 @@ GameObject* findPlayerById(game_engine::GameState& gameState, uint32_t playerID)
     }
   }
   return nullptr;
+}
+
+GameObject* findObjectByKey(game_engine::GameState& gameState, GameObjectKey key) {
+  for (auto& layer : gameState.layers) {
+    for (auto& obj : layer) {
+      if (obj.objClass == key.first && obj.id == key.second) {
+        return &obj;
+      }
+    }
+  }
+
+  for (auto& bullet : gameState.bullets) {
+    if (bullet.objClass == key.first && bullet.id == key.second) {
+      return &bullet;
+    }
+  }
+
+  return nullptr;
+}
+
+int frozenImpactFrameFor(const GameObject& obj) {
+  const bool hasActiveAnimation =
+    obj.currentAnimation >= 0 &&
+    obj.currentAnimation < static_cast<int>(obj.animations.size()) &&
+    obj.animations[obj.currentAnimation].getFrameCount() > 0;
+  if (!hasActiveAnimation) {
+    return obj.spriteFrame;
+  }
+
+  if (obj.objClass == ObjectClass::Player) {
+    switch (obj.currentAnimation) {
+      case ANIM_SWING:
+      case ANIM_RUN_ATTACK:
+      case ANIM_SWING_2: {
+        const int frameCount = obj.animations[obj.currentAnimation].getFrameCount();
+        return std::max(1, (frameCount / 2) + 1);
+      }
+      default:
+        break;
+    }
+  }
+
+  return obj.animations[obj.currentAnimation].currentFrame() + 1;
+}
+
+void captureFrozenTarget(LocalHitStopTarget& out, GameObject& obj) {
+  out.active = true;
+  out.objClass = obj.objClass;
+  out.id = obj.id;
+  out.frozenRenderPosition =
+    obj.renderPositionInitialized ? obj.renderPosition : obj.position;
+  out.frozenSpriteFrame = frozenImpactFrameFor(obj);
+}
+
+void startLocalHitStop(
+  game_engine::GameState& gameState,
+  GameObjectKey attackerKey,
+  GameObjectKey victimKey,
+  float durationSeconds,
+  uint32_t sequence = 0) {
+  if (sequence != 0 && sequence <= gameState.localHitStop.lastSequence) {
+    return;
+  }
+
+  gameState.localHitStop.remainingSeconds = durationSeconds;
+  if (sequence != 0) {
+    gameState.localHitStop.lastSequence = sequence;
+  }
+  for (auto& target : gameState.localHitStop.targets) {
+    target = {};
+  }
+
+  std::size_t targetIndex = 0;
+  if (attackerKey.first != ObjectClass::Projectile) {
+    if (GameObject* attacker = findObjectByKey(gameState, attackerKey)) {
+      captureFrozenTarget(gameState.localHitStop.targets[targetIndex++], *attacker);
+    }
+  }
+  if (targetIndex < gameState.localHitStop.targets.size()) {
+    if (GameObject* victim = findObjectByKey(gameState, victimKey)) {
+      captureFrozenTarget(gameState.localHitStop.targets[targetIndex++], *victim);
+    }
+  }
+
+  if (targetIndex == 0) {
+    gameState.localHitStop.remainingSeconds = 0.0f;
+  }
+}
+
+void startReplicatedHitStop(
+  game_engine::GameState& gameState,
+  const NetHitStopEvent& event) {
+  if (!event.active) {
+    return;
+  }
+
+  startLocalHitStop(
+    gameState,
+    {event.attackerClass, event.attackerId},
+    {event.victimClass, event.victimId},
+    game_engine::hitStopDurationSeconds(event.strength),
+    event.sequence);
+}
+
+void stepLocalHitStop(game_engine::GameState& gameState, float deltaTime) {
+  if (gameState.localHitStop.remainingSeconds <= 0.0f) {
+    return;
+  }
+
+  gameState.localHitStop.remainingSeconds =
+    std::max(0.0f, gameState.localHitStop.remainingSeconds - deltaTime);
+  if (gameState.localHitStop.remainingSeconds > 0.0f) {
+    return;
+  }
+
+  for (auto& target : gameState.localHitStop.targets) {
+    target = {};
+  }
 }
 
 void playLocalMultiplayerFireAudio(
@@ -725,17 +842,20 @@ public:
     game::ProgressionService& progService,
     float deltaTime,
     const UIManager::UIActions& actions) override {
+
     SimContext ctx{engine, engine.getGameState(), resources, progService};
+    const UIManager::GameView previousView = ctx.gameState.currentView;
+    stepLocalHitStop(ctx.gameState, deltaTime);
 
     if (ctx.gameState.currentView == UIManager::GameView::LevelLoading) {
       return;
     }
 
+    // STOPPED HERE: read this and the serverThread input handling
     if (engine.isMultiplayerActive()) {
       if (auto* client = engine.getGameClient()) {
         if (ctx.gameState.currentView == UIManager::GameView::Playing ||
-            ctx.gameState.currentView == UIManager::GameView::PauseMenu ||
-            ctx.gameState.currentView == UIManager::GameView::MultiplayerRespawnWait) {
+            ctx.gameState.currentView == UIManager::GameView::PauseMenu) {
           engine.setAudioSoundtrack(
             resources.m_currLevel ? resources.m_currLevel->backgroundTrack : nullptr);
         }
@@ -751,17 +871,23 @@ public:
             }
             ctx.gameState.currentView = UIManager::GameView::Playing;
             engine.synchronizeHostAuthoritativeState(true);
-            engine.broadcastHostSnapshot();
+            engine.broadcastHostSnapshot(); // special case broadcast when switching levels
             game_engine::NetGameStateSnapshot hostSnapshot;
+
             if (engine.copyHostSnapshot(hostSnapshot)) {
+
               applyAuthoritativeSnapshot(
                 ctx,
                 hostSnapshot,
                 client->GetPlayerID(),
                 true);
+
+              startReplicatedHitStop(ctx.gameState, hostSnapshot.hitStopEvent);
+
               if (ctx.gameState.playerIndex >= 0) {
                 updateMapViewport(ctx, engine.getPlayer());
               }
+
               if (client->NeedsFullRebuild()) {
                 client->MarkFullRebuildApplied();
               }
@@ -770,6 +896,8 @@ public:
         }
 
         const AudioStateMap before = captureAudioState(ctx.gameState);
+
+        // read in GameState snapshot coming from the server
         client->ProcessServerMessages();
         game_engine::NetGameStateSnapshot latestSnapshot;
         if (client->CopyLatestSnapshot(latestSnapshot)) {
@@ -784,6 +912,7 @@ public:
             latestSnapshot,
             client->GetPlayerID(),
             forceFullRebuild);
+          startReplicatedHitStop(ctx.gameState, latestSnapshot.hitStopEvent);
           if (client->NeedsFullRebuild()) {
             client->MarkFullRebuildApplied();
           }
@@ -793,10 +922,12 @@ public:
             updateMapViewport(ctx, player);
             if (player.data.player.state == PlayerState::dead && player.currentAnimation == -1) {
               ctx.gameState.currentView = UIManager::GameView::GameOver;
-              ctx.engine.setAudioSoundtrack(
-                ctx.resources.m_currLevel ? ctx.resources.m_currLevel->gameOverAudioTrack : nullptr,
-                0);
-            } else if (ctx.gameState.currentView == UIManager::GameView::MultiplayerRespawnWait &&
+              if (previousView != UIManager::GameView::GameOver) {
+                ctx.engine.setAudioSoundtrack(
+                  ctx.resources.m_currLevel ? ctx.resources.m_currLevel->gameOverAudioTrack : nullptr,
+                  0);
+              }
+            } else if (ctx.gameState.currentView == UIManager::GameView::GameOver &&
                        player.data.player.state != PlayerState::dead) {
               ctx.gameState.currentView = UIManager::GameView::Playing;
             }
@@ -823,6 +954,13 @@ public:
       hooks.onPortalTriggered = [&](LevelIndex nextLevel) {
         game::switchToLevel(engine, resources, progService, nextLevel);
       };
+      hooks.onHitConfirmed = [&](GameObjectKey attacker, GameObjectKey victim, HitStopStrength strength) {
+        startLocalHitStop(
+          ctx.gameState,
+          attacker,
+          victim,
+          game_engine::hitStopDurationSeconds(strength));
+      };
       hooks.cullProjectilesByViewport = true;
       hooks.projectileViewport = ctx.gameState.mapViewport;
       game_engine::stepGameplaySimulation(ctx.gameState, playerInputs, deltaTime, hooks);
@@ -831,11 +969,15 @@ public:
       updateMapViewport(ctx, engine.getPlayer());
     }
 
-    if (ctx.gameState.currentView == UIManager::GameView::GameOver) {
+    const bool enteredGameOver =
+      ctx.gameState.currentView == UIManager::GameView::GameOver &&
+      previousView != UIManager::GameView::GameOver;
+    if (enteredGameOver) {
       engine.setAudioSoundtrack(
         resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr,
         0);
-    } else if (ctx.gameState.evaluateGameOver()) {
+    } else if (ctx.gameState.currentView != UIManager::GameView::GameOver &&
+               ctx.gameState.evaluateGameOver()) {
       engine.setAudioSoundtrack(
         resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr,
         0);

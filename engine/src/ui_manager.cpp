@@ -543,21 +543,6 @@ namespace UIManager {
       return act;
   }
 
-  UIActions UI_Manager::drawMultiplayerRespawnWait(const UISnapshots& snaps, ImGuiWindowFlags flags) {
-      UIActions act;
-      act.blockMainGameDraw = true;
-      act.blockGameplayUpdates = true;
-      clearRenderer(sdlState);
-      ImGui::Begin("Respawning", nullptr, flags);
-      ImGui::TextUnformatted("Respawning...");
-      if (!snaps.multiplayerStatus.empty()) {
-        ImGui::TextWrapped("%s", snaps.multiplayerStatus.c_str());
-      }
-      ImGui::End();
-      return act;
-  }
-
-
   UIActions UI_Manager::drawGameOver(const LoadingSnapshot&, ImGuiWindowFlags flags) {
       UIActions act;
       act.stopBackgroundTrack = true;
@@ -669,7 +654,6 @@ namespace UIManager {
         case GameView::MultiPlayerOptionsMenu: return drawMultiplayerOptionsMenu(snaps, flags);
         case GameView::MultiplayerBrowse: return drawMultiplayerBrowse(snaps, flags);
         case GameView::MultiplayerHostWaiting: return drawMultiplayerHostWaiting(snaps, flags);
-        case GameView::MultiplayerRespawnWait: return drawMultiplayerRespawnWait(snaps, flags);
         case GameView::CutScene:
         {
           bool playNextScene = snaps.advanceToNextScene; // user hit return/enter, force advance to next scene

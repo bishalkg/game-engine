@@ -291,7 +291,7 @@ const std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
   {
     LevelIndex::LEVEL_2,
     LevelAssets{
-      .mapPath = "data/maps/level_2/level_2.tmx",
+      .mapPath = "data/maps/level_2/level_2_1.tmx",
       .background4PathName = "background1",
       .background3PathName = "background3",
       .background2PathName = "background4a",

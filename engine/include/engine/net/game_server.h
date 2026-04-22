@@ -39,12 +39,15 @@ public:
 
   std::unordered_map<uint32_t, PlayerSession> m_playerSessions;
   std::vector<uint32_t> m_vGarbageIDs;
-  NetGameStateSnapshot m_currGameSnapshot;
+  NetGameStateSnapshot m_currGameSnapshot; // extracted out of m_authCtx
   net::tsqueue<NetGameInput> m_playerInputQueue;
   std::unique_ptr<AuthoritativeContext> m_authCtx;
   mutable std::recursive_mutex m_stateMu;
   mutable std::mutex m_pendingLevelTransitionMu;
   std::optional<LevelIndex> m_pendingLevelTransition;
+  NetHitStopEvent m_latestHitStopEvent;
+  bool m_hitStopEventDirty = false;
+  uint32_t m_nextHitStopSequence = 1;
 
 protected:
   bool OnClientConnect(std::shared_ptr<net::connection<GameMsgHeaders>> client) override;
@@ -56,7 +59,7 @@ public:
   GameObject* findPlayerById(uint32_t playerID);
   void applyPlayerInputs();
   void step(float deltaTime);
-  void refreshSnapshot();
+  void refreshGameSnapshot();
   void broadcastSnapshot();
   bool copyCurrentSnapshot(NetGameStateSnapshot& out) const;
   void resetAuthoritativeState(GameState&& initialState, bool refreshSpawnPositions = false);

@@ -42,6 +42,11 @@ enum class PresentationVariant : std::uint32_t {
   ProjectileHit,
 };
 
+enum class HitStopStrength : uint8_t {
+  Normal,
+  Heavy,
+};
+
 struct PlayerData {
   PlayerState state;
   Timer damageTimer;
@@ -63,7 +68,7 @@ struct PlayerData {
   bool meleePressedThisFrame = false;
   bool ultimatePressedThisFrame = false;
   bool unlockedUltimateOne = false;
-  int meleeDamage = 50;
+  int meleeDamage = 10;
   uint32_t activeUltimateCastId = 0;
   uint32_t nextUltimateCastId = 1;
 
@@ -102,6 +107,10 @@ struct EnemyData {
   int srcH, srcW;
   uint32_t lastUltimatePlayerId;
   uint32_t lastUltimateCastId;
+  float hitStopRemainingSeconds;
+  float pendingKnockbackDirection;
+  float pendingKnockbackMagnitude;
+  bool hasPendingKnockback;
 
 
   EnemyData(): state(EnemyState::idle), damageTimer(0.4f), attackTimer(1.0), idleTimer(1.0) {
@@ -110,6 +119,10 @@ struct EnemyData {
     srcW = 0;
     lastUltimatePlayerId = 0;
     lastUltimateCastId = 0;
+    hitStopRemainingSeconds = 0.0f;
+    pendingKnockbackDirection = 0.0f;
+    pendingKnockbackMagnitude = 0.0f;
+    hasPendingKnockback = false;
   };
 };
 
