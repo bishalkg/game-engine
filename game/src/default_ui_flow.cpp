@@ -31,6 +31,7 @@ public:
     snaps.multiplayerSessions.clear();
     snaps.multiplayerStatus.clear();
 
+    // set player values for UI view -> TODO helpers
     if (gameState.playerLayer >= 0 &&
         gameState.playerLayer < static_cast<int>(gameState.layers.size()) &&
         gameState.playerIndex >= 0 &&
@@ -55,6 +56,7 @@ public:
         const uint8_t progress = gameState.getLevelLoadProgress();
         snaps.loading.progress01 = std::clamp(progress * 0.01f, 0.0f, 1.0f);
         snaps.loading.done = (progress >= 100);
+        // only set cutscene if available -> TODO helper
         if (resources.m_currLevel && !resources.m_currLevel->cutscenes.empty()) {
           snaps.cutscene = &resources.m_currLevel->cutscenes;
           snaps.cutSceneID = static_cast<int>(resources.m_currLevel->lvlIdx);
@@ -72,6 +74,7 @@ public:
       case UIManager::GameView::CharacterSelect: {
         snaps.deltaTime = deltaTime;
         snaps.cutscene = &resources.characterSelectScene;
+        engine.setAudioSoundtrack(resources.mainMenuTrack);
         snaps.cutSceneID = -4;
         break;
       }
@@ -174,6 +177,8 @@ public:
         SDL_Log("MIX_SetMasterGain failed: %s", SDL_GetError());
       }
     }
+
+    // TODO: IF HOST DIES BOTH PLAYERS RESPAWN FROM START; IF CLIENT DIES ONLY CLIENT STARTS FROM START. CHANGE THIS.
     if (actions.restartLevel && resources.m_currLevel) {
       if (engine.isHostMode()) {
         if (game::switchToLevel(engine, resources, progService, resources.m_currLevelIdx)) {

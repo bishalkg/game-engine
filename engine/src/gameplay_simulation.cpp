@@ -786,6 +786,7 @@ void updateDynamicObject(
     obj.data.bullet.liveTimer.step(deltaTime);
     switch (obj.data.bullet.state) {
       case BulletState::moving: {
+        // TODO: update lifetime of projectiles here
         setPresentation(obj, PresentationVariant::ProjectileMoving);
         const bool outsideViewport =
           hooks.cullProjectilesByViewport &&
@@ -1232,6 +1233,8 @@ float enemyKnockbackMagnitude(EnemyImpactType impactType) {
   }
 }
 
+// stepGameplaySimulation updates the servers authoritative game state using each players inputs
+// and also updates each enemy and bullet object
 void stepGameplaySimulation(
   GameState& state,
   const std::unordered_map<uint32_t, NetGameInput>& playerInputs,

@@ -95,7 +95,7 @@ void markPlayerDeadFromFall(GameObject& player) {
 GameServer::GameServer(uint16_t nPort, std::unique_ptr<AuthoritativeContext> authCtx)
   : net::server_interface<GameMsgHeaders>(nPort),
     m_authCtx(std::move(authCtx)) {
-  refreshSnapshot();
+  refreshGameSnapshot();
 }
 
 bool GameServer::OnClientConnect(std::shared_ptr<net::connection<GameMsgHeaders>> client) {
@@ -197,7 +197,7 @@ void GameServer::applyPlayerInputs() {
       continue;
     }
     sessionIt->second.lastInputSeq = input.inputSeq;
-    m_authCtx->latestPlayerInputs[input.playerID] = input;
+    m_authCtx->latestPlayerInputs[input.playerID] = input; // store only the latest input from each player
   }
 }
 
@@ -207,7 +207,7 @@ void GameServer::step(float deltaTime) {
     return;
   }
 
-  auto& state = *m_authCtx->state;
+  GameState& state = *m_authCtx->state;
   ++m_authCtx->serverTick;
   state.m_stateLastUpdatedAt = m_authCtx->serverTick;
 
@@ -256,7 +256,7 @@ void GameServer::step(float deltaTime) {
   }
 }
 
-void GameServer::refreshSnapshot() {
+void GameServer::refreshGameSnapshot() {
   std::scoped_lock lock(m_stateMu);
   if (!m_authCtx || !m_authCtx->state) {
     return;
@@ -273,7 +273,7 @@ void GameServer::refreshSnapshot() {
 }
 
 void GameServer::broadcastSnapshot() {
-  refreshSnapshot();
+  refreshGameSnapshot();
   net::message<GameMsgHeaders> msg;
   msg.header.id = GameMsgHeaders::Game_Snapshot;
   msg.body = m_currGameSnapshot.serealizeNetGameStateSnapshot();
@@ -290,11 +290,12 @@ bool GameServer::copyCurrentSnapshot(NetGameStateSnapshot& out) const {
   return true;
 }
 
+// rebuilds the host/server’s authoritative game world from a fresh GameState, while preserving the currently connected multiplayer roster.
 void GameServer::resetAuthoritativeState(GameState&& initialState, bool refreshSpawnPositions) {
   std::scoped_lock lock(m_stateMu);
   if (!m_authCtx) {
     m_authCtx = std::make_unique<AuthoritativeContext>(std::move(initialState));
-    refreshSnapshot();
+    refreshGameSnapshot();
     return;
   }
 
@@ -313,7 +314,7 @@ void GameServer::resetAuthoritativeState(GameState&& initialState, bool refreshS
 
   auto& state = *m_authCtx->state;
   if (state.playerLayer < 0 || state.playerLayer >= static_cast<int>(state.layers.size())) {
-    refreshSnapshot();
+    refreshGameSnapshot();
     return;
   }
 
@@ -323,7 +324,7 @@ void GameServer::resetAuthoritativeState(GameState&& initialState, bool refreshS
     layer.end(),
     [](const GameObject& obj) { return obj.objClass == ObjectClass::Player; });
   if (templateIt == layer.end()) {
-    refreshSnapshot();
+    refreshGameSnapshot();
     return;
   }
 
@@ -370,7 +371,7 @@ void GameServer::resetAuthoritativeState(GameState&& initialState, bool refreshS
     m_playerSessions[roster[idx].first].lifecycle = PlayerSessionState::alive;
   }
 
-  refreshSnapshot();
+  refreshGameSnapshot();
 }
 
 bool GameServer::registerPlayer(uint32_t playerID, SpriteType spriteType) {

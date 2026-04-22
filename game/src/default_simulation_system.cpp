@@ -842,6 +842,7 @@ public:
     game::ProgressionService& progService,
     float deltaTime,
     const UIManager::UIActions& actions) override {
+
     SimContext ctx{engine, engine.getGameState(), resources, progService};
     const UIManager::GameView previousView = ctx.gameState.currentView;
     stepLocalHitStop(ctx.gameState, deltaTime);
@@ -850,6 +851,7 @@ public:
       return;
     }
 
+    // STOPPED HERE: read this and the serverThread input handling
     if (engine.isMultiplayerActive()) {
       if (auto* client = engine.getGameClient()) {
         if (ctx.gameState.currentView == UIManager::GameView::Playing ||
@@ -869,18 +871,23 @@ public:
             }
             ctx.gameState.currentView = UIManager::GameView::Playing;
             engine.synchronizeHostAuthoritativeState(true);
-            engine.broadcastHostSnapshot();
+            engine.broadcastHostSnapshot(); // special case broadcast when switching levels
             game_engine::NetGameStateSnapshot hostSnapshot;
+
             if (engine.copyHostSnapshot(hostSnapshot)) {
+
               applyAuthoritativeSnapshot(
                 ctx,
                 hostSnapshot,
                 client->GetPlayerID(),
                 true);
+
               startReplicatedHitStop(ctx.gameState, hostSnapshot.hitStopEvent);
+
               if (ctx.gameState.playerIndex >= 0) {
                 updateMapViewport(ctx, engine.getPlayer());
               }
+
               if (client->NeedsFullRebuild()) {
                 client->MarkFullRebuildApplied();
               }
@@ -889,6 +896,8 @@ public:
         }
 
         const AudioStateMap before = captureAudioState(ctx.gameState);
+
+        // read in GameState snapshot coming from the server
         client->ProcessServerMessages();
         game_engine::NetGameStateSnapshot latestSnapshot;
         if (client->CopyLatestSnapshot(latestSnapshot)) {
