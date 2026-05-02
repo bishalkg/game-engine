@@ -23,6 +23,7 @@ namespace UIManager {
       PauseMenu,
       CutScene,
       CharacterSelect,
+      LevelSection,
       LevelLoading,
       InventoryMenu,
       GameOver,
@@ -156,6 +157,7 @@ namespace UIManager {
       UIActions drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawPausedMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawCharacterSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags);
+      UIActions drawLevelSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerBrowse(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerHostWaiting(const UISnapshots& snaps, ImGuiWindowFlags flags);

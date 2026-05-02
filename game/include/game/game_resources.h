@@ -94,6 +94,10 @@ struct GameResources {
   MIX_Track* mainMenuTrack{nullptr};
   std::vector<UIManager::Cutscene> mainMenuCutscene;
 
+  SDL_Texture* texLevelSelect{};
+  std::shared_ptr<Animation> levelSelectAnim; // not animation in the traditional sense, will select which frame to display depending on player progression
+  std::vector<UIManager::Cutscene> levelSelectCutscene;
+
   SDL_Texture* texCharSelect{};
   std::shared_ptr<Animation> charSelectAnim;
   std::vector<UIManager::Cutscene> characterSelectScene;

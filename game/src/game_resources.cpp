@@ -410,6 +410,20 @@ void GameResources::loadAllAssets(
       },
     };
 
+    texLevelSelect = loadTexture(state.renderer, "data/maps/level_select/level_select.png");
+    levelSelectAnim = std::make_shared<Animation>(5, 1.0f); // TODO we wont step animation every frame. only steps on character progression.
+    levelSelectCutscene = {
+      UIManager::Cutscene{
+        .tex = texLevelSelect,
+        .anim = levelSelectAnim,
+        .scale = 1.0f,
+        .numFrameColumns = 5,
+        .frameH = 360.0f,
+        .frameW = 640.0f,
+        .loopScene = false,
+      },
+    };
+
     texPauseMenu = loadTexture(state.renderer, "data/cutscenes/menu/pause_menu.png");
     pauseMenuAnim = std::make_shared<Animation>(1, 1.0f, 0, true);
     pauseMenuScene = {
