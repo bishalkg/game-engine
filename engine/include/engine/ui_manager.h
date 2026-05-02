@@ -23,7 +23,7 @@ namespace UIManager {
       PauseMenu,
       CutScene,
       CharacterSelect,
-      LevelSection,
+      LevelSelection,
       LevelLoading,
       InventoryMenu,
       GameOver,
@@ -56,6 +56,7 @@ namespace UIManager {
     std::optional<bool> startMultiPlayerHost;
     std::optional<bool> startMultiPlayerClient;
     std::optional<SpriteType> selectedPlayerSprite;
+    std::optional<LevelIndex> selectedLevel;
     std::optional<size_t> selectedSessionIndex;
     std::optional<GameView> nextView;
     bool quitGame = false;

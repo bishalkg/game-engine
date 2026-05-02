@@ -78,6 +78,12 @@ public:
         snaps.cutSceneID = -4;
         break;
       }
+      case UIManager::GameView::LevelSelection: {
+        snaps.deltaTime;
+        snaps.cutscene = &resources.levelSelectCutscene;
+        snaps.cutSceneID = -5;
+        break;
+      }
       case UIManager::GameView::PauseMenu: {
         snaps.deltaTime = deltaTime;
         snaps.cutscene = &resources.pauseMenuScene;

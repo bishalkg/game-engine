@@ -488,6 +488,7 @@ void GameResources::unload() {
   texBulletHit = nullptr;
   texMainMenu = nullptr;
   texCharSelect = nullptr;
+  texLevelSelect = nullptr;
   texPauseMenu = nullptr;
 }
 
