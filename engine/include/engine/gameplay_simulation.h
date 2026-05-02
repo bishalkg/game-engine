@@ -16,9 +16,9 @@ enum class EnemyImpactType : uint8_t {
 };
 
 struct GameplayImpactTuning {
-  static constexpr float normalHitStopSeconds = 10.0f / 60.0f;
-  static constexpr float heavyHitStopSeconds = 20.0f / 60.0f;
-  static constexpr float meleeEnemyKnockback = 20.0f;
+  static constexpr float normalHitStopSeconds = 5.0f / 60.0f;
+  static constexpr float heavyHitStopSeconds = 15.0f / 60.0f;
+  static constexpr float meleeEnemyKnockback = 10.0f;
   static constexpr float projectileEnemyKnockback = 10.0f;
   static constexpr float ultimateEnemyKnockback = 30.0f;
 };
