@@ -417,11 +417,11 @@ namespace UIManager {
     const float refH = scn.frameH;  // texture height
 
     // 2) Measure the button stack in the PNG (in pixels of the art)
-    const float btnOriginX = 75.0f; // left edge of the first green button in the art
-    const float btnOriginY = 110.0f; // top edge of the first button in the art
-    const float btnW_ref   = 95.0f;
-    const float btnH_ref   = 140.0f;
-    const float btnGap_ref = 10.0f;  // vertical gap between buttons
+    const float btnOriginX = 92.0f; // left edge of the first green button in the art
+    const float btnOriginY = 130.0f; // top edge of the first button in the art
+    const float btnW_ref   = 65.0f;
+    const float btnH_ref   = 108.0f;
+    const float btnGap_ref = 40.0f;  // default gap between buttons; mostly using custom for this
 
     // 3) Scale & offset to current window (letterboxed)
     int outW, outH;
@@ -447,26 +447,26 @@ namespace UIManager {
 
     ImVec2 pos(offX + btnOriginX * scale, offY + btnOriginY * scale);
     bool anyHovered = false;
-    auto place = [&](const char* id, auto onClick) {
+    auto place = [&](const char* id, float gap, auto onClick) {
       ImGui::SetCursorScreenPos(pos);
       if (ImGui::Button(id, ImVec2(btnW_ref * scale, btnH_ref * scale))) onClick();
       anyHovered |= ImGui::IsItemHovered();
-      pos.x += (btnH_ref + btnGap_ref) * scale;
+      pos.x += (btnW_ref + gap) * scale;
     };
 
-    place("##level1", [&]{
+    place("##level1", 34, [&]{
       act.selectedLevel = LevelIndex::LEVEL_1;
     });
-    place("##level2", [&]{
+    place("##level2", 34, [&]{
       act.selectedLevel = LevelIndex::LEVEL_2;
     });
-    place("##level3", [&]{
+    place("##level3", 34, [&]{
       act.selectedLevel = LevelIndex::LEVEL_3;
     });
-    place("##level4", [&]{
+    place("##level4", 36, [&]{
       act.selectedLevel = LevelIndex::LEVEL_4;
     });
-    place("##level5", [&]{
+    place("##level5", btnGap_ref, [&]{
       act.selectedLevel = LevelIndex::LEVEL_5;
     });
 
@@ -478,13 +478,13 @@ namespace UIManager {
     }
 
 
-    // act.blockMainGameDraw = true;
+    act.blockMainGameDraw = true;
     // animated backdrop: stepped in renderView before this call
-    // if (cutscenePlr.scenes && !cutscenePlr.scenes->empty()) {
-    //   draw(sdlState, snaps.deltaTime, false, false, 0);
-    // } else {
-    //   ImGui::Render(); // must force render to close out imgui cycle.
-    // }
+    if (cutscenePlr.scenes && !cutscenePlr.scenes->empty()) {
+      draw(sdlState, snaps.deltaTime, false, false, 0);
+    } else {
+      ImGui::Render(); // must force render to close out imgui cycle.
+    }
 
     return act;
 
@@ -514,7 +514,7 @@ namespace UIManager {
     const float btnOriginY = 100.0f; // top edge of the first button in the art
     const float btnW_ref   = 140.0f;
     const float btnH_ref   = 150.0f;
-    const float btnGap_ref = 90.0f;  // vertical gap between buttons
+    const float btnGap_ref = 100.0f;  // vertical gap between buttons
 
     // 3) Scale & offset to current window (letterboxed)
     int outW, outH; SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
@@ -543,7 +543,7 @@ namespace UIManager {
       ImGui::SetCursorScreenPos(pos);
       if (ImGui::Button(id, ImVec2(btnW_ref * scale, btnH_ref * scale))) onClick();
       anyHovered |= ImGui::IsItemHovered();
-      pos.x += (btnH_ref + btnGap_ref) * scale;
+      pos.x += (btnW_ref + btnGap_ref) * scale;
     };
 
     place("##marie", [&]{
