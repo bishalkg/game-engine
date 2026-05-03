@@ -16,6 +16,7 @@ struct IUIFlow {
   virtual UIManager::UIActions update(
     game_engine::Engine& engine,
     GameResources& resources,
+    ProgressionService& progService,
     float deltaTime,
     UIManager::UISnapshots& snaps) = 0;
 

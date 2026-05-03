@@ -85,6 +85,7 @@ namespace UIManager {
     ImVec2 winDims;
     float deltaTime;
     float currVolume;
+    int levelProgressionIdx;
 
     Animation* mainMenuAnim{nullptr};
     SDL_Texture* mainMenuTex{nullptr};
@@ -123,6 +124,8 @@ namespace UIManager {
     void start(int sceneID, const std::vector<Cutscene>* newScenes);
 
     void update(bool playNextScene, float deltaTime, const UISnapshots& snaps);
+
+    void setAnimIndex(int animIdx);
 
     bool isCutsceneComplete();
     bool isCurrentSceneComplete();

@@ -23,6 +23,7 @@ public:
   UIManager::UIActions update(
     game_engine::Engine& engine,
     game::GameResources& resources,
+    game::ProgressionService& progService,
     float deltaTime,
     UIManager::UISnapshots& snaps) override {
     auto& gameState = engine.getGameState();
@@ -79,7 +80,8 @@ public:
         break;
       }
       case UIManager::GameView::LevelSelection: {
-        snaps.deltaTime;
+        snaps.deltaTime = deltaTime;
+        snaps.levelProgressionIdx = static_cast<int>(progService.getLastCompletedLevel());
         snaps.cutscene = &resources.levelSelectCutscene;
         snaps.cutSceneID = -5;
         break;

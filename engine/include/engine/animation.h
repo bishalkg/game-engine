@@ -11,6 +11,8 @@ class Animation
   int frameCount;
   int   loopStart{0};    // first frame to use after the first full playthrough
   bool  holdLast{false};
+  bool hasFixedFrame{false}; // only use if you want to fix a frame manualy; eg. used for level selection
+  int fixedFrameIdx{0};
 
   public:
     Animation() : timer(0), frameCount(0) {}
@@ -36,6 +38,8 @@ class Animation
     int currentFrame() const {
       if (frameCount == 0) return 0;
 
+      if (hasFixedFrame) return fixedFrameIdx;
+
       // Optional: stay on last frame once done
       if (holdLast && timer.isTimedOut()) return frameCount - 1;
 
@@ -55,6 +59,11 @@ class Animation
 
       // int loopIdx = (rawFrame - frameCount) % loopFrames; // wrap within loop segment
       // return loopStart + loopIdx;
+    }
+
+    void setFixedFrameIdx(int frameIdx) {
+      hasFixedFrame = true;
+      fixedFrameIdx = frameIdx;
     }
 
     int getFrameCount() const { return frameCount; }

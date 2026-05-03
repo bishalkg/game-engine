@@ -401,6 +401,10 @@ namespace UIManager {
       cutscenePlr.start(snaps.cutSceneID, snaps.cutscene);
     }
 
+    // set the animation index according to the levels user has unlocked
+    // because progression is sequential, just pass total number of levels completed.
+    cutscenePlr.setAnimIndex(snaps.levelProgressionIdx);
+
     // cutscenePlr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps); // nothing to animate in level
 
     auto scn = cutscenePlr.currScene();
@@ -830,6 +834,11 @@ namespace UIManager {
       sceneIndex = 0;
       doneWithCurrScene = false;
   }
+
+  void CutscenePlayer::setAnimIndex(int animIdx) {
+    if (!scenes || sceneIndex >= scenes->size()) return;
+    scenes->at(sceneIndex).anim->setFixedFrameIdx(animIdx);
+  };
 
   const Cutscene& CutscenePlayer::currScene() {
     static const Cutscene kDummy{nullptr, nullptr, {}, 1, 0, 0.0f, 0.0f, 0.0f, 1.0f};
