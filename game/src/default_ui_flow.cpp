@@ -64,6 +64,12 @@ public:
         }
         break;
       }
+      case UIManager::GameView::PauseMenu: {
+        snaps.deltaTime = deltaTime;
+        snaps.cutscene = &resources.pauseMenuScene;
+        snaps.cutSceneID = -2;
+        break;
+      }
       case UIManager::GameView::MainMenu: {
         snaps.deltaTime = deltaTime;
         snaps.currVolume = resources.m_masterAudioGain;
@@ -81,15 +87,9 @@ public:
       }
       case UIManager::GameView::LevelSelection: {
         snaps.deltaTime = deltaTime;
-        snaps.levelProgressionIdx = static_cast<int>(progService.getLastCompletedLevel());
+        snaps.levelProgressionIdx = progService.getLastCompletedLevel();
         snaps.cutscene = &resources.levelSelectCutscene;
         snaps.cutSceneID = -5;
-        break;
-      }
-      case UIManager::GameView::PauseMenu: {
-        snaps.deltaTime = deltaTime;
-        snaps.cutscene = &resources.pauseMenuScene;
-        snaps.cutSceneID = -2;
         break;
       }
       case UIManager::GameView::MultiplayerBrowse: {
@@ -167,6 +167,16 @@ public:
       if (resources.m_currLevel) {
         (void)game::switchToLevel(engine, resources, progService, resources.m_currLevelIdx);
         if (engine.isHostMode()) {
+          gameState.currentView = UIManager::GameView::MultiplayerHostWaiting;
+        } else if (engine.isClientMode()) {
+          gameState.currentView = UIManager::GameView::Playing;
+        }
+      }
+    }
+    if (actions.selectedLevel.has_value()) {
+      if (resources.m_currLevel) {
+        (void)game::switchToLevel(engine, resources, progService, actions.selectedLevel.value());
+        if (engine.isHostMode()) { // TODO needed here?
           gameState.currentView = UIManager::GameView::MultiplayerHostWaiting;
         } else if (engine.isClientMode()) {
           gameState.currentView = UIManager::GameView::Playing;

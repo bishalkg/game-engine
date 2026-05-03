@@ -85,7 +85,7 @@ namespace UIManager {
     ImVec2 winDims;
     float deltaTime;
     float currVolume;
-    int levelProgressionIdx;
+    LevelIndex levelProgressionIdx;
 
     Animation* mainMenuAnim{nullptr};
     SDL_Texture* mainMenuTex{nullptr};

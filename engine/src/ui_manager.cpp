@@ -403,7 +403,7 @@ namespace UIManager {
 
     // set the animation index according to the levels user has unlocked
     // because progression is sequential, just pass total number of levels completed.
-    cutscenePlr.setAnimIndex(snaps.levelProgressionIdx);
+    cutscenePlr.setAnimIndex(static_cast<int>(snaps.levelProgressionIdx));
 
     // cutscenePlr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps); // nothing to animate in level
 
@@ -453,25 +453,32 @@ namespace UIManager {
       pos.x += (btnW_ref + gap) * scale;
     };
 
+    auto setLevelIfAllowed = [&](LevelIndex nextLevelIdx) {
+      if (nextLevelIdx <= snaps.levelProgressionIdx) {
+        act.selectedLevel = nextLevelIdx;
+        // act.nextView = GameView::Playing;
+      }
+    };
+
     // TODO can only clik on level if its unlocked
     place("##level1", 34, [&]{
-      act.selectedLevel = LevelIndex::LEVEL_1;
+      setLevelIfAllowed(LevelIndex::LEVEL_1);
       // act.nextView = GameView::Playing;
     });
     place("##level2", 34, [&]{
-      act.selectedLevel = LevelIndex::LEVEL_2;
+      setLevelIfAllowed(LevelIndex::LEVEL_2);
       // act.nextView = GameView::Playing;
     });
     place("##level3", 34, [&]{
-      act.selectedLevel = LevelIndex::LEVEL_3;
+      setLevelIfAllowed(LevelIndex::LEVEL_3);
       // act.nextView = GameView::Playing;
     });
     place("##level4", 36, [&]{
-      act.selectedLevel = LevelIndex::LEVEL_4;
+      setLevelIfAllowed(LevelIndex::LEVEL_4);
       // act.nextView = GameView::Playing;
     });
     place("##level5", btnGap_ref, [&]{
-      act.selectedLevel = LevelIndex::LEVEL_5;
+      setLevelIfAllowed(LevelIndex::LEVEL_5);
       // act.nextView = GameView::Playing;
     });
 
