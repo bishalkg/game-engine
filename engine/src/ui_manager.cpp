@@ -404,11 +404,6 @@ namespace UIManager {
     // cutscenePlr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps); // nothing to animate in level
 
     auto scn = cutscenePlr.currScene();
-
-    // draw the ImGuiButtons on top
-
-    // texture will have 4 boxes: lvl 1, 2, 3, final boss -> make this in aseperite or generate
-    // in pixellab with reference
     // we we will need the players current unlocked levels from the save file
     // then we create badges for each unlocked level, only these badges are clickable.
 
@@ -454,20 +449,41 @@ namespace UIManager {
       pos.x += (btnW_ref + gap) * scale;
     };
 
+    // TODO can only clik on level if its unlocked
     place("##level1", 34, [&]{
       act.selectedLevel = LevelIndex::LEVEL_1;
+      // act.nextView = GameView::Playing;
     });
     place("##level2", 34, [&]{
       act.selectedLevel = LevelIndex::LEVEL_2;
+      // act.nextView = GameView::Playing;
     });
     place("##level3", 34, [&]{
       act.selectedLevel = LevelIndex::LEVEL_3;
+      // act.nextView = GameView::Playing;
     });
     place("##level4", 36, [&]{
       act.selectedLevel = LevelIndex::LEVEL_4;
+      // act.nextView = GameView::Playing;
     });
     place("##level5", btnGap_ref, [&]{
       act.selectedLevel = LevelIndex::LEVEL_5;
+      // act.nextView = GameView::Playing;
+    });
+
+    // TODO DRY refactor, reuse placeQuit
+    const float qbtnOriginX = 510.0f; // left edge of the first green button in the art
+    const float qbtnOriginY = 42.0f; // top edge of the first button in the art
+    const float qbtnW_ref   = 60.0f;
+    const float qbtnH_ref   = 17.0f;
+    ImVec2 posQuit(offX + qbtnOriginX * scale, offY + qbtnOriginY * scale);
+    auto placeQuit = [&](const char* id, auto onClick) {
+      ImGui::SetCursorScreenPos(posQuit);
+      if (ImGui::Button(id, ImVec2(qbtnW_ref * scale, qbtnH_ref * scale))) onClick();
+      anyHovered |= ImGui::IsItemHovered();
+    };
+    placeQuit("##quit", [&]{
+      act.nextView = GameView::PauseMenu;
     });
 
     ImGui::PopStyleVar(2);
@@ -477,13 +493,20 @@ namespace UIManager {
       wantsHandCursor = true;
     }
 
+    // TODO conditionally draw backdrop or not depending on if level selection is before game starts
+    // or was from the pause menu
+    bool levelSelectFromPauseMenu = true;
+    if (levelSelectFromPauseMenu) {
+      // for now level can only be accessed once in the game.
 
-    act.blockMainGameDraw = true;
-    // animated backdrop: stepped in renderView before this call
-    if (cutscenePlr.scenes && !cutscenePlr.scenes->empty()) {
-      draw(sdlState, snaps.deltaTime, false, false, 0);
     } else {
-      ImGui::Render(); // must force render to close out imgui cycle.
+      act.blockMainGameDraw = true;
+      // animated backdrop: stepped in renderView before this call
+      if (cutscenePlr.scenes && !cutscenePlr.scenes->empty()) {
+        draw(sdlState, snaps.deltaTime, false, false, 0);
+      } else {
+        ImGui::Render(); // must force render to close out imgui cycle.
+      }
     }
 
     return act;
