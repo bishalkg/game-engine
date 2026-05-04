@@ -173,14 +173,15 @@ public:
         }
       }
     }
-    if (actions.selectedLevel.has_value()) {
-      if (resources.m_currLevel) {
-        (void)game::switchToLevel(engine, resources, progService, actions.selectedLevel.value());
-        if (engine.isHostMode()) { // TODO needed here?
-          gameState.currentView = UIManager::GameView::MultiplayerHostWaiting;
-        } else if (engine.isClientMode()) {
-          gameState.currentView = UIManager::GameView::Playing;
-        }
+    if (actions.selectedLevel.has_value() && resources.m_currLevel) {
+      if (engine.isHostMode() && game::switchToLevel(engine, resources, progService, actions.selectedLevel.value())) {
+        // gameState.currentView = UIManager::GameView::MultiplayerHostWaiting;
+        engine.restartMultiplayerSession();
+      } else if (engine.isClientMode()) {
+        engine.restartMultiplayerSession();
+        // gameState.currentView = UIManager::GameView::Playing;
+      } else {
+         (void)game::switchToLevel(engine, resources, progService, actions.selectedLevel.value());
       }
     }
     if (actions.nextView == UIManager::GameView::MainMenu && engine.isMultiplayerActive()) {
