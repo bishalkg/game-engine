@@ -25,6 +25,12 @@ std::vector<UIAction> UIController::fromEngineActions(const UIManager::UIActions
 
   if (actions.adjustVolume) out.push_back({UIActionType::AdjustVolume, actions.newVolume});
 
+  if (actions.selectedLevel.has_value()) {
+    UIAction action{UIActionType::LevelSelect};
+    action.selectedLevelIdx = actions.selectedLevel;
+    out.push_back(action);
+  }
+
   if (actions.startSinglePlayer.has_value() && *actions.startSinglePlayer) out.push_back({UIActionType::StartSinglePlayer});
 
   if (actions.startMultiPlayerHost.has_value() && *actions.startMultiPlayerHost) out.push_back({UIActionType::StartMultiPlayerHost});
@@ -79,6 +85,7 @@ UIManager::UIActions UIController::toEngineActions(const std::vector<UIAction>& 
       case UIActionType::SelectMultiplayerSession: out.selectedSessionIndex = action.selectedSessionIndex; break;
       case UIActionType::NextView: out.nextView = action.nextView; break;
       case UIActionType::QuitGame: out.quitGame = true; break;
+      case UIActionType::LevelSelect: out.selectedLevel = action.selectedLevelIdx; break;
     }
   }
 

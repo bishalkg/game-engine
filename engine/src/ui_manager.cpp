@@ -369,7 +369,7 @@ namespace UIManager {
         act.nextView = GameView::Playing;
       });
       place("##settings", [&]{ act.nextView = GameView::MultiPlayerOptionsMenu;  });
-      place("##levels", [&]{  });
+      place("##levels", [&]{ act.nextView = GameView::LevelSelection; });
       place("##inventory", [&]{  });
       place("##equipment",  [&]{ });
       place("##shop",   [&]{ });
@@ -390,77 +390,127 @@ namespace UIManager {
       return act;
   }
 
-    UIActions UI_Manager::drawCharacterSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags) {
-      UIActions act;
-      act.blockGameplayUpdates = true;
-      act.drawSceneOverlay = true;
-      act.dimBackground = true;
+  UIActions UI_Manager::drawLevelSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags) {
+    UIActions act;
+    act.blockGameplayUpdates = true;
+    act.drawSceneOverlay = true;
+    act.dimBackground = true;
 
-      // cutscene draws the textures
-      if (snaps.cutSceneID != cutscenePlr.cutSceneID && snaps.cutscene) {
-        cutscenePlr.start(snaps.cutSceneID, snaps.cutscene);
+    // draws the texture
+    if (snaps.cutSceneID != cutscenePlr.cutSceneID && snaps.cutscene) {
+      cutscenePlr.start(snaps.cutSceneID, snaps.cutscene);
+    }
+
+    // set the animation index according to the levels user has unlocked
+    // because progression is sequential, just pass total number of levels completed.
+    cutscenePlr.setAnimIndex(static_cast<int>(snaps.levelProgressionIdx));
+
+    // cutscenePlr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps); // nothing to animate in level
+
+    auto scn = cutscenePlr.currScene();
+    // we we will need the players current unlocked levels from the save file
+    // then we create badges for each unlocked level, only these badges are clickable.
+
+    // 1) Reference = the PNG’s pixel size
+    const float refW = scn.frameW;   // texture width
+    const float refH = scn.frameH;  // texture height
+
+    // 2) Measure the button stack in the PNG (in pixels of the art)
+    const float btnOriginX = 92.0f; // left edge of the first green button in the art
+    const float btnOriginY = 130.0f; // top edge of the first button in the art
+    const float btnW_ref   = 65.0f;
+    const float btnH_ref   = 108.0f;
+    const float btnGap_ref = 40.0f;  // default gap between buttons; mostly using custom for this
+
+    // 3) Scale & offset to current window (letterboxed)
+    int outW, outH;
+    SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
+    float scale  = std::min(outW / refW, outH / refH);
+
+    float offX   = (outW - refW * scale) * 0.5f;
+    float offY   = (outH - refH * scale) * 0.5f;
+
+    // 4) Place buttons in that space
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1,1,1,0.15f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1,1,1,0.25f));
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+    ImGui::SetNextWindowSize(ImVec2(static_cast<float>(outW), static_cast<float>(outH)));
+    ImGui::Begin("##level_select", nullptr,
+        ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
+        ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
+        ImGuiWindowFlags_NoScrollbar);
+
+    ImVec2 pos(offX + btnOriginX * scale, offY + btnOriginY * scale);
+    bool anyHovered = false;
+    auto place = [&](const char* id, float gap, auto onClick) {
+      ImGui::SetCursorScreenPos(pos);
+      if (ImGui::Button(id, ImVec2(btnW_ref * scale, btnH_ref * scale))) onClick();
+      anyHovered |= ImGui::IsItemHovered();
+      pos.x += (btnW_ref + gap) * scale;
+    };
+
+    auto setLevelIfAllowed = [&](LevelIndex nextLevelIdx) {
+      if (nextLevelIdx <= snaps.levelProgressionIdx) {
+        act.selectedLevel = nextLevelIdx;
+        // act.nextView = GameView::Playing;
       }
+    };
 
-      cutscenePlr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
+    // TODO can only clik on level if its unlocked
+    place("##level1", 34, [&]{
+      setLevelIfAllowed(LevelIndex::LEVEL_1);
+      // act.nextView = GameView::Playing;
+    });
+    place("##level2", 34, [&]{
+      setLevelIfAllowed(LevelIndex::LEVEL_2);
+      // act.nextView = GameView::Playing;
+    });
+    place("##level3", 34, [&]{
+      setLevelIfAllowed(LevelIndex::LEVEL_3);
+      // act.nextView = GameView::Playing;
+    });
+    place("##level4", 36, [&]{
+      setLevelIfAllowed(LevelIndex::LEVEL_4);
+      // act.nextView = GameView::Playing;
+    });
+    place("##level5", btnGap_ref, [&]{
+      setLevelIfAllowed(LevelIndex::LEVEL_5);
+      // act.nextView = GameView::Playing;
+    });
 
-      auto scn = cutscenePlr.currScene();
+    // TODO DRY refactor, reuse placeQuit
+    const float qbtnOriginX = 510.0f; // left edge of the first green button in the art
+    const float qbtnOriginY = 42.0f; // top edge of the first button in the art
+    const float qbtnW_ref   = 60.0f;
+    const float qbtnH_ref   = 17.0f;
+    ImVec2 posQuit(offX + qbtnOriginX * scale, offY + qbtnOriginY * scale);
+    auto placeQuit = [&](const char* id, auto onClick) {
+      ImGui::SetCursorScreenPos(posQuit);
+      if (ImGui::Button(id, ImVec2(qbtnW_ref * scale, qbtnH_ref * scale))) onClick();
+      anyHovered |= ImGui::IsItemHovered();
+    };
+    placeQuit("##quit", [&]{
+      act.nextView = GameView::PauseMenu;
+    });
 
-      // 1) Reference = the PNG’s pixel size
-      const float refW = scn.frameW;   // texture width
-      const float refH = scn.frameH;  // texture height
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(4);
+    ImGui::End();
+    if (anyHovered) {
+      wantsHandCursor = true;
+    }
 
-      // 2) Measure the button stack in the PNG (in pixels of the art)
-      const float btnOriginX = 130.0f; // left edge of the first green button in the art
-      const float btnOriginY = 100.0f; // top edge of the first button in the art
-      const float btnW_ref   = 140.0f;
-      const float btnH_ref   = 150.0f;
-      const float btnGap_ref = 90.0f;  // vertical gap between buttons
+    // TODO conditionally draw backdrop or not depending on if level selection is before game starts
+    // or was from the pause menu
+    bool levelSelectFromPauseMenu = true;
+    if (levelSelectFromPauseMenu) {
+      // for now level can only be accessed once in the game.
 
-      // 3) Scale & offset to current window (letterboxed)
-      int outW, outH; SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
-      float scale  = std::min(outW / refW, outH / refH);
-
-      float offX   = (outW - refW * scale) * 0.5f;
-      float offY   = (outH - refH * scale) * 0.5f;
-
-      // 4) Place buttons in that space
-      ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
-      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
-      ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
-      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
-      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1,1,1,0.15f));
-      ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1,1,1,0.25f));
-      ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
-      ImGui::SetNextWindowSize(ImVec2(static_cast<float>(outW), static_cast<float>(outH)));
-      ImGui::Begin("##character_select", nullptr,
-          ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
-          ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
-          ImGuiWindowFlags_NoScrollbar);
-
-      ImVec2 pos(offX + btnOriginX * scale, offY + btnOriginY * scale);
-      bool anyHovered = false;
-      auto place = [&](const char* id, auto onClick) {
-        ImGui::SetCursorScreenPos(pos);
-        if (ImGui::Button(id, ImVec2(btnW_ref * scale, btnH_ref * scale))) onClick();
-        anyHovered |= ImGui::IsItemHovered();
-        pos.x += (btnH_ref + btnGap_ref) * scale;
-      };
-
-      place("##marie", [&]{
-        act.selectedPlayerSprite = SpriteType::Player_Marie;
-      });
-      place("##bonkfather", [&]{
-        act.selectedPlayerSprite = SpriteType::Player_Bonkfather;
-      });
-
-      ImGui::PopStyleVar(2);
-      ImGui::PopStyleColor(4);
-      ImGui::End();
-      if (anyHovered) {
-        wantsHandCursor = true;
-      }
-
-
+    } else {
       act.blockMainGameDraw = true;
       // animated backdrop: stepped in renderView before this call
       if (cutscenePlr.scenes && !cutscenePlr.scenes->empty()) {
@@ -468,9 +518,93 @@ namespace UIManager {
       } else {
         ImGui::Render(); // must force render to close out imgui cycle.
       }
+    }
 
-      return act;
-  }
+    return act;
+
+  };
+
+  UIActions UI_Manager::drawCharacterSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags) {
+    UIActions act;
+    act.blockGameplayUpdates = true;
+    act.drawSceneOverlay = true;
+    act.dimBackground = true;
+
+    // cutscene draws the textures
+    if (snaps.cutSceneID != cutscenePlr.cutSceneID && snaps.cutscene) {
+      cutscenePlr.start(snaps.cutSceneID, snaps.cutscene);
+    }
+
+    cutscenePlr.update(snaps.advanceToNextScene, snaps.deltaTime, snaps);
+
+    auto scn = cutscenePlr.currScene();
+
+    // 1) Reference = the PNG’s pixel size
+    const float refW = scn.frameW;   // texture width
+    const float refH = scn.frameH;  // texture height
+
+    // 2) Measure the button stack in the PNG (in pixels of the art)
+    const float btnOriginX = 130.0f; // left edge of the first green button in the art
+    const float btnOriginY = 100.0f; // top edge of the first button in the art
+    const float btnW_ref   = 140.0f;
+    const float btnH_ref   = 150.0f;
+    const float btnGap_ref = 100.0f;  // vertical gap between buttons
+
+    // 3) Scale & offset to current window (letterboxed)
+    int outW, outH; SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
+    float scale  = std::min(outW / refW, outH / refH);
+
+    float offX   = (outW - refW * scale) * 0.5f;
+    float offY   = (outH - refH * scale) * 0.5f;
+
+    // 4) Place buttons in that space
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1,1,1,0.15f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1,1,1,0.25f));
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+    ImGui::SetNextWindowSize(ImVec2(static_cast<float>(outW), static_cast<float>(outH)));
+    ImGui::Begin("##character_select", nullptr,
+        ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
+        ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
+        ImGuiWindowFlags_NoScrollbar);
+
+    ImVec2 pos(offX + btnOriginX * scale, offY + btnOriginY * scale);
+    bool anyHovered = false;
+    auto place = [&](const char* id, auto onClick) {
+      ImGui::SetCursorScreenPos(pos);
+      if (ImGui::Button(id, ImVec2(btnW_ref * scale, btnH_ref * scale))) onClick();
+      anyHovered |= ImGui::IsItemHovered();
+      pos.x += (btnW_ref + btnGap_ref) * scale;
+    };
+
+    place("##marie", [&]{
+      act.selectedPlayerSprite = SpriteType::Player_Marie;
+    });
+    place("##bonkfather", [&]{
+      act.selectedPlayerSprite = SpriteType::Player_Bonkfather;
+    });
+
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(4);
+    ImGui::End();
+    if (anyHovered) {
+      wantsHandCursor = true;
+    }
+
+
+    act.blockMainGameDraw = true;
+    // animated backdrop: stepped in renderView before this call
+    if (cutscenePlr.scenes && !cutscenePlr.scenes->empty()) {
+      draw(sdlState, snaps.deltaTime, false, false, 0);
+    } else {
+      ImGui::Render(); // must force render to close out imgui cycle.
+    }
+
+    return act;
+}
 
   UIActions UI_Manager::drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags) {
       UIActions act;
@@ -651,6 +785,7 @@ namespace UIManager {
         case GameView::Playing: return drawGameplay(snaps, flags);
         case GameView::InventoryMenu: return drawPausedMenu(snaps, flags);
         case GameView::PauseMenu: return drawPausedMenu(snaps, flags); // same as inventory menu because pauses game
+        case GameView::LevelSelection: return drawLevelSelectScreen(snaps, flags);
         case GameView::MultiPlayerOptionsMenu: return drawMultiplayerOptionsMenu(snaps, flags);
         case GameView::MultiplayerBrowse: return drawMultiplayerBrowse(snaps, flags);
         case GameView::MultiplayerHostWaiting: return drawMultiplayerHostWaiting(snaps, flags);
@@ -706,6 +841,11 @@ namespace UIManager {
       sceneIndex = 0;
       doneWithCurrScene = false;
   }
+
+  void CutscenePlayer::setAnimIndex(int animIdx) {
+    if (!scenes || sceneIndex >= scenes->size()) return;
+    scenes->at(sceneIndex).anim->setFixedFrameIdx(animIdx);
+  };
 
   const Cutscene& CutscenePlayer::currScene() {
     static const Cutscene kDummy{nullptr, nullptr, {}, 1, 0, 0.0f, 0.0f, 0.0f, 1.0f};

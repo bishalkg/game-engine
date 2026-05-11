@@ -24,12 +24,14 @@ enum class UIActionType {
   SelectPlayerCharacter,
   SelectMultiplayerSession,
   NextView,
+  LevelSelect,
   QuitGame,
 };
 
 struct UIAction {
   UIActionType type;
   float value{0.0f};
+  std::optional<LevelIndex> selectedLevelIdx;
   std::optional<SpriteType> selectedPlayerSprite;
   std::optional<size_t> selectedSessionIndex;
   std::optional<UIManager::GameView> nextView;

@@ -9,6 +9,8 @@ enum class LevelIndex: std::uint32_t  {
   LEVEL_1,
   LEVEL_2,
   LEVEL_3,
+  LEVEL_4,
+  LEVEL_5,
 };
 
 const int ANIM_IDLE = 0;

@@ -47,7 +47,7 @@ void GameRules::onUpdate(game_engine::Engine& engine, float deltaTime) {
   auto& uiManager = resources_->m_uiManager;
 
   const UIManager::UIActions engineActions =
-    uiFlow_->update(engine, *resources_, deltaTime, snaps_);
+    uiFlow_->update(engine, *resources_, *progressionService_, deltaTime, snaps_);
 
   const auto gameActions = uiController_.fromEngineActions(engineActions);
   // TODO is from and toEngineActions even required?

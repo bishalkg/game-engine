@@ -23,6 +23,7 @@ public:
   UIManager::UIActions update(
     game_engine::Engine& engine,
     game::GameResources& resources,
+    game::ProgressionService& progService,
     float deltaTime,
     UIManager::UISnapshots& snaps) override {
     auto& gameState = engine.getGameState();
@@ -63,6 +64,12 @@ public:
         }
         break;
       }
+      case UIManager::GameView::PauseMenu: {
+        snaps.deltaTime = deltaTime;
+        snaps.cutscene = &resources.pauseMenuScene;
+        snaps.cutSceneID = -2;
+        break;
+      }
       case UIManager::GameView::MainMenu: {
         snaps.deltaTime = deltaTime;
         snaps.currVolume = resources.m_masterAudioGain;
@@ -78,10 +85,11 @@ public:
         snaps.cutSceneID = -4;
         break;
       }
-      case UIManager::GameView::PauseMenu: {
+      case UIManager::GameView::LevelSelection: {
         snaps.deltaTime = deltaTime;
-        snaps.cutscene = &resources.pauseMenuScene;
-        snaps.cutSceneID = -2;
+        snaps.levelProgressionIdx = progService.getLastCompletedLevel();
+        snaps.cutscene = &resources.levelSelectCutscene;
+        snaps.cutSceneID = -5;
         break;
       }
       case UIManager::GameView::MultiplayerBrowse: {
@@ -163,6 +171,17 @@ public:
         } else if (engine.isClientMode()) {
           gameState.currentView = UIManager::GameView::Playing;
         }
+      }
+    }
+    if (actions.selectedLevel.has_value() && resources.m_currLevel) {
+      if (engine.isHostMode() && game::switchToLevel(engine, resources, progService, actions.selectedLevel.value())) {
+        // gameState.currentView = UIManager::GameView::MultiplayerHostWaiting;
+        engine.restartMultiplayerSession();
+      } else if (engine.isClientMode()) {
+        engine.restartMultiplayerSession();
+        // gameState.currentView = UIManager::GameView::Playing;
+      } else {
+         (void)game::switchToLevel(engine, resources, progService, actions.selectedLevel.value());
       }
     }
     if (actions.nextView == UIManager::GameView::MainMenu && engine.isMultiplayerActive()) {

@@ -642,6 +642,7 @@ void game_engine::Engine::runGameServerLoopThread() {
       ++tickCount;
       accum -= dt;
       if (tickCount % kSnapshotEveryTicks == 0) {
+        tickCount = 0;
         m_gameServer->broadcastSnapshot();
       }
     }

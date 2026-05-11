@@ -851,7 +851,6 @@ public:
       return;
     }
 
-    // STOPPED HERE: read this and the serverThread input handling
     if (engine.isMultiplayerActive()) {
       if (auto* client = engine.getGameClient()) {
         if (ctx.gameState.currentView == UIManager::GameView::Playing ||

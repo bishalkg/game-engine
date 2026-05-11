@@ -23,6 +23,7 @@ namespace UIManager {
       PauseMenu,
       CutScene,
       CharacterSelect,
+      LevelSelection,
       LevelLoading,
       InventoryMenu,
       GameOver,
@@ -55,6 +56,7 @@ namespace UIManager {
     std::optional<bool> startMultiPlayerHost;
     std::optional<bool> startMultiPlayerClient;
     std::optional<SpriteType> selectedPlayerSprite;
+    std::optional<LevelIndex> selectedLevel;
     std::optional<size_t> selectedSessionIndex;
     std::optional<GameView> nextView;
     bool quitGame = false;
@@ -83,6 +85,7 @@ namespace UIManager {
     ImVec2 winDims;
     float deltaTime;
     float currVolume;
+    LevelIndex levelProgressionIdx;
 
     Animation* mainMenuAnim{nullptr};
     SDL_Texture* mainMenuTex{nullptr};
@@ -122,6 +125,8 @@ namespace UIManager {
 
     void update(bool playNextScene, float deltaTime, const UISnapshots& snaps);
 
+    void setAnimIndex(int animIdx);
+
     bool isCutsceneComplete();
     bool isCurrentSceneComplete();
 
@@ -156,6 +161,7 @@ namespace UIManager {
       UIActions drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawPausedMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawCharacterSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags);
+      UIActions drawLevelSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerBrowse(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerHostWaiting(const UISnapshots& snaps, ImGuiWindowFlags flags);
