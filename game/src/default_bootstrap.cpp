@@ -263,6 +263,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           float centerX = objStartingPos.x;
           material.position.x = centerX - material.collider.w * 0.5f;
           material.position.y = feetY - (material.collider.y + material.collider.h);
+
           MaterialType materialType = MaterialType::coin;
           switch (spriteType) {
             case SpriteType::Coin:
@@ -277,6 +278,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           material.data.material = MaterialData(1, materialType);
           material.currentAnimation = res.ANIM_IDLE;
           material.presentationVariant = PresentationVariant::Idle;
+          newLayer.push_back(std::move(material));
         }
 
         if (obj.type == "Player") {
