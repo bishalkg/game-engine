@@ -23,6 +23,10 @@ enum class EnemyState: std::uint32_t {
   idle, hurt, dead, attack
 };
 
+enum class MaterialType: std::uint32_t {
+  healthPotion, manaPotion
+};
+
 enum class PresentationVariant : std::uint32_t {
   Idle,
   Run,
@@ -49,6 +53,7 @@ enum class HitStopStrength : uint8_t {
 
 struct PlayerData {
   PlayerState state;
+  Inventory inventory;
   Timer damageTimer;
   int healthPoints;
   int maxHealthPoints;
@@ -133,12 +138,27 @@ struct BulletData{
   BulletData(): state(BulletState::moving), liveTimer(0.7f), ownerPlayerId(0) {};
 };
 
+struct MaterialData{
+  uint32_t count; // how many of this item player has
+  MaterialType type;
+  MaterialData(uint32_t count): count(count){};
+};
+
+// either an array of all materials
+// or just one of each type
+struct Inventory{
+  // std::vector<MaterialData> consumables;
+  MaterialData healthPotions;
+  MaterialData manaPotiions;
+};
+
 union ObjectData {
   PlayerData player;
   LevelData level;
   EnemyData enemy;
   PortalData portal;
   BulletData bullet;
+  MaterialData material;
 
   ObjectData() { new (&level) LevelData{}; }   // pick one as default
   ~ObjectData() {}  // and destroy the active member appropriately if you change it
@@ -146,7 +166,7 @@ union ObjectData {
 
 enum class ObjectClass : std::uint32_t
 {
-  Player, Level, Portal, Background, Enemy, Projectile
+  Player, Level, Portal, Background, Enemy, Projectile, Material
 };
 
 // define all objects in the game
