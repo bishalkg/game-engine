@@ -12,6 +12,11 @@ const std::unordered_map<std::string, SpriteType> CHARACTER_NAME_TO_SPRITE_TYPE 
   {"Red_Werewolf", SpriteType::Red_Werewolf},
 };
 
+const std::unordered_map<std::string, SpriteType> MATERIAL_NAME_TO_SPRITE_TYPE = {
+  {"Coin", SpriteType::Coin},
+  {"Gem", SpriteType::Gem},
+};
+
 
 const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
   {
@@ -234,6 +239,32 @@ const std::unordered_map<SpriteType, SpriteAssets> ENEMY_CONFIG = {
   },
 };
 
+const std::unordered_map<SpriteType, SpriteAssets> MATERIAL_CONFIG = {
+  {
+    SpriteType::Gem,
+    SpriteAssets{
+      .paths = SpriteAssetPaths{
+        .idleTex = "data/materials/Gem/Idle.png",
+      },
+      .animSettings = {
+        { ANIM_IDLE,{ 1, 1.0f } },
+        // TODO add animation for collected before dissapearing
+      },
+    },
+  },
+  {
+    SpriteType::Coin,
+    SpriteAssets{
+      .paths = SpriteAssetPaths{
+        .idleTex = "data/materials/Coin/Idle.png",
+      },
+      .animSettings = {
+        { ANIM_IDLE,{ 1, 1.0f } },
+        // TODO add animation for collected before dissapearing
+      },
+    },
+  },
+};
 
 const char* DEFAULT_GAME_OVER_SOUND = "data/audio/game_over.mp3";
 
@@ -253,6 +284,7 @@ const std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
       .gameOverAudioPath = DEFAULT_GAME_OVER_SOUND,
       .stepAudioPath = "data/audio/movement/step_grass.wav",
       .enemyTypes = { SpriteType::Minotaur_1,  SpriteType::Skeleton_Warrior},
+      .materialTypes = { SpriteType::Gem, SpriteType::Coin},
       .cutsceneData = {
         {
             .texPath = "data/cutscenes/text_test_3.png",
@@ -300,6 +332,7 @@ const std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
       .gameOverAudioPath = DEFAULT_GAME_OVER_SOUND,
       .stepAudioPath = "data/audio/movement/step_rock.wav",
       .enemyTypes = { SpriteType::Red_Werewolf,  SpriteType::Skeleton_Warrior,SpriteType::Skeleton_Pikeman },
+      .materialTypes = { SpriteType::Gem, SpriteType::Coin},
     },
   },
 };

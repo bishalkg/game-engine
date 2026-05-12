@@ -187,6 +187,22 @@ bool GameResources::loadLevel(
       Animation(attackFrames, attackSeconds);
   }
 
+  for (const SpriteType& material : assets.materialTypes) {
+    const SpriteAssets& spriteAssets = MATERIAL_CONFIG.at(material);
+
+    if (!headless) {
+      m_currLevel->texCharacterMap[material].texIdle =
+        m_currLevel->loadTexture(state.renderer, spriteAssets.paths.idleTex);
+    }
+
+    m_currLevel->texCharacterMap[material].anims.resize(1);
+    auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
+    m_currLevel->texCharacterMap[material].anims[ANIM_IDLE] =
+      Animation(idleFrames, idleSeconds);
+
+    // TODO add animation for collected before dissapearing
+  }
+
   gs.setLevelLoadProgress(60);
   for (const auto& [character, spriteAssets] : SPRITE_CONFIG) {
     if (!headless) {

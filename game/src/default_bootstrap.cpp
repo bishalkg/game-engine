@@ -245,6 +245,40 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           newLayer.push_back(std::move(enemy));
         }
 
+        if (obj.type == "Material") {
+          SpriteType spriteType = MATERIAL_NAME_TO_SPRITE_TYPE.at(obj.name);
+          GameObject material = createObject(
+            1,
+            1,
+            res.m_currLevel->texCharacterMap.at(spriteType).texIdle, // texCharMap also has materials
+            ObjectClass::Material,
+            16,
+            16,
+            0,
+            0);
+          material.id = nextDynamicId++;
+          material.spriteType = spriteType;
+
+          float feetY = objStartingPos.y;
+          float centerX = objStartingPos.x;
+          material.position.x = centerX - material.collider.w * 0.5f;
+          material.position.y = feetY - (material.collider.y + material.collider.h);
+          MaterialType materialType = MaterialType::coin;
+          switch (spriteType) {
+            case SpriteType::Coin:
+              materialType = MaterialType::coin;
+              break;
+            case SpriteType::Gem:
+              materialType = MaterialType::gem;
+            default:
+              break;
+          }
+
+          material.data.material = MaterialData(1, materialType);
+          material.currentAnimation = res.ANIM_IDLE;
+          material.presentationVariant = PresentationVariant::Idle;
+        }
+
         if (obj.type == "Player") {
           SpriteType spriteType = gs.selectedPlayerSprite;
           int texDim = 128;

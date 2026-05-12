@@ -24,7 +24,7 @@ enum class EnemyState: std::uint32_t {
 };
 
 enum class MaterialType: std::uint32_t {
-  healthPotion, manaPotion
+  coin, gem, healthPotion, manaPotion
 };
 
 enum class PresentationVariant : std::uint32_t {
@@ -49,47 +49,6 @@ enum class PresentationVariant : std::uint32_t {
 enum class HitStopStrength : uint8_t {
   Normal,
   Heavy,
-};
-
-struct PlayerData {
-  PlayerState state;
-  Inventory inventory;
-  Timer damageTimer;
-  int healthPoints;
-  int maxHealthPoints;
-  int manaPoints;
-  int maxManaPoints;
-  int ultimatePoints;
-  int maxUltimatePoints;
-  Timer manaRecoveryTimer;
-  Timer healthRecoveryTimer;
-  Timer ultimateRecoveryTimer;
-  Timer weaponTimer;
-  Timer jumpWindupTimer;
-  bool jumpImpulseApplied;
-  bool playLandingFrame = false;
-  PlayerSwingStage swingStage = PlayerSwingStage::None;
-  bool queuedFollowupSwing = false;
-  bool meleePressedThisFrame = false;
-  bool ultimatePressedThisFrame = false;
-  bool unlockedUltimateOne = false;
-  int meleeDamage = 10;
-  uint32_t activeUltimateCastId = 0;
-  uint32_t nextUltimateCastId = 1;
-
-  PlayerData()
-    : damageTimer(0.5f),
-      manaRecoveryTimer(0.2f),
-      healthRecoveryTimer(0.2f),
-      ultimateRecoveryTimer(1.0f),
-      weaponTimer(0.1f),
-      jumpWindupTimer(0.00f) { //unlockedUltimateOne(ultOneUnlocked)
-    state = PlayerState::idle;
-    healthPoints = maxHealthPoints = 100;
-    manaPoints = maxManaPoints = 100;
-    ultimatePoints = 0;
-    maxUltimatePoints = 100;
-  };
 };
 
 struct LevelData {
@@ -141,7 +100,7 @@ struct BulletData{
 struct MaterialData{
   uint32_t count; // how many of this item player has
   MaterialType type;
-  MaterialData(uint32_t count): count(count){};
+  MaterialData(uint32_t count, MaterialType type): count(count), type(type){};
 };
 
 // either an array of all materials
@@ -150,6 +109,51 @@ struct Inventory{
   // std::vector<MaterialData> consumables;
   MaterialData healthPotions;
   MaterialData manaPotiions;
+  MaterialData coins;
+  MaterialData gems;
+  Inventory(): healthPotions(0, MaterialType::healthPotion), manaPotiions(0, MaterialType::manaPotion), coins(0, MaterialType::coin), gems(0, MaterialType::gem) {}
+};
+
+struct PlayerData {
+  PlayerState state;
+  Inventory inventory;
+  Timer damageTimer;
+  int healthPoints;
+  int maxHealthPoints;
+  int manaPoints;
+  int maxManaPoints;
+  int ultimatePoints;
+  int maxUltimatePoints;
+  Timer manaRecoveryTimer;
+  Timer healthRecoveryTimer;
+  Timer ultimateRecoveryTimer;
+  Timer weaponTimer;
+  Timer jumpWindupTimer;
+  bool jumpImpulseApplied;
+  bool playLandingFrame = false;
+  PlayerSwingStage swingStage = PlayerSwingStage::None;
+  bool queuedFollowupSwing = false;
+  bool meleePressedThisFrame = false;
+  bool ultimatePressedThisFrame = false;
+  bool unlockedUltimateOne = false;
+  int meleeDamage = 10;
+  uint32_t activeUltimateCastId = 0;
+  uint32_t nextUltimateCastId = 1;
+
+  PlayerData()
+    : damageTimer(0.5f),
+      manaRecoveryTimer(0.2f),
+      healthRecoveryTimer(0.2f),
+      ultimateRecoveryTimer(1.0f),
+      weaponTimer(0.1f),
+      jumpWindupTimer(0.00f) { //unlockedUltimateOne(ultOneUnlocked)
+    state = PlayerState::idle;
+    healthPoints = maxHealthPoints = 100;
+    manaPoints = maxManaPoints = 100;
+    ultimatePoints = 0;
+    maxUltimatePoints = 100;
+    inventory = Inventory();
+  };
 };
 
 union ObjectData {
