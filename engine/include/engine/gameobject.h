@@ -27,6 +27,10 @@ enum class MaterialType: std::uint32_t {
   coin, gem, healthPotion, manaPotion
 };
 
+enum class MaterialState: std::uint32_t {
+  present, collapsing, collected
+};
+
 enum class PresentationVariant : std::uint32_t {
   Idle,
   Run,
@@ -44,6 +48,9 @@ enum class PresentationVariant : std::uint32_t {
   Die,
   ProjectileMoving,
   ProjectileHit,
+  Present,
+  Collapsing,
+  // Collected
 };
 
 enum class HitStopStrength : uint8_t {
@@ -100,6 +107,7 @@ struct BulletData{
 struct MaterialData{
   uint32_t count; // how many of this item player has
   MaterialType type;
+  MaterialState state = MaterialState::present;
   MaterialData(uint32_t count, MaterialType type): count(count), type(type){};
 };
 

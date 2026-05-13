@@ -245,6 +245,7 @@ const std::unordered_map<SpriteType, SpriteAssets> MATERIAL_CONFIG = {
     SpriteAssets{
       .paths = SpriteAssetPaths{
         .idleTex = "data/materials/Gem/Idle.png",
+        .dieTex = "data/materials/Gem/Shatter.png"
       },
       .animSettings = {
         { ANIM_IDLE, { 4, 0.7f } },
@@ -257,6 +258,7 @@ const std::unordered_map<SpriteType, SpriteAssets> MATERIAL_CONFIG = {
     SpriteAssets{
       .paths = SpriteAssetPaths{
         .idleTex = "data/materials/Coin/Idle.png",
+        .dieTex = "data/materials/Coin/Collapse.png"
       },
       .animSettings = {
         { ANIM_IDLE,{ 7, 0.7f } }, // No animation for coin for now

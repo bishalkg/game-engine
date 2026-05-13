@@ -193,14 +193,20 @@ bool GameResources::loadLevel(
     if (!headless) {
       m_currLevel->texCharacterMap[material].texIdle =
         m_currLevel->loadTexture(state.renderer, spriteAssets.paths.idleTex);
+
+      m_currLevel->texCharacterMap[material].texDie =
+        m_currLevel->loadTexture(state.renderer, spriteAssets.paths.dieTex);
     }
 
-    m_currLevel->texCharacterMap[material].anims.resize(1);
+    m_currLevel->texCharacterMap[material].anims.resize(2);
     auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
     m_currLevel->texCharacterMap[material].anims[ANIM_IDLE] =
       Animation(idleFrames, idleSeconds);
 
-    // TODO add animation for collected before dissapearing
+    auto [collapseFrames, collapseSeconds] = spriteAssets.animSettings.at(ANIM_COLLECT);
+    m_currLevel->texCharacterMap[material].anims[ANIM_COLLECT] =
+      Animation(collapseFrames, collapseSeconds);
+
   }
 
   gs.setLevelLoadProgress(60);

@@ -91,6 +91,11 @@ SDL_Texture* pickEntityTexture(
       return entityRes.texRunAttack ? entityRes.texRunAttack : entityRes.texRun;
     case PresentationVariant::Swing2:
       return entityRes.texAttack2 ? entityRes.texAttack2 : entityRes.texAttack;
+    case PresentationVariant::Collapsing:
+      if (objClass == ObjectClass::Material && entityRes.texDie) {
+        std::cout << "returning collapsing texture" << std::endl;
+        return entityRes.texDie;
+      }
     case PresentationVariant::Ultimate:
       if (entityRes.texUltimate) {
         return entityRes.texUltimate;
