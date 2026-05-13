@@ -828,7 +828,9 @@ void playSimulationAudio(
 void refreshPresentation(game::GameResources& resources, game_engine::GameState& gameState) {
   for (auto& layer : gameState.layers) {
     for (auto& obj : layer) {
-      if (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy) {
+      if (obj.objClass == ObjectClass::Player ||
+          obj.objClass == ObjectClass::Enemy ||
+          obj.objClass == ObjectClass::Material) {
         applyPresentation(resources, obj);
       }
     }

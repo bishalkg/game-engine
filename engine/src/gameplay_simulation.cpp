@@ -207,6 +207,23 @@ void awardUltimateCharge(GameState& state, uint32_t playerID, int amount) {
   }
 }
 
+void awardMaterialToPlayer(GameObject& player, const MaterialData& material) {
+  switch (material.type) {
+    case MaterialType::coin:
+      player.data.player.inventory.coins.count += material.count;
+      break;
+    case MaterialType::gem:
+      player.data.player.inventory.gems.count += material.count;
+      break;
+    case MaterialType::healthPotion:
+      player.data.player.inventory.healthPotions.count += material.count;
+      break;
+    case MaterialType::manaPotion:
+      player.data.player.inventory.manaPotiions.count += material.count;
+      break;
+  }
+}
+
 void emitHitConfirmed(
   const GameplaySimulationHooks& hooks,
   GameObjectKey attacker,
@@ -884,17 +901,14 @@ void updateDynamicObject(
   } else if (obj.objClass == ObjectClass::Material) {
     if (obj.data.material.state == MaterialState::collapsing) {
       std::cout << "entered collapsing state" << std::endl;
-      // obj.texture =
-      setAnimationAndPresentation(obj, ANIM_COLLECT, PresentationVariant::Collapsing);
-      if (obj.currentAnimation != -1 && obj.currentAnimation == ANIM_DIE && obj.animations[obj.currentAnimation].isDone()) {
+      setAnimationAndPresentation(obj, ANIM_COLLECT, PresentationVariant::Collapsing, false);
+      if (obj.currentAnimation != -1 &&
+          obj.currentAnimation == ANIM_COLLECT &&
+          obj.animations[obj.currentAnimation].isDone()) {
         std::cout << "setting material state to collected" << std::endl;
         obj.data.material.state = MaterialState::collected;
         obj.currentAnimation = -1;
       }
-      // set animation to next one
-      // next round it should step
-      // once the animation is done
-      // set the state to collected, and collision code will handle adding to player inventory bc has access to player there
     }
   }
 
@@ -1044,20 +1058,9 @@ void collisionResponse(
           std::cout << "setting material state to collapsing" << std::endl;
           objB.data.material.state = MaterialState::collapsing;
         } else if (objB.data.material.state == MaterialState::collected) {
-          objA.data.player.inventory.coins.count += 1;
-          std::cout << "add coin" << objA.data.player.inventory.coins.count << std::endl;
+          awardMaterialToPlayer(objA, objB.data.material);
+          clearDynamicCollider(objB);
         }
-        // set the animation to next
-        // if animation is done and  if (objB.data.material.state != MaterialState::collected) {
-        //   objB.data.material.state = MaterialState::collected;
-        //   increment players count of this material; save?
-        //.  later it will be removed from the game
-
-        // }
-        // play the collapse animation
-        // after the collapse is done,
-        // remove it from the game
-        // increment players count once
         break;
       case ObjectClass::Player:
       case ObjectClass::Background:

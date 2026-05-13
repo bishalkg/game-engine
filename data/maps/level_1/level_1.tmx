@@ -2169,6 +2169,20 @@
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4383,4384,4385,4386,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 </data>
  </layer>
+ <objectgroup id="7" name="Characters" opacity="0.94">
+  <object id="3" name="Minotaur_1" type="Enemy" x="464.417" y="250.396"/>
+  <object id="4" name="Skeleton_Warrior" type="Enemy" x="520.287" y="401.853"/>
+  <object id="6" name="Skeleton_Warrior" type="Enemy" x="871.889" y="424.24" width="17.1362" height="10.2817"/>
+  <object id="7" name="Minotaur_1" type="Enemy" x="975.195" y="170.013" width="17.1362" height="10.2817"/>
+  <object id="8" name="Skeleton_Warrior" type="Enemy" x="1113" y="426.573" width="17.1362" height="10.2817"/>
+  <object id="9" name="Minotaur_1" type="Enemy" x="1384.38" y="60.5918" width="17.1362" height="10.2817"/>
+  <object id="10" name="Skeleton_Warrior" type="Enemy" x="1743.47" y="420.705" width="17.1362" height="10.2817"/>
+  <object id="11" name="Minotaur_1" type="Enemy" x="2119.93" y="425.373" width="17.1362" height="10.2817"/>
+  <object id="12" name="Skeleton_Warrior" type="Enemy" x="2693.39" y="259.464" width="17.1362" height="10.2817"/>
+  <object id="13" name="Minotaur_1" type="Enemy" x="2940.34" y="262.928" width="17.1362" height="10.2817"/>
+  <object id="15" name="Level_2" type="Portal" x="3052.41" y="405.408" width="23.0818" height="44.8038" rotation="0.902733"/>
+  <object id="16" name="Player_Mage" type="Player" x="57.1953" y="327.321" width="9.20598" height="8.18749"/>
+ </objectgroup>
  <objectgroup id="20" name="Materials">
   <object id="17" name="Coin" type="Material" x="142.478" y="351.711"/>
   <object id="18" name="Coin" type="Material" x="175.728" y="324.927"/>
@@ -2184,20 +2198,6 @@
   <object id="28" name="Coin" type="Material" x="334.973" y="294.594">
    <point/>
   </object>
- </objectgroup>
- <objectgroup id="7" name="Characters" opacity="0.94">
-  <object id="3" name="Minotaur_1" type="Enemy" x="464.417" y="250.396"/>
-  <object id="4" name="Skeleton_Warrior" type="Enemy" x="520.287" y="401.853"/>
-  <object id="6" name="Skeleton_Warrior" type="Enemy" x="871.889" y="424.24" width="17.1362" height="10.2817"/>
-  <object id="7" name="Minotaur_1" type="Enemy" x="975.195" y="170.013" width="17.1362" height="10.2817"/>
-  <object id="8" name="Skeleton_Warrior" type="Enemy" x="1113" y="426.573" width="17.1362" height="10.2817"/>
-  <object id="9" name="Minotaur_1" type="Enemy" x="1384.38" y="60.5918" width="17.1362" height="10.2817"/>
-  <object id="10" name="Skeleton_Warrior" type="Enemy" x="1743.47" y="420.705" width="17.1362" height="10.2817"/>
-  <object id="11" name="Minotaur_1" type="Enemy" x="2119.93" y="425.373" width="17.1362" height="10.2817"/>
-  <object id="12" name="Skeleton_Warrior" type="Enemy" x="2693.39" y="259.464" width="17.1362" height="10.2817"/>
-  <object id="13" name="Minotaur_1" type="Enemy" x="2940.34" y="262.928" width="17.1362" height="10.2817"/>
-  <object id="15" name="Level_2" type="Portal" x="3052.41" y="405.408" width="23.0818" height="44.8038" rotation="0.902733"/>
-  <object id="16" name="Player_Mage" type="Player" x="57.1953" y="327.321" width="9.20598" height="8.18749"/>
  </objectgroup>
  <layer id="2" name="Foreground" width="100" height="17">
   <data encoding="csv">

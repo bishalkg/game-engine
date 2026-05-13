@@ -198,7 +198,7 @@ bool GameResources::loadLevel(
         m_currLevel->loadTexture(state.renderer, spriteAssets.paths.dieTex);
     }
 
-    m_currLevel->texCharacterMap[material].anims.resize(2);
+    m_currLevel->texCharacterMap[material].anims.resize(ANIM_COLLECT + 1);
     auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
     m_currLevel->texCharacterMap[material].anims[ANIM_IDLE] =
       Animation(idleFrames, idleSeconds);
