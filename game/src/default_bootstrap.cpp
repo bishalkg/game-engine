@@ -261,8 +261,9 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
 
           float feetY = objStartingPos.y;
           float centerX = objStartingPos.x;
-          material.position.x = centerX - material.collider.w * 0.5f;
-          material.position.y = feetY - (material.collider.y + material.collider.h);
+
+          material.position.y = objStartingPos.y;
+          material.position.x = centerX + material.collider.w * 0.5f;
 
           MaterialType materialType = MaterialType::coin;
           switch (spriteType) {
@@ -271,12 +272,15 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
               break;
             case SpriteType::Gem:
               materialType = MaterialType::gem;
+              break;
             default:
               break;
           }
 
           material.data.material = MaterialData(1, materialType);
           material.currentAnimation = res.ANIM_IDLE;
+          material.dynamic = true; // materials need to be dynamic to animate and apply collisions
+          material.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
           material.presentationVariant = PresentationVariant::Idle;
           newLayer.push_back(std::move(material));
         }

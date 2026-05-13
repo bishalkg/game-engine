@@ -247,8 +247,8 @@ const std::unordered_map<SpriteType, SpriteAssets> MATERIAL_CONFIG = {
         .idleTex = "data/materials/Gem/Idle.png",
       },
       .animSettings = {
-        { ANIM_IDLE,{ 1, 1.0f } },
-        // TODO add animation for collected before dissapearing
+        { ANIM_IDLE, { 4, 0.7f } },
+        { ANIM_COLLECT, { 5, 0.7f} },
       },
     },
   },
@@ -259,8 +259,8 @@ const std::unordered_map<SpriteType, SpriteAssets> MATERIAL_CONFIG = {
         .idleTex = "data/materials/Coin/Idle.png",
       },
       .animSettings = {
-        { ANIM_IDLE,{ 1, 1.0f } },
-        // TODO add animation for collected before dissapearing
+        { ANIM_IDLE,{ 7, 0.7f } }, // No animation for coin for now
+        { ANIM_COLLECT, { 6, 0.7f} },
       },
     },
   },

@@ -26,6 +26,7 @@ const int ANIM_DIE = 9;
 const int ANIM_RUN_ATTACK = 10;
 const int ANIM_SWING_2 = 11;
 const int ANIM_ULTIMATE = 12;
+const int ANIM_COLLECT = 13;
 
 enum class SpriteType: std::uint32_t {
   // Characters

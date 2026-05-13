@@ -1,0 +1,63 @@
+{
+  "character": {
+    "id": "a09f2dcd-d9e2-4ac7-9794-1b936e9e5df2",
+    "name": "large purple dragon",
+    "prompt": "large purple dragon",
+    "size": {
+      "width": 160,
+      "height": 160
+    },
+    "template_id": "horse",
+    "directions": 8,
+    "view": "side",
+    "created_at": "2026-02-17T03:18:28.150386+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "south-east": "rotations/south-east.png",
+      "east": "rotations/east.png",
+      "north-east": "rotations/north-east.png",
+      "north": "rotations/north.png",
+      "north-west": "rotations/north-west.png",
+      "west": "rotations/west.png",
+      "south-west": "rotations/south-west.png"
+    },
+    "animations": {
+      "animation-95d133fb": {
+        "west": [
+          "animations/animation-95d133fb/west/frame_000.png",
+          "animations/animation-95d133fb/west/frame_001.png",
+          "animations/animation-95d133fb/west/frame_002.png",
+          "animations/animation-95d133fb/west/frame_003.png",
+          "animations/animation-95d133fb/west/frame_004.png",
+          "animations/animation-95d133fb/west/frame_005.png"
+        ]
+      },
+      "Stand_Up-1c30be2a": {
+        "west": [
+          "animations/Stand_Up-1c30be2a/west/frame_000.png",
+          "animations/Stand_Up-1c30be2a/west/frame_001.png",
+          "animations/Stand_Up-1c30be2a/west/frame_002.png",
+          "animations/Stand_Up-1c30be2a/west/frame_003.png",
+          "animations/Stand_Up-1c30be2a/west/frame_004.png",
+          "animations/Stand_Up-1c30be2a/west/frame_005.png"
+        ]
+      },
+      "Attack-03c4f5cf": {
+        "west": [
+          "animations/Attack-03c4f5cf/west/frame_000.png",
+          "animations/Attack-03c4f5cf/west/frame_001.png",
+          "animations/Attack-03c4f5cf/west/frame_002.png",
+          "animations/Attack-03c4f5cf/west/frame_003.png",
+          "animations/Attack-03c4f5cf/west/frame_004.png",
+          "animations/Attack-03c4f5cf/west/frame_005.png",
+          "animations/Attack-03c4f5cf/west/frame_006.png",
+          "animations/Attack-03c4f5cf/west/frame_007.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-09T03:07:23.433480"
+}

@@ -403,7 +403,7 @@ void updateDynamicObject(
 
   clearFlash(obj, deltaTime);
 
-  if (obj.dynamic && !obj.grounded) {
+  if (obj.dynamic && !obj.grounded && obj.objClass != ObjectClass::Material && obj.objClass != ObjectClass::Projectile) {
     obj.velocity += Engine::GRAVITY * deltaTime;
   }
 

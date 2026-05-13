@@ -67,10 +67,6 @@
 # debug information files
 *.dwo
 
-
-/data/idle_*
-/data/move*
-/data/*
 *notes.txt
 
 /.DS_Store
