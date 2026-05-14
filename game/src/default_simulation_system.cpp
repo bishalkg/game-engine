@@ -29,6 +29,8 @@ struct AudioObjectState {
   MaterialType materialType = MaterialType::none;
   int healthPoints = 0;
   int manaPoints = 0;
+  uint32_t coinCount = 0;
+  uint32_t gemCount = 0;
   bool jumpImpulseApplied = false;
 };
 
@@ -536,6 +538,8 @@ AudioStateMap captureAudioState(const game_engine::GameState& gameState) {
         state.playerState = obj.data.player.state;
         state.healthPoints = obj.data.player.healthPoints;
         state.manaPoints = obj.data.player.manaPoints;
+        state.coinCount = obj.data.player.inventory.coins.count;
+        state.gemCount = obj.data.player.inventory.gems.count;
         state.jumpImpulseApplied = obj.data.player.jumpImpulseApplied;
       } else if (obj.objClass == ObjectClass::Enemy) {
         state.enemyState = obj.data.enemy.state;
@@ -727,7 +731,8 @@ void playSimulationAudio(
   game_engine::GameState& gameState,
   uint32_t localPlayerID,
   float deltaTime,
-  bool playLocalShotAudioFromStateDiff = false) {
+  bool playLocalShotAudioFromStateDiff = false,
+  bool playMaterialCollectAudioFromStateDiff = true) {
   resources.stepAudioCooldown.step(deltaTime);
 
   GameObject* localPlayer = findPlayerById(gameState, localPlayerID);
@@ -769,6 +774,15 @@ void playSimulationAudio(
         MIX_PlayAudio(resources.mixer, resources.audioShoot);
       }
 
+      if (localPlayer->data.player.inventory.coins.count > prev.coinCount &&
+          resources.audioCoinCollect) {
+        MIX_PlayAudio(resources.mixer, resources.audioCoinCollect);
+      }
+      if (localPlayer->data.player.inventory.gems.count > prev.gemCount &&
+          resources.audioGemCollect) {
+        MIX_PlayAudio(resources.mixer, resources.audioGemCollect);
+      }
+
       if (localPlayer->data.player.healthPoints < prev.healthPoints && resources.boneImpactHitTrack) {
         MIX_PlayTrack(resources.boneImpactHitTrack, 0);
       }
@@ -789,9 +803,6 @@ void playSimulationAudio(
   bool enemyDied = false;
   bool enemyDamagedByMelee = false;
   bool localPlayerDied = false;
-  bool coinCollected = false;
-  bool gemCollected = false;
-
   AudioStateMap after = captureAudioState(gameState);
   for (const auto& [key, prev] : before) {
     const auto afterIt = after.find(key);
@@ -805,13 +816,16 @@ void playSimulationAudio(
         curr.bulletState == BulletState::colliding) {
       bulletCollided = true;
     }
-    if (key.first == ObjectClass::Material && prev.materialState == MaterialState::present && curr.materialState != MaterialState::present) {
-        if (curr.materialType == MaterialType::coin) {
-          coinCollected = true;
-        }
-        if (curr.materialType == MaterialType::gem) {
-          gemCollected = true;
-        }
+    if (playMaterialCollectAudioFromStateDiff &&
+        key.first == ObjectClass::Material &&
+        prev.materialState == MaterialState::present &&
+        curr.materialState != MaterialState::present) {
+      if (curr.materialType == MaterialType::coin && resources.audioCoinCollect) {
+        MIX_PlayAudio(resources.mixer, resources.audioCoinCollect);
+      }
+      if (curr.materialType == MaterialType::gem && resources.audioGemCollect) {
+        MIX_PlayAudio(resources.mixer, resources.audioGemCollect);
+      }
     }
     if (key.first == ObjectClass::Enemy && curr.healthPoints < prev.healthPoints) {
       enemyDamaged = true;
@@ -836,12 +850,6 @@ void playSimulationAudio(
   }
   if (enemyDied && resources.audioEnemyDie) {
     MIX_PlayAudio(resources.mixer, resources.audioEnemyDie);
-  }
-  if (coinCollected && resources.audioCoinCollect) {
-    MIX_PlayAudio(resources.mixer, resources.audioCoinCollect);
-  }
-  if (gemCollected && resources.audioGemCollect) {
-    MIX_PlayAudio(resources.mixer, resources.audioGemCollect);
   }
   if (enemyDamagedByMelee && resources.boneImpactHitTrack) {
     MIX_PlayTrack(resources.boneImpactHitTrack, 0);
@@ -949,7 +957,14 @@ public:
           if (client->NeedsFullRebuild()) {
             client->MarkFullRebuildApplied();
           }
-          playSimulationAudio(resources, before, ctx.gameState, client->GetPlayerID(), deltaTime, false);
+          playSimulationAudio(
+            resources,
+            before,
+            ctx.gameState,
+            client->GetPlayerID(),
+            deltaTime,
+            false,
+            false);
           if (ctx.gameState.playerIndex >= 0) {
             auto& player = engine.getPlayer();
             updateMapViewport(ctx, player);

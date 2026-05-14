@@ -21,7 +21,7 @@
 
 namespace game_engine {
 
-  static constexpr std::uint16_t VERSION = 3;
+  static constexpr std::uint16_t VERSION = 6;
   static constexpr std::uint16_t MSG_SNAPSHOT = 1;
 
   // use std::ByteWriter, ByteReader to write and read GameStateSnapshot
@@ -180,7 +180,8 @@ namespace game_engine {
             w.write_u32(static_cast<uint32_t>(obj.data.player.manaPoints));
             w.write_u32(static_cast<uint32_t>(obj.data.player.ultimatePoints));
             w.write_bool(obj.data.player.unlockedUltimateOne);
-            // TODO inventory is local so does it need to go through the network?
+            w.write_u32(obj.data.player.inventory.coins.count);
+            w.write_u32(obj.data.player.inventory.gems.count);
             break;
           }
           case ObjectClass::Projectile: {
@@ -268,6 +269,8 @@ namespace game_engine {
             obj.data.player.manaPoints = r.read_u32();
             obj.data.player.ultimatePoints = r.read_u32();
             obj.data.player.unlockedUltimateOne = r.read_bool();
+            obj.data.player.inventory.coins.count = r.read_u32();
+            obj.data.player.inventory.gems.count = r.read_u32();
             break;
           }
           case ObjectClass::Projectile: {
