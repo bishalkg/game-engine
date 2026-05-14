@@ -383,6 +383,10 @@ void GameResources::loadAllAssets(
     loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
   std::tie(audioJump, jumpTrack) =
     loadAudioChunk("data/audio/movement/jump.wav", chunkAudioGain);
+  std::tie(audioCoinCollect, coinCollectTrack) =
+    loadAudioChunk("data/materials/Coin/Collect.wav", chunkAudioGain);
+  std::tie(audioGemCollect, gemCollectTrack) =
+    loadAudioChunk("data/materials/Gem/Collect.wav", chunkAudioGain);
 
   const bool lvlLoaded = loadLevel(
     progService.getLastCompletedLevel(), state,
@@ -499,6 +503,8 @@ void GameResources::unload() {
   destroyAudio(audioEnemyDie);
   destroyTrack(jumpTrack);
   destroyAudio(audioJump);
+  destroyAudio(audioCoinCollect);
+  destroyAudio(audioGemCollect);
 
   for (SDL_Texture* tex : textures) {
     if (tex) {

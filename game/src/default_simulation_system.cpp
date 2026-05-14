@@ -25,6 +25,8 @@ struct AudioObjectState {
   PlayerState playerState = PlayerState::idle;
   EnemyState enemyState = EnemyState::idle;
   BulletState bulletState = BulletState::inactive;
+  MaterialState materialState = MaterialState::present;
+  MaterialType materialType = MaterialType::none;
   int healthPoints = 0;
   int manaPoints = 0;
   bool jumpImpulseApplied = false;
@@ -93,7 +95,6 @@ SDL_Texture* pickEntityTexture(
       return entityRes.texAttack2 ? entityRes.texAttack2 : entityRes.texAttack;
     case PresentationVariant::Collapsing:
       if (objClass == ObjectClass::Material && entityRes.texDie) {
-        std::cout << "returning collapsing texture" << std::endl;
         return entityRes.texDie;
       }
     case PresentationVariant::Ultimate:
@@ -532,6 +533,9 @@ AudioStateMap captureAudioState(const game_engine::GameState& gameState) {
       } else if (obj.objClass == ObjectClass::Enemy) {
         state.enemyState = obj.data.enemy.state;
         state.healthPoints = obj.data.enemy.healthPoints;
+      } else if (obj.objClass == ObjectClass::Material) {
+        state.materialState = obj.data.material.state;
+        state.materialType = obj.data.material.type;
       }
       states[{obj.objClass, obj.id}] = state;
     }
@@ -778,6 +782,8 @@ void playSimulationAudio(
   bool enemyDied = false;
   bool enemyDamagedByMelee = false;
   bool localPlayerDied = false;
+  bool coinCollected = false;
+  bool gemCollected = false;
 
   AudioStateMap after = captureAudioState(gameState);
   for (const auto& [key, prev] : before) {
@@ -792,6 +798,16 @@ void playSimulationAudio(
         curr.bulletState == BulletState::colliding) {
       bulletCollided = true;
     }
+    if (key.first == ObjectClass::Material && prev.materialState != MaterialState::collapsing &&
+      curr.materialState == MaterialState::collapsing) {
+        if (curr.materialType == MaterialType::coin) {
+          coinCollected = true;
+        }
+        if (curr.materialType == MaterialType::gem) {
+          gemCollected = true;
+        }
+    }
+
     if (key.first == ObjectClass::Enemy && curr.healthPoints < prev.healthPoints) {
       enemyDamaged = true;
       if (localPlayer &&
@@ -815,6 +831,12 @@ void playSimulationAudio(
   }
   if (enemyDied && resources.audioEnemyDie) {
     MIX_PlayAudio(resources.mixer, resources.audioEnemyDie);
+  }
+  if (coinCollected && resources.audioCoinCollect) {
+    MIX_PlayAudio(resources.mixer, resources.audioCoinCollect);
+  }
+  if (gemCollected && resources.audioGemCollect) {
+    MIX_PlayAudio(resources.mixer, resources.audioGemCollect);
   }
   if (enemyDamagedByMelee && resources.boneImpactHitTrack) {
     MIX_PlayTrack(resources.boneImpactHitTrack, 0);

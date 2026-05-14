@@ -24,7 +24,7 @@ enum class EnemyState: std::uint32_t {
 };
 
 enum class MaterialType: std::uint32_t {
-  coin, gem, healthPotion, manaPotion
+  none, coin, gem, healthPotion, manaPotion
 };
 
 enum class MaterialState: std::uint32_t {

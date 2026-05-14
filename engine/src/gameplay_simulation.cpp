@@ -900,12 +900,10 @@ void updateDynamicObject(
     }
   } else if (obj.objClass == ObjectClass::Material) {
     if (obj.data.material.state == MaterialState::collapsing) {
-      std::cout << "entered collapsing state" << std::endl;
       setAnimationAndPresentation(obj, ANIM_COLLECT, PresentationVariant::Collapsing, false);
       if (obj.currentAnimation != -1 &&
           obj.currentAnimation == ANIM_COLLECT &&
           obj.animations[obj.currentAnimation].isDone()) {
-        std::cout << "setting material state to collected" << std::endl;
         obj.data.material.state = MaterialState::collected;
         obj.currentAnimation = -1;
       }
@@ -1055,7 +1053,6 @@ void collisionResponse(
         // player colliding with item
 
         if (objB.data.material.state == MaterialState::present) {
-          std::cout << "setting material state to collapsing" << std::endl;
           objB.data.material.state = MaterialState::collapsing;
         } else if (objB.data.material.state == MaterialState::collected) {
           awardMaterialToPlayer(objA, objB.data.material);
