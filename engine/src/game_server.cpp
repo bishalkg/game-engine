@@ -21,6 +21,9 @@ ObjectData cloneObjectData(const GameObject& src) {
     case ObjectClass::Enemy:
       new (&data.enemy) EnemyData(src.data.enemy);
       break;
+    case ObjectClass::Material:
+      new (&data.material) MaterialData(src.data.material);
+      break;
     case ObjectClass::Projectile:
       new (&data.bullet) BulletData(src.data.bullet);
       break;

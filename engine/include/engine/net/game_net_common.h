@@ -180,6 +180,7 @@ namespace game_engine {
             w.write_u32(static_cast<uint32_t>(obj.data.player.manaPoints));
             w.write_u32(static_cast<uint32_t>(obj.data.player.ultimatePoints));
             w.write_bool(obj.data.player.unlockedUltimateOne);
+            // TODO inventory is local so does it need to go through the network?
             break;
           }
           case ObjectClass::Projectile: {
@@ -195,6 +196,12 @@ namespace game_engine {
             w.write_float(obj.data.enemy.pendingKnockbackDirection);
             w.write_float(obj.data.enemy.pendingKnockbackMagnitude);
             w.write_bool(obj.data.enemy.hasPendingKnockback);
+            break;
+          }
+          case ObjectClass::Material: {
+            w.write_u32(obj.data.material.count);
+            w.write_u32(static_cast<uint32_t>(obj.data.material.state));
+            w.write_u32(static_cast<uint32_t>(obj.data.material.type));
             break;
           }
           case ObjectClass::Level: {
@@ -278,6 +285,13 @@ namespace game_engine {
             obj.data.enemy.pendingKnockbackDirection = r.read_float();
             obj.data.enemy.pendingKnockbackMagnitude = r.read_float();
             obj.data.enemy.hasPendingKnockback = r.read_bool();
+            break;
+          }
+          case ObjectClass::Material: {
+            new (&obj.data.material) MaterialData(0, MaterialType::none); // set active member
+            obj.data.material.count = r.read_u32();
+            obj.data.material.state = r.read_enum<MaterialState>();
+            obj.data.material.type = r.read_enum<MaterialType>();
             break;
           }
           case ObjectClass::Level: {

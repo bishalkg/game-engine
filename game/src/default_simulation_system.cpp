@@ -232,7 +232,11 @@ GameObject buildReplicatedObject(SimContext& ctx, const game_engine::NetGameObje
   obj.shouldFlash = snap.shouldFlash;
   obj.dynamic = true;
 
-  if (snap.type == ObjectClass::Projectile) {
+  if (snap.type == ObjectClass::Material) {
+    obj.drawScale = 1.0f;
+    obj.collider = {.x = 0, .y = 0, .w = obj.spritePixelW, .h = obj.spritePixelW};
+    obj.data.material = snap.data.material;
+  } else if (snap.type == ObjectClass::Projectile) {
     obj.drawScale = 2.0f;
     obj.colliderNorm = {.x = 0.0f, .y = 0.40f, .w = 0.5f, .h = 0.1f};
     obj.applyScale();
@@ -319,6 +323,8 @@ void updateReplicatedObject(
     obj.data.player = snap.data.player;
   } else if (obj.objClass == ObjectClass::Enemy) {
     obj.data.enemy = snap.data.enemy;
+  } else if (obj.objClass == ObjectClass::Material) {
+    obj.data.material = snap.data.material;
   }
 
   const bool isRespawn =
@@ -359,7 +365,7 @@ void reconcileReplicatedActors(
     auto& layer = ctx.gameState.layers[layerIdx];
     for (std::size_t objIdx = 0; objIdx < layer.size(); ++objIdx) {
       const auto& obj = layer[objIdx];
-      if (obj.dynamic && (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy)) {
+      if (obj.dynamic && (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy || obj.objClass == ObjectClass::Material)) {
         existing[{static_cast<uint32_t>(layerIdx), obj.objClass, obj.id}] = objIdx;
       }
     }
@@ -367,7 +373,7 @@ void reconcileReplicatedActors(
 
   std::unordered_set<LayeredDynamicKey, LayeredDynamicKeyHash> seen;
   for (const auto& [_, snap] : snapshot.m_gameObjects) {
-    if (snap.type != ObjectClass::Player && snap.type != ObjectClass::Enemy) {
+    if (snap.type != ObjectClass::Player && snap.type != ObjectClass::Enemy && snap.type !=   ObjectClass::Material) {
       continue;
     }
     if (snap.layer >= ctx.gameState.layers.size()) {
@@ -386,6 +392,7 @@ void reconcileReplicatedActors(
     }
   }
 
+  // remove objects
   for (std::size_t layerIdx = 0; layerIdx < ctx.gameState.layers.size(); ++layerIdx) {
     auto& layer = ctx.gameState.layers[layerIdx];
     layer.erase(
@@ -394,7 +401,7 @@ void reconcileReplicatedActors(
         layer.end(),
         [&seen, layerIdx](const GameObject& obj) {
           return obj.dynamic &&
-                 (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy) &&
+                 (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy || obj.objClass == ObjectClass::Material) &&
                  !seen.contains({static_cast<uint32_t>(layerIdx), obj.objClass, obj.id});
         }),
       layer.end());
@@ -798,8 +805,7 @@ void playSimulationAudio(
         curr.bulletState == BulletState::colliding) {
       bulletCollided = true;
     }
-    if (key.first == ObjectClass::Material && prev.materialState != MaterialState::collapsing &&
-      curr.materialState == MaterialState::collapsing) {
+    if (key.first == ObjectClass::Material && prev.materialState == MaterialState::present && curr.materialState != MaterialState::present) {
         if (curr.materialType == MaterialType::coin) {
           coinCollected = true;
         }
@@ -807,7 +813,6 @@ void playSimulationAudio(
           gemCollected = true;
         }
     }
-
     if (key.first == ObjectClass::Enemy && curr.healthPoints < prev.healthPoints) {
       enemyDamaged = true;
       if (localPlayer &&
