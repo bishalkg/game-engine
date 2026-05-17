@@ -21,7 +21,7 @@
 
 namespace game_engine {
 
-  static constexpr std::uint16_t VERSION = 7;
+  static constexpr std::uint16_t VERSION = 8;
   static constexpr std::uint16_t MSG_SNAPSHOT = 1;
 
   // use std::ByteWriter, ByteReader to write and read GameStateSnapshot
@@ -70,6 +70,83 @@ namespace game_engine {
       ultimatePressed = reader.read_bool();
 
     };
+  };
+
+  struct NetPersistedPlayerState {
+    uint32_t coinCount = 0;
+    uint32_t gemCount = 0;
+    uint32_t healthPotionCount = 0;
+    uint32_t manaPotionCount = 0;
+    int healthPoints = 100;
+    int maxHealthPoints = 100;
+    int manaPoints = 100;
+    int maxManaPoints = 100;
+    int ultimatePoints = 0;
+    int maxUltimatePoints = 100;
+    bool unlockedUltimateOne = false;
+    int meleeDamage = 10;
+
+    static NetPersistedPlayerState fromPlayerData(const PlayerData& player) {
+      NetPersistedPlayerState state;
+      state.coinCount = player.inventory.coins.count;
+      state.gemCount = player.inventory.gems.count;
+      state.healthPotionCount = player.inventory.healthPotions.count;
+      state.manaPotionCount = player.inventory.manaPotions.count;
+      state.healthPoints = player.healthPoints;
+      state.maxHealthPoints = player.maxHealthPoints;
+      state.manaPoints = player.manaPoints;
+      state.maxManaPoints = player.maxManaPoints;
+      state.ultimatePoints = player.ultimatePoints;
+      state.maxUltimatePoints = player.maxUltimatePoints;
+      state.unlockedUltimateOne = player.unlockedUltimateOne;
+      state.meleeDamage = player.meleeDamage;
+      return state;
+    }
+
+    void applyToPlayerData(PlayerData& player) const {
+      player.inventory.coins.count = coinCount;
+      player.inventory.gems.count = gemCount;
+      player.inventory.healthPotions.count = healthPotionCount;
+      player.inventory.manaPotions.count = manaPotionCount;
+      player.healthPoints = healthPoints;
+      player.maxHealthPoints = maxHealthPoints;
+      player.manaPoints = manaPoints;
+      player.maxManaPoints = maxManaPoints;
+      player.ultimatePoints = ultimatePoints;
+      player.maxUltimatePoints = maxUltimatePoints;
+      player.unlockedUltimateOne = unlockedUltimateOne;
+      player.meleeDamage = meleeDamage;
+    }
+
+    void writeTo(net::ByteWriter& writer) const {
+      writer.write_u32(coinCount);
+      writer.write_u32(gemCount);
+      writer.write_u32(healthPotionCount);
+      writer.write_u32(manaPotionCount);
+      writer.write_u32(static_cast<uint32_t>(healthPoints));
+      writer.write_u32(static_cast<uint32_t>(maxHealthPoints));
+      writer.write_u32(static_cast<uint32_t>(manaPoints));
+      writer.write_u32(static_cast<uint32_t>(maxManaPoints));
+      writer.write_u32(static_cast<uint32_t>(ultimatePoints));
+      writer.write_u32(static_cast<uint32_t>(maxUltimatePoints));
+      writer.write_bool(unlockedUltimateOne);
+      writer.write_u32(static_cast<uint32_t>(meleeDamage));
+    }
+
+    void readFrom(net::ByteReader& reader) {
+      coinCount = reader.read_u32();
+      gemCount = reader.read_u32();
+      healthPotionCount = reader.read_u32();
+      manaPotionCount = reader.read_u32();
+      healthPoints = static_cast<int>(reader.read_u32());
+      maxHealthPoints = static_cast<int>(reader.read_u32());
+      manaPoints = static_cast<int>(reader.read_u32());
+      maxManaPoints = static_cast<int>(reader.read_u32());
+      ultimatePoints = static_cast<int>(reader.read_u32());
+      maxUltimatePoints = static_cast<int>(reader.read_u32());
+      unlockedUltimateOne = reader.read_bool();
+      meleeDamage = static_cast<int>(reader.read_u32());
+    }
   };
 
 
@@ -177,13 +254,19 @@ namespace game_engine {
           case ObjectClass::Player: {
             w.write_enum<PlayerState>(obj.data.player.state);
             w.write_u32(static_cast<uint32_t>(obj.data.player.healthPoints));
+            w.write_u32(static_cast<uint32_t>(obj.data.player.maxHealthPoints));
             w.write_u32(static_cast<uint32_t>(obj.data.player.manaPoints));
+            w.write_u32(static_cast<uint32_t>(obj.data.player.maxManaPoints));
             w.write_u32(static_cast<uint32_t>(obj.data.player.ultimatePoints));
+            w.write_u32(static_cast<uint32_t>(obj.data.player.maxUltimatePoints));
             w.write_bool(obj.data.player.unlockedUltimateOne);
+            w.write_u32(static_cast<uint32_t>(obj.data.player.meleeDamage));
             w.write_u32(obj.data.player.coinPickupCueCount);
             w.write_u32(obj.data.player.gemPickupCueCount);
             w.write_u32(obj.data.player.inventory.coins.count);
             w.write_u32(obj.data.player.inventory.gems.count);
+            w.write_u32(obj.data.player.inventory.healthPotions.count);
+            w.write_u32(obj.data.player.inventory.manaPotions.count);
             break;
           }
           case ObjectClass::Projectile: {
@@ -267,14 +350,20 @@ namespace game_engine {
           case ObjectClass::Player: {
             new (&obj.data.player) PlayerData{}; // set active member
             obj.data.player.state = r.read_enum<PlayerState>();
-            obj.data.player.healthPoints = r.read_u32();
-            obj.data.player.manaPoints = r.read_u32();
-            obj.data.player.ultimatePoints = r.read_u32();
+            obj.data.player.healthPoints = static_cast<int>(r.read_u32());
+            obj.data.player.maxHealthPoints = static_cast<int>(r.read_u32());
+            obj.data.player.manaPoints = static_cast<int>(r.read_u32());
+            obj.data.player.maxManaPoints = static_cast<int>(r.read_u32());
+            obj.data.player.ultimatePoints = static_cast<int>(r.read_u32());
+            obj.data.player.maxUltimatePoints = static_cast<int>(r.read_u32());
             obj.data.player.unlockedUltimateOne = r.read_bool();
+            obj.data.player.meleeDamage = static_cast<int>(r.read_u32());
             obj.data.player.coinPickupCueCount = r.read_u32();
             obj.data.player.gemPickupCueCount = r.read_u32();
             obj.data.player.inventory.coins.count = r.read_u32();
             obj.data.player.inventory.gems.count = r.read_u32();
+            obj.data.player.inventory.healthPotions.count = r.read_u32();
+            obj.data.player.inventory.manaPotions.count = r.read_u32();
             break;
           }
           case ObjectClass::Projectile: {

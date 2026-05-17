@@ -63,7 +63,10 @@ public:
   void broadcastSnapshot();
   bool copyCurrentSnapshot(NetGameStateSnapshot& out) const;
   void resetAuthoritativeState(GameState&& initialState, bool refreshSpawnPositions = false);
-  bool registerPlayer(uint32_t playerID, SpriteType spriteType);
+  bool registerPlayer(
+    uint32_t playerID,
+    SpriteType spriteType,
+    const NetPersistedPlayerState& persistedPlayerState);
   bool respawnPlayer(uint32_t playerID);
   bool removePlayer(uint32_t playerID);
   bool HasPendingLevelTransition() const;

@@ -113,6 +113,28 @@ bool isMultiplayerBootstrapView(UIManager::GameView view) {
   }
 }
 
+std::optional<game_engine::NetPersistedPlayerState> captureLocalPersistedPlayerState(
+  const game_engine::GameState& state) {
+  if (state.playerLayer >= 0 &&
+      state.playerLayer < static_cast<int>(state.layers.size()) &&
+      state.playerIndex >= 0 &&
+      state.playerIndex < static_cast<int>(state.layers[state.playerLayer].size())) {
+    const GameObject& player = state.layers[state.playerLayer][state.playerIndex];
+    if (player.objClass == ObjectClass::Player) {
+      return game_engine::NetPersistedPlayerState::fromPlayerData(player.data.player);
+    }
+  }
+
+  for (const auto& layer : state.layers) {
+    for (const auto& obj : layer) {
+      if (obj.objClass == ObjectClass::Player) {
+        return game_engine::NetPersistedPlayerState::fromPlayerData(obj.data.player);
+      }
+    }
+  }
+  return std::nullopt;
+}
+
 } // namespace
 
 GameObject &game_engine::Engine::getPlayer() {
@@ -403,7 +425,11 @@ bool game_engine::Engine::handleMultiplayerConnections() {
 
 
     if (m_gameClient->IsClientValidated() && !m_gameClient->IsRegistered()) {
-      m_gameClient->RegisterWithServer(m_gameState.selectedPlayerSprite);
+      const NetPersistedPlayerState persistedPlayerState =
+        captureLocalPersistedPlayerState(m_gameState).value_or(NetPersistedPlayerState{});
+      m_gameClient->RegisterWithServer(
+        m_gameState.selectedPlayerSprite,
+        persistedPlayerState);
       m_multiplayerStatus = "Registering with server...";
     } else if (m_gameClient->IsRegistered()) {
       m_multiplayerStatus = "Connected";

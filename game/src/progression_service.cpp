@@ -98,7 +98,7 @@ namespace game {
 
     }
 
-    return std::move(Inventory(healthPots, manaPots, gemCount, coinCount));
+    return Inventory(healthPots, manaPots, coinCount, gemCount);
   }
 
 

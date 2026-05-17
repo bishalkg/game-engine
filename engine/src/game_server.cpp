@@ -70,9 +70,10 @@ GameObject cloneGameObject(const GameObject& src) {
 }
 
 void resetPlayerRuntimeStatePreservingUnlocks(PlayerData& playerData) {
-  const bool unlockedUltimateOne = playerData.unlockedUltimateOne;
+  const NetPersistedPlayerState persistedState =
+    NetPersistedPlayerState::fromPlayerData(playerData);
   playerData = PlayerData();
-  playerData.unlockedUltimateOne = unlockedUltimateOne;
+  persistedState.applyToPlayerData(playerData);
 }
 
 void markPlayerDeadFromFall(GameObject& player) {
@@ -132,7 +133,9 @@ void GameServer::OnMessage(
     case GameMsgHeaders::Client_RegisterWithServer: {
       net::ByteReader reader(msg.body);
       const SpriteType spriteType = reader.read_enum<SpriteType>();
-      if (registerPlayer(client->GetID(), spriteType)) {
+      NetPersistedPlayerState persistedPlayerState;
+      persistedPlayerState.readFrom(reader);
+      if (registerPlayer(client->GetID(), spriteType, persistedPlayerState)) {
         net::message<GameMsgHeaders> reply;
         reply.header.id = GameMsgHeaders::Client_AssignID;
         net::ByteWriter writer;
@@ -296,6 +299,20 @@ bool GameServer::copyCurrentSnapshot(NetGameStateSnapshot& out) const {
 // rebuilds the host/server’s authoritative game world from a fresh GameState, while preserving the currently connected multiplayer roster.
 void GameServer::resetAuthoritativeState(GameState&& initialState, bool refreshSpawnPositions) {
   std::scoped_lock lock(m_stateMu);
+  std::unordered_map<uint32_t, NetPersistedPlayerState> persistedStatesByPlayerId;
+  if (m_authCtx && m_authCtx->state) {
+    auto& previousState = *m_authCtx->state;
+    if (previousState.playerLayer >= 0 &&
+        previousState.playerLayer < static_cast<int>(previousState.layers.size())) {
+      for (const auto& obj : previousState.layers[previousState.playerLayer]) {
+        if (obj.objClass == ObjectClass::Player) {
+          persistedStatesByPlayerId[obj.id] =
+            NetPersistedPlayerState::fromPlayerData(obj.data.player);
+        }
+      }
+    }
+  }
+
   if (!m_authCtx) {
     m_authCtx = std::make_unique<AuthoritativeContext>(std::move(initialState));
     refreshGameSnapshot();
@@ -359,6 +376,11 @@ void GameServer::resetAuthoritativeState(GameState&& initialState, bool refreshS
     player.velocity = glm::vec2(0.0f);
     player.acceleration = templatePlayer.acceleration;
     player.data.player = templatePlayer.data.player;
+    if (const auto persistedIt = persistedStatesByPlayerId.find(roster[idx].first);
+        persistedIt != persistedStatesByPlayerId.end()) {
+      persistedIt->second.applyToPlayerData(player.data.player);
+    }
+    resetPlayerRuntimeStatePreservingUnlocks(player.data.player);
     player.currentAnimation = ANIM_IDLE;
     player.presentationVariant = PresentationVariant::Idle;
     if (player.currentAnimation >= 0 &&
@@ -377,7 +399,10 @@ void GameServer::resetAuthoritativeState(GameState&& initialState, bool refreshS
   refreshGameSnapshot();
 }
 
-bool GameServer::registerPlayer(uint32_t playerID, SpriteType spriteType) {
+bool GameServer::registerPlayer(
+  uint32_t playerID,
+  SpriteType spriteType,
+  const NetPersistedPlayerState& persistedPlayerState) {
   std::scoped_lock lock(m_stateMu);
   if (!m_authCtx || !m_authCtx->state) {
     return false;
@@ -407,6 +432,7 @@ bool GameServer::registerPlayer(uint32_t playerID, SpriteType spriteType) {
     const glm::vec2 spawnPosition = templatePlayer->position;
     templatePlayer->id = playerID;
     templatePlayer->spriteType = spriteType;
+    persistedPlayerState.applyToPlayerData(templatePlayer->data.player);
     resetPlayerRuntimeStatePreservingUnlocks(templatePlayer->data.player);
     templatePlayer->velocity = glm::vec2(0.0f);
     templatePlayer->currentAnimation = ANIM_IDLE;
@@ -426,6 +452,7 @@ bool GameServer::registerPlayer(uint32_t playerID, SpriteType spriteType) {
   newPlayer.spriteType = spriteType;
   newPlayer.position.x += 48.0f * static_cast<float>(m_playerSessions.size());
   newPlayer.velocity = glm::vec2(0.0f);
+  persistedPlayerState.applyToPlayerData(newPlayer.data.player);
   resetPlayerRuntimeStatePreservingUnlocks(newPlayer.data.player);
   newPlayer.currentAnimation = ANIM_IDLE;
   newPlayer.presentationVariant = PresentationVariant::Idle;

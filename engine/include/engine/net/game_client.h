@@ -94,7 +94,9 @@ public:
     }
   }
 
-  void RegisterWithServer(SpriteType spriteType) {
+  void RegisterWithServer(
+    SpriteType spriteType,
+    const NetPersistedPlayerState& persistedPlayerState) {
     if (!IsClientValidated() || m_isRegistered) {
       return;
     }
@@ -103,6 +105,7 @@ public:
     msg.header.id = GameMsgHeaders::Client_RegisterWithServer;
     net::ByteWriter writer;
     writer.write_enum(spriteType);
+    persistedPlayerState.writeTo(writer);
     msg.body = std::move(writer.buff);
     msg.header.bodySize = msg.body.size();
     Send(msg);
