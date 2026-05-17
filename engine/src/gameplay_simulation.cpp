@@ -1054,6 +1054,16 @@ void collisionResponse(
 
         if (objB.data.material.state == MaterialState::present) {
           objB.data.material.state = MaterialState::collapsing;
+          switch (objB.data.material.type) {
+            case MaterialType::coin:
+              ++objA.data.player.coinPickupCueCount;
+              break;
+            case MaterialType::gem:
+              ++objA.data.player.gemPickupCueCount;
+              break;
+            default:
+              break;
+          }
         } else if (objB.data.material.state == MaterialState::collected) {
           awardMaterialToPlayer(objA, objB.data.material);
           clearDynamicCollider(objB);

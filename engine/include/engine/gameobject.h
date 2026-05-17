@@ -145,6 +145,8 @@ struct PlayerData {
   bool ultimatePressedThisFrame = false;
   bool unlockedUltimateOne = false;
   int meleeDamage = 10;
+  uint32_t coinPickupCueCount = 0;
+  uint32_t gemPickupCueCount = 0;
   uint32_t activeUltimateCastId = 0;
   uint32_t nextUltimateCastId = 1;
 

@@ -25,12 +25,10 @@ struct AudioObjectState {
   PlayerState playerState = PlayerState::idle;
   EnemyState enemyState = EnemyState::idle;
   BulletState bulletState = BulletState::inactive;
-  MaterialState materialState = MaterialState::present;
-  MaterialType materialType = MaterialType::none;
   int healthPoints = 0;
   int manaPoints = 0;
-  uint32_t coinCount = 0;
-  uint32_t gemCount = 0;
+  uint32_t coinPickupCueCount = 0;
+  uint32_t gemPickupCueCount = 0;
   bool jumpImpulseApplied = false;
 };
 
@@ -538,15 +536,12 @@ AudioStateMap captureAudioState(const game_engine::GameState& gameState) {
         state.playerState = obj.data.player.state;
         state.healthPoints = obj.data.player.healthPoints;
         state.manaPoints = obj.data.player.manaPoints;
-        state.coinCount = obj.data.player.inventory.coins.count;
-        state.gemCount = obj.data.player.inventory.gems.count;
+        state.coinPickupCueCount = obj.data.player.coinPickupCueCount;
+        state.gemPickupCueCount = obj.data.player.gemPickupCueCount;
         state.jumpImpulseApplied = obj.data.player.jumpImpulseApplied;
       } else if (obj.objClass == ObjectClass::Enemy) {
         state.enemyState = obj.data.enemy.state;
         state.healthPoints = obj.data.enemy.healthPoints;
-      } else if (obj.objClass == ObjectClass::Material) {
-        state.materialState = obj.data.material.state;
-        state.materialType = obj.data.material.type;
       }
       states[{obj.objClass, obj.id}] = state;
     }
@@ -731,8 +726,7 @@ void playSimulationAudio(
   game_engine::GameState& gameState,
   uint32_t localPlayerID,
   float deltaTime,
-  bool playLocalShotAudioFromStateDiff = false,
-  bool playMaterialCollectAudioFromStateDiff = true) {
+  bool playLocalShotAudioFromStateDiff = false) {
   resources.stepAudioCooldown.step(deltaTime);
 
   GameObject* localPlayer = findPlayerById(gameState, localPlayerID);
@@ -775,12 +769,11 @@ void playSimulationAudio(
         MIX_PlayAudio(resources.mixer, resources.audioShoot);
       }
 
-      // TODO sound plays twice in single player
-      if (localPlayer->data.player.inventory.coins.count > prev.coinCount + 1 &&
+      if (localPlayer->data.player.coinPickupCueCount > prev.coinPickupCueCount &&
           resources.audioCoinCollect) {
         MIX_PlayAudio(resources.mixer, resources.audioCoinCollect);
       }
-      if (localPlayer->data.player.inventory.gems.count > prev.gemCount &&
+      if (localPlayer->data.player.gemPickupCueCount > prev.gemPickupCueCount &&
           resources.audioGemCollect) {
         MIX_PlayAudio(resources.mixer, resources.audioGemCollect);
       }
@@ -817,17 +810,6 @@ void playSimulationAudio(
         prev.bulletState != BulletState::colliding &&
         curr.bulletState == BulletState::colliding) {
       bulletCollided = true;
-    }
-    if (playMaterialCollectAudioFromStateDiff &&
-        key.first == ObjectClass::Material &&
-        prev.materialState == MaterialState::present &&
-        curr.materialState != MaterialState::present) {
-      if (curr.materialType == MaterialType::coin && resources.audioCoinCollect) {
-        MIX_PlayAudio(resources.mixer, resources.audioCoinCollect);
-      }
-      if (curr.materialType == MaterialType::gem && resources.audioGemCollect) {
-        MIX_PlayAudio(resources.mixer, resources.audioGemCollect);
-      }
     }
     if (key.first == ObjectClass::Enemy && curr.healthPoints < prev.healthPoints) {
       enemyDamaged = true;
@@ -965,7 +947,6 @@ public:
             ctx.gameState,
             client->GetPlayerID(),
             deltaTime,
-            false,
             false);
           if (ctx.gameState.playerIndex >= 0) {
             auto& player = engine.getPlayer();
