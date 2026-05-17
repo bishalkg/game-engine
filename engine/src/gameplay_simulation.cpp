@@ -210,10 +210,14 @@ void awardUltimateCharge(GameState& state, uint32_t playerID, int amount) {
 void awardMaterialToPlayer(GameObject& player, const MaterialData& material) {
   switch (material.type) {
     case MaterialType::coin:
-      player.data.player.inventory.coins.count += material.count;
+      player.data.player.inventory.coins.count = std::min(
+        player.data.player.inventory.coins.count + material.count,
+        99u);
       break;
     case MaterialType::gem:
-      player.data.player.inventory.gems.count += material.count;
+      player.data.player.inventory.gems.count = std::min(
+        player.data.player.inventory.gems.count + material.count,
+        99u);
       break;
     case MaterialType::healthPotion:
       player.data.player.inventory.healthPotions.count += material.count;
