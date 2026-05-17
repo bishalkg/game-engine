@@ -225,6 +225,10 @@ void awardMaterialToPlayer(GameObject& player, const MaterialData& material) {
     case MaterialType::manaPotion:
       player.data.player.inventory.manaPotions.count += material.count;
       break;
+    case MaterialType::attackUp:
+    case MaterialType::defenceUp:
+    case MaterialType::none:
+      break;
   }
 }
 
@@ -1149,6 +1153,7 @@ void collisionResponse(
       case ObjectClass::Portal:
       case ObjectClass::Background:
       case ObjectClass::Projectile:
+      case ObjectClass::Material:
         break;
     }
   }

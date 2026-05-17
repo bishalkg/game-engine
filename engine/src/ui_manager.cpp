@@ -26,13 +26,16 @@ namespace UIManager {
     constexpr float kNumbersGlyphWidth = 11.0f;
     constexpr float kNumbersGlyphHeight = 16.0f;
     constexpr int kNumbersAtlasColumns = 10;
+    constexpr float kShopWalletCountY = 296.0f;
+    constexpr float kShopCoinCountX = 256.0f;
+    constexpr float kShopGemCountX = 386.0f;
 
-    void drawHudCountGlyph(
+    void drawCountGlyph(
       SDL_Renderer* renderer,
       SDL_Texture* numbersHudTex,
       uint32_t count,
-      float widgetX,
-      float widgetY) {
+      float dstX,
+      float dstY) {
       if (!numbersHudTex || count == 0) {
         return;
       }
@@ -48,13 +51,31 @@ namespace UIManager {
         kNumbersGlyphHeight,
       };
       SDL_FRect textDst{
-        widgetX + std::floor((kHudWidgetDrawSize - kNumbersGlyphWidth) * 0.5f),
-        widgetY + kHudTextBoxTopOffset +
-          std::floor((kHudTextBoxHeight - kNumbersGlyphHeight) * 0.5f),
+        dstX,
+        dstY,
         kNumbersGlyphWidth,
         kNumbersGlyphHeight,
       };
       SDL_RenderTexture(renderer, numbersHudTex, &src, &textDst);
+    }
+
+    void drawHudCountGlyph(
+      SDL_Renderer* renderer,
+      SDL_Texture* numbersHudTex,
+      uint32_t count,
+      float widgetX,
+      float widgetY) {
+      if (!numbersHudTex || count == 0) {
+        return;
+      }
+
+      drawCountGlyph(
+        renderer,
+        numbersHudTex,
+        count,
+        widgetX + std::floor((kHudWidgetDrawSize - kNumbersGlyphWidth) * 0.5f),
+        widgetY + kHudTextBoxTopOffset +
+          std::floor((kHudTextBoxHeight - kNumbersGlyphHeight) * 0.5f));
     }
   } // namespace
 
@@ -174,6 +195,21 @@ namespace UIManager {
     };
 
     SDL_RenderTexture(sdlState.renderer, scene.tex, &src, &dst);
+
+    if (cutscenePlr.cutSceneID == -6 && cachedGameplayHud.numbersHudTex) {
+      drawCountGlyph(
+        sdlState.renderer,
+        cachedGameplayHud.numbersHudTex,
+        cachedGameplayHud.playerCoins,
+        dst.x + kShopCoinCountX,
+        dst.y + kShopWalletCountY);
+      drawCountGlyph(
+        sdlState.renderer,
+        cachedGameplayHud.numbersHudTex,
+        cachedGameplayHud.playerGems,
+        dst.x + kShopGemCountX,
+        dst.y + kShopWalletCountY);
+    }
 
     // renderPresent(sdlState);
     if (drawDialogue && !scene.dialogue.empty()) {
@@ -470,7 +506,7 @@ namespace UIManager {
       place("##levels", [&]{ act.nextView = GameView::LevelSelection; });
       place("##inventory", [&]{  });
       place("##equipment",  [&]{ });
-      place("##shop",   [&]{ });
+      place("##shop",   [&]{ act.nextView = GameView::ShopMenu; });
       place("##craft",   [&]{ });
       place("##quit",   [&]{ act.nextView = UIManager::GameView::MainMenu; act.stopBackgroundTrack = true; });
       ImGui::PopStyleVar(2);
@@ -483,6 +519,73 @@ namespace UIManager {
 
       if (snaps.togglePauseGameplay) {
          act.nextView = GameView::Playing;
+      }
+
+      return act;
+  }
+
+  UIActions UI_Manager::drawShopMenu(const UISnapshots& snaps, ImGuiWindowFlags flags) {
+      UIActions act;
+      act.blockGameplayUpdates = true;
+      act.drawSceneOverlay = true;
+      act.dimBackground = true;
+
+      if (snaps.cutSceneID != cutscenePlr.cutSceneID && snaps.cutscene) {
+        cutscenePlr.start(snaps.cutSceneID, snaps.cutscene);
+      }
+
+      auto scn = cutscenePlr.currScene();
+
+      const float refW = scn.frameW;
+      const float refH = scn.frameH;
+
+      int outW, outH;
+      SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
+      float scale = std::min(outW / refW, outH / refH);
+      float offX = (outW - refW * scale) * 0.5f;
+      float offY = (outH - refH * scale) * 0.5f;
+
+      ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1,1,1,0.15f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1,1,1,0.25f));
+      ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+      ImGui::SetNextWindowSize(ImVec2(static_cast<float>(outW), static_cast<float>(outH)));
+      ImGui::Begin("##shop_hitboxes", nullptr,
+          ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
+          ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
+          ImGuiWindowFlags_NoScrollbar);
+
+      bool anyHovered = false;
+      auto place = [&](const char* id, float x, float y, float w, float h, auto onClick) {
+        ImGui::SetCursorScreenPos(ImVec2(offX + x * scale, offY + y * scale));
+        if (ImGui::Button(id, ImVec2(w * scale, h * scale))) onClick();
+        anyHovered |= ImGui::IsItemHovered();
+      };
+
+      place("##close_shop", 408.0f, 35.0f, 18.0f, 18.0f, [&]{
+        act.nextView = GameView::PauseMenu;
+      });
+      place("##shop_hp", 223.0f, 130.0f, 50.0f, 28.0f, [&]{
+        act.shopPurchase = ShopPurchase::HealthPotion;
+      });
+      place("##shop_mana", 293.0f, 130.0f, 50.0f, 28.0f, [&]{
+        act.shopPurchase = ShopPurchase::ManaPotion;
+      });
+      place("##shop_attack", 223.0f, 247.0f, 50.0f, 28.0f, [&]{
+        act.shopPurchase = ShopPurchase::AttackUp;
+      });
+      place("##shop_defence", 293.0f, 247.0f, 50.0f, 28.0f, [&]{
+        act.shopPurchase = ShopPurchase::DefenceUp;
+      });
+
+      ImGui::PopStyleVar(2);
+      ImGui::PopStyleColor(4);
+      ImGui::End();
+      if (anyHovered) {
+        wantsHandCursor = true;
       }
 
       return act;
@@ -880,6 +983,7 @@ namespace UIManager {
       ImGui::NewFrame();
       wantsHandCursor = false;
       gameplayHudActive = false;
+      cachedGameplayHud = snaps.gameplayHud;
 
       ImGui::SetNextWindowPos(ImVec2(0, 0));
       ImGui::SetNextWindowSize(io.DisplaySize);
@@ -893,6 +997,7 @@ namespace UIManager {
         case GameView::Playing: return drawGameplay(snaps, flags);
         case GameView::InventoryMenu: return drawPausedMenu(snaps, flags);
         case GameView::PauseMenu: return drawPausedMenu(snaps, flags); // same as inventory menu because pauses game
+        case GameView::ShopMenu: return drawShopMenu(snaps, flags);
         case GameView::LevelSelection: return drawLevelSelectScreen(snaps, flags);
         case GameView::MultiPlayerOptionsMenu: return drawMultiplayerOptionsMenu(snaps, flags);
         case GameView::MultiplayerBrowse: return drawMultiplayerBrowse(snaps, flags);

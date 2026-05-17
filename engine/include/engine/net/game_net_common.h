@@ -21,7 +21,7 @@
 
 namespace game_engine {
 
-  static constexpr std::uint16_t VERSION = 8;
+  static constexpr std::uint16_t VERSION = 9;
   static constexpr std::uint16_t MSG_SNAPSHOT = 1;
 
   // use std::ByteWriter, ByteReader to write and read GameStateSnapshot
@@ -77,6 +77,8 @@ namespace game_engine {
     uint32_t gemCount = 0;
     uint32_t healthPotionCount = 0;
     uint32_t manaPotionCount = 0;
+    uint32_t attackUpCount = 0;
+    uint32_t defenceUpCount = 0;
     int healthPoints = 100;
     int maxHealthPoints = 100;
     int manaPoints = 100;
@@ -92,6 +94,8 @@ namespace game_engine {
       state.gemCount = player.inventory.gems.count;
       state.healthPotionCount = player.inventory.healthPotions.count;
       state.manaPotionCount = player.inventory.manaPotions.count;
+      state.attackUpCount = player.inventory.attackUps.count;
+      state.defenceUpCount = player.inventory.defenceUps.count;
       state.healthPoints = player.healthPoints;
       state.maxHealthPoints = player.maxHealthPoints;
       state.manaPoints = player.manaPoints;
@@ -108,6 +112,8 @@ namespace game_engine {
       player.inventory.gems.count = gemCount;
       player.inventory.healthPotions.count = healthPotionCount;
       player.inventory.manaPotions.count = manaPotionCount;
+      player.inventory.attackUps.count = attackUpCount;
+      player.inventory.defenceUps.count = defenceUpCount;
       player.healthPoints = healthPoints;
       player.maxHealthPoints = maxHealthPoints;
       player.manaPoints = manaPoints;
@@ -123,6 +129,8 @@ namespace game_engine {
       writer.write_u32(gemCount);
       writer.write_u32(healthPotionCount);
       writer.write_u32(manaPotionCount);
+      writer.write_u32(attackUpCount);
+      writer.write_u32(defenceUpCount);
       writer.write_u32(static_cast<uint32_t>(healthPoints));
       writer.write_u32(static_cast<uint32_t>(maxHealthPoints));
       writer.write_u32(static_cast<uint32_t>(manaPoints));
@@ -138,6 +146,8 @@ namespace game_engine {
       gemCount = reader.read_u32();
       healthPotionCount = reader.read_u32();
       manaPotionCount = reader.read_u32();
+      attackUpCount = reader.read_u32();
+      defenceUpCount = reader.read_u32();
       healthPoints = static_cast<int>(reader.read_u32());
       maxHealthPoints = static_cast<int>(reader.read_u32());
       manaPoints = static_cast<int>(reader.read_u32());
@@ -267,6 +277,8 @@ namespace game_engine {
             w.write_u32(obj.data.player.inventory.gems.count);
             w.write_u32(obj.data.player.inventory.healthPotions.count);
             w.write_u32(obj.data.player.inventory.manaPotions.count);
+            w.write_u32(obj.data.player.inventory.attackUps.count);
+            w.write_u32(obj.data.player.inventory.defenceUps.count);
             break;
           }
           case ObjectClass::Projectile: {
@@ -364,6 +376,8 @@ namespace game_engine {
             obj.data.player.inventory.gems.count = r.read_u32();
             obj.data.player.inventory.healthPotions.count = r.read_u32();
             obj.data.player.inventory.manaPotions.count = r.read_u32();
+            obj.data.player.inventory.attackUps.count = r.read_u32();
+            obj.data.player.inventory.defenceUps.count = r.read_u32();
             break;
           }
           case ObjectClass::Projectile: {

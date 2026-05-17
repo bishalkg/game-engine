@@ -23,6 +23,7 @@ enum class UIActionType {
   StartMultiPlayerClient,
   SelectPlayerCharacter,
   SelectMultiplayerSession,
+  ShopPurchase,
   NextView,
   LevelSelect,
   QuitGame,
@@ -34,6 +35,7 @@ struct UIAction {
   std::optional<LevelIndex> selectedLevelIdx;
   std::optional<SpriteType> selectedPlayerSprite;
   std::optional<size_t> selectedSessionIndex;
+  std::optional<UIManager::ShopPurchase> shopPurchase;
   std::optional<UIManager::GameView> nextView;
 };
 

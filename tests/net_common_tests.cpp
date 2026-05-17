@@ -48,7 +48,9 @@ bool equalSnapshots(const game_engine::NetGameObjectSnapshot& a,
              a.data.player.inventory.coins.count == b.data.player.inventory.coins.count &&
              a.data.player.inventory.gems.count == b.data.player.inventory.gems.count &&
              a.data.player.inventory.healthPotions.count == b.data.player.inventory.healthPotions.count &&
-             a.data.player.inventory.manaPotions.count == b.data.player.inventory.manaPotions.count;
+             a.data.player.inventory.manaPotions.count == b.data.player.inventory.manaPotions.count &&
+             a.data.player.inventory.attackUps.count == b.data.player.inventory.attackUps.count &&
+             a.data.player.inventory.defenceUps.count == b.data.player.inventory.defenceUps.count;
     case ObjectClass::Enemy:
       return a.data.enemy.state == b.data.enemy.state &&
              a.data.enemy.healthPoints == b.data.enemy.healthPoints &&
@@ -71,6 +73,7 @@ bool equalSnapshots(const game_engine::NetGameObjectSnapshot& a,
              a.data.level.dst.h == b.data.level.dst.h;
     case ObjectClass::Portal:
     case ObjectClass::Background:
+    case ObjectClass::Material:
       return true;
   }
   return false;

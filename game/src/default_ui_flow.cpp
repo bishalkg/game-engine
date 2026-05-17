@@ -14,8 +14,68 @@ const char* levelName(LevelIndex levelId) {
       return "Level 2";
     case LevelIndex::LEVEL_3:
       return "Level 3";
+    case LevelIndex::LEVEL_4:
+      return "Level 4";
+    case LevelIndex::LEVEL_5:
+      return "Level 5";
   }
   return "Unknown";
+}
+
+bool applyShopPurchase(
+  game_engine::Engine& engine,
+  game::ProgressionService& progService,
+  UIManager::ShopPurchase purchase) {
+  auto& gameState = engine.getGameState();
+  if (gameState.playerLayer < 0 ||
+      gameState.playerLayer >= static_cast<int>(gameState.layers.size()) ||
+      gameState.playerIndex < 0 ||
+      gameState.playerIndex >= static_cast<int>(gameState.layers[gameState.playerLayer].size())) {
+    return false;
+  }
+
+  GameObject& player = gameState.layers[gameState.playerLayer][gameState.playerIndex];
+  if (player.objClass != ObjectClass::Player) {
+    return false;
+  }
+
+  auto& inventory = player.data.player.inventory;
+  MaterialData* currency = nullptr;
+  MaterialData* item = nullptr;
+  uint32_t cost = 0;
+
+  switch (purchase) {
+    case UIManager::ShopPurchase::HealthPotion:
+      currency = &inventory.coins;
+      item = &inventory.healthPotions;
+      cost = 15;
+      break;
+    case UIManager::ShopPurchase::ManaPotion:
+      currency = &inventory.coins;
+      item = &inventory.manaPotions;
+      cost = 15;
+      break;
+    case UIManager::ShopPurchase::AttackUp:
+      currency = &inventory.gems;
+      item = &inventory.attackUps;
+      cost = 10;
+      break;
+    case UIManager::ShopPurchase::DefenceUp:
+      currency = &inventory.gems;
+      item = &inventory.defenceUps;
+      cost = 10;
+      break;
+  }
+
+  if (!currency || !item || currency->count < cost) {
+    return false;
+  }
+
+  currency->count -= cost;
+  ++item->count;
+  progService.updatePlayerInventory(inventory);
+  engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
+  return true;
 }
 
 class DefaultUIFlow final : public game::IUIFlow {
@@ -82,6 +142,12 @@ public:
         snaps.deltaTime = deltaTime;
         snaps.cutscene = &resources.pauseMenuScene;
         snaps.cutSceneID = -2;
+        break;
+      }
+      case UIManager::GameView::ShopMenu: {
+        snaps.deltaTime = deltaTime;
+        snaps.cutscene = &resources.shopScene;
+        snaps.cutSceneID = -6;
         break;
       }
       case UIManager::GameView::MainMenu: {
@@ -175,6 +241,9 @@ public:
     }
     if (actions.selectedSessionIndex) {
       (void)engine.selectDiscoveredSession(*actions.selectedSessionIndex);
+    }
+    if (actions.shopPurchase) {
+      (void)applyShopPurchase(engine, progService, *actions.shopPurchase);
     }
     if (actions.selectedPlayerSprite) {
       gameState.selectedPlayerSprite = *actions.selectedPlayerSprite;

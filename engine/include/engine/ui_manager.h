@@ -21,6 +21,7 @@ namespace UIManager {
       Playing,
       MainMenu,
       PauseMenu,
+      ShopMenu,
       CutScene,
       CharacterSelect,
       LevelSelection,
@@ -40,6 +41,14 @@ namespace UIManager {
   };
 
   struct LoadingSnapshot { float progress01; bool done; };
+
+  enum class ShopPurchase {
+    HealthPotion,
+    ManaPotion,
+    AttackUp,
+    DefenceUp,
+  };
+
   struct UIActions {
     bool finishLoading = false;
     bool blockMainGameDraw = false;
@@ -58,6 +67,7 @@ namespace UIManager {
     std::optional<SpriteType> selectedPlayerSprite;
     std::optional<LevelIndex> selectedLevel;
     std::optional<size_t> selectedSessionIndex;
+    std::optional<ShopPurchase> shopPurchase;
     std::optional<GameView> nextView;
     bool quitGame = false;
   };
@@ -169,6 +179,7 @@ namespace UIManager {
       UIActions drawMainMenu(const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState);
       UIActions drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawPausedMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
+      UIActions drawShopMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawCharacterSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawLevelSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);

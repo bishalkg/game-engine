@@ -468,6 +468,20 @@ void GameResources::loadAllAssets(
         .loopScene = false,
       },
     };
+
+    texShop = loadTexture(state.renderer, "data/hud/shop.png");
+    shopAnim = std::make_shared<Animation>(1, 1.0f, 0, true);
+    shopScene = {
+      UIManager::Cutscene{
+        .tex = texShop,
+        .anim = shopAnim,
+        .scale = 1.0f,
+        .numFrameColumns = 1,
+        .frameH = 360.0f,
+        .frameW = 640.0f,
+        .loopScene = false,
+      },
+    };
   }
 }
 
@@ -523,11 +537,13 @@ void GameResources::unload() {
   texCharSelect = nullptr;
   texLevelSelect = nullptr;
   texPauseMenu = nullptr;
+  texShop = nullptr;
   texHudNumbers = nullptr;
   texCoinCountUI = nullptr;
   texGemCountUI = nullptr;
   coinCountUIAnim.reset();
   gemCountUIAnim.reset();
+  shopAnim.reset();
 }
 
 } // namespace game

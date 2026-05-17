@@ -880,7 +880,8 @@ public:
     if (engine.isMultiplayerActive()) {
       if (auto* client = engine.getGameClient()) {
         if (ctx.gameState.currentView == UIManager::GameView::Playing ||
-            ctx.gameState.currentView == UIManager::GameView::PauseMenu) {
+            ctx.gameState.currentView == UIManager::GameView::PauseMenu ||
+            ctx.gameState.currentView == UIManager::GameView::ShopMenu) {
           engine.setAudioSoundtrack(
             resources.m_currLevel ? resources.m_currLevel->backgroundTrack : nullptr);
         }
@@ -969,7 +970,8 @@ public:
     }
 
     if (ctx.gameState.currentView != UIManager::GameView::Playing &&
-        ctx.gameState.currentView != UIManager::GameView::PauseMenu) {
+        ctx.gameState.currentView != UIManager::GameView::PauseMenu &&
+        ctx.gameState.currentView != UIManager::GameView::ShopMenu) {
       return;
     }
 

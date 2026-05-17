@@ -24,7 +24,7 @@ enum class EnemyState: std::uint32_t {
 };
 
 enum class MaterialType: std::uint32_t {
-  none, coin, gem, healthPotion, manaPotion
+  none, coin, gem, healthPotion, manaPotion, attackUp, defenceUp
 };
 
 enum class MaterialState: std::uint32_t {
@@ -117,10 +117,30 @@ struct Inventory{
   // std::vector<MaterialData> consumables;
   MaterialData healthPotions;
   MaterialData manaPotions;
+  MaterialData attackUps;
+  MaterialData defenceUps;
   MaterialData coins;
   MaterialData gems;
-  Inventory(): healthPotions(0, MaterialType::healthPotion), manaPotions(0, MaterialType::manaPotion), coins(0, MaterialType::coin), gems(0, MaterialType::gem) {}
-  Inventory(uint32_t hpots, uint32_t manaPots, uint32_t coinAmt, uint32_t gemAmt): healthPotions(hpots, MaterialType::healthPotion), manaPotions(manaPots, MaterialType::manaPotion), coins(coinAmt, MaterialType::coin), gems(gemAmt, MaterialType::gem) {}
+  Inventory()
+    : healthPotions(0, MaterialType::healthPotion),
+      manaPotions(0, MaterialType::manaPotion),
+      attackUps(0, MaterialType::attackUp),
+      defenceUps(0, MaterialType::defenceUp),
+      coins(0, MaterialType::coin),
+      gems(0, MaterialType::gem) {}
+  Inventory(
+    uint32_t hpots,
+    uint32_t manaPots,
+    uint32_t attackUpAmt,
+    uint32_t defenceUpAmt,
+    uint32_t coinAmt,
+    uint32_t gemAmt)
+    : healthPotions(hpots, MaterialType::healthPotion),
+      manaPotions(manaPots, MaterialType::manaPotion),
+      attackUps(attackUpAmt, MaterialType::attackUp),
+      defenceUps(defenceUpAmt, MaterialType::defenceUp),
+      coins(coinAmt, MaterialType::coin),
+      gems(gemAmt, MaterialType::gem) {}
 };
 
 struct PlayerData {

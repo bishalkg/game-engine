@@ -38,6 +38,8 @@ namespace game {
       case LevelIndex::LEVEL_2:
         return LevelIndex::LEVEL_3;
       case LevelIndex::LEVEL_3:
+      case LevelIndex::LEVEL_4:
+      case LevelIndex::LEVEL_5:
         return LevelIndex::LEVEL_3;
     }
 
@@ -61,11 +63,13 @@ namespace game {
 
   void ProgressionService::updatePlayerInventory(Inventory currInventory) {
     std::vector<InventoryItemRecord> records;
-    records.reserve(4);
+    records.reserve(6);
     records.emplace_back(InventoryItemRecord{currInventory.coins.type, currInventory.coins.count});
     records.emplace_back(InventoryItemRecord{currInventory.gems.type, currInventory.gems.count});
     records.emplace_back(InventoryItemRecord{currInventory.healthPotions.type, currInventory.healthPotions.count});
     records.emplace_back(InventoryItemRecord{currInventory.manaPotions.type, currInventory.manaPotions.count});
+    records.emplace_back(InventoryItemRecord{currInventory.attackUps.type, currInventory.attackUps.count});
+    records.emplace_back(InventoryItemRecord{currInventory.defenceUps.type, currInventory.defenceUps.count});
     m_Profile.item_records = std::move(records);
   }
 
@@ -74,6 +78,8 @@ namespace game {
     uint32_t coinCount = 0;
     uint32_t healthPots = 0;
     uint32_t manaPots = 0;
+    uint32_t attackUpCount = 0;
+    uint32_t defenceUpCount = 0;
 
     for (auto const &rec : m_Profile.item_records) {
       switch (rec.type) {
@@ -93,12 +99,20 @@ namespace game {
           manaPots = rec.amount;
           break;
         }
+        case MaterialType::attackUp: {
+          attackUpCount = rec.amount;
+          break;
+        }
+        case MaterialType::defenceUp: {
+          defenceUpCount = rec.amount;
+          break;
+        }
         default:
       }
 
     }
 
-    return Inventory(healthPots, manaPots, coinCount, gemCount);
+    return Inventory(healthPots, manaPots, attackUpCount, defenceUpCount, coinCount, gemCount);
   }
 
 

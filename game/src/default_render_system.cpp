@@ -38,6 +38,7 @@ public:
 
     if (gameState.currentView == UIManager::GameView::Playing ||
         gameState.currentView == UIManager::GameView::PauseMenu ||
+        gameState.currentView == UIManager::GameView::ShopMenu ||
         gameState.currentView == UIManager::GameView::LevelSelection
       ) {
       drawAllObjects(engine, resources, deltaTime, actions);
