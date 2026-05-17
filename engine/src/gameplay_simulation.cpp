@@ -1053,6 +1053,8 @@ void collisionResponse(
         // player colliding with item
 
         if (objB.data.material.state == MaterialState::present) {
+          awardMaterialToPlayer(objA, objB.data.material);
+          clearDynamicCollider(objB);
           objB.data.material.state = MaterialState::collapsing;
           switch (objB.data.material.type) {
             case MaterialType::coin:
@@ -1064,9 +1066,6 @@ void collisionResponse(
             default:
               break;
           }
-        } else if (objB.data.material.state == MaterialState::collected) {
-          awardMaterialToPlayer(objA, objB.data.material);
-          clearDynamicCollider(objB);
         }
         break;
       case ObjectClass::Player:

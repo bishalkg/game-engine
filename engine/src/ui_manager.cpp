@@ -20,7 +20,8 @@ namespace UIManager {
     constexpr float kHudWidgetBottomMargin = 4.0f;
     constexpr float kHudTextBoxTopOffset = 20.0f;
     constexpr float kHudTextBoxHeight = 1.0f;
-    constexpr float kNumbersSlotSize = 32.0f;
+    constexpr float kNumbersSlotWidth = 32.0f;
+    constexpr float kNumbersRowHeight = 16.0f;
     constexpr float kNumbersGlyphOffsetX = 11.0f;
     constexpr float kNumbersGlyphWidth = 11.0f;
     constexpr float kNumbersGlyphHeight = 16.0f;
@@ -37,12 +38,12 @@ namespace UIManager {
       }
 
       const uint32_t clampedCount = std::min<uint32_t>(count, 99);
-      const uint32_t slotRow = clampedCount / static_cast<uint32_t>(kNumbersAtlasColumns);
-      const uint32_t slotCol = clampedCount % static_cast<uint32_t>(kNumbersAtlasColumns);
+      const uint32_t slotRow = clampedCount < 10 ? 0 : clampedCount / 10;
+      const uint32_t slotCol = clampedCount < 10 ? (clampedCount - 1) : (clampedCount % 10);
 
       SDL_FRect src{
-        static_cast<float>(slotCol) * kNumbersSlotSize + kNumbersGlyphOffsetX,
-        static_cast<float>(slotRow) * kNumbersSlotSize,
+        static_cast<float>(slotCol) * kNumbersSlotWidth + kNumbersGlyphOffsetX,
+        static_cast<float>(slotRow) * kNumbersRowHeight,
         kNumbersGlyphWidth,
         kNumbersGlyphHeight,
       };
