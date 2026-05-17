@@ -9,22 +9,6 @@ namespace game {
   static constexpr std::uint16_t SCHEMA_VERSION = 1;
   static constexpr std::uint32_t MAGIC = 65500;
 
-  namespace {
-    void upsertInventoryItemRecord(
-      std::vector<InventoryItemRecord>& records,
-      MaterialType type,
-      uint32_t amount) {
-      const uint32_t itemId = static_cast<uint32_t>(type);
-      for (InventoryItemRecord& record : records) {
-        if (record.type == itemId) {
-          record.amount = amount;
-          return;
-        }
-      }
-      records.push_back(InventoryItemRecord{itemId, amount});
-    }
-  } // namespace
-
   std::unique_ptr<game::ProgressionService> createDefaultProgressionService() {
     return std::make_unique<game::ProgressionService>();
   }
@@ -76,28 +60,48 @@ namespace game {
   };
 
   void ProgressionService::updatePlayerInventory(Inventory currInventory) {
-
-    //
     std::vector<InventoryItemRecord> records;
-
-
-    upsertInventoryItemRecord(
-      m_Profile.item_records,
-      currInventory.healthPotions.type,
-      currInventory.healthPotions.count);
-    upsertInventoryItemRecord(
-      m_Profile.item_records,
-      currInventory.manaPotiions.type,
-      currInventory.manaPotiions.count);
-    upsertInventoryItemRecord(
-      m_Profile.item_records,
-      currInventory.coins.type,
-      currInventory.coins.count);
-    upsertInventoryItemRecord(
-      m_Profile.item_records,
-      currInventory.gems.type,
-      currInventory.gems.count);
+    records.reserve(4);
+    records.emplace_back(InventoryItemRecord{currInventory.coins.type, currInventory.coins.count});
+    records.emplace_back(InventoryItemRecord{currInventory.gems.type, currInventory.gems.count});
+    records.emplace_back(InventoryItemRecord{currInventory.healthPotions.type, currInventory.healthPotions.count});
+    records.emplace_back(InventoryItemRecord{currInventory.manaPotions.type, currInventory.manaPotions.count});
+    m_Profile.item_records = std::move(records);
   }
+
+  Inventory ProgressionService::buildInventoryFromState() {
+    uint32_t gemCount = 0;
+    uint32_t coinCount = 0;
+    uint32_t healthPots = 0;
+    uint32_t manaPots = 0;
+
+    for (auto const &rec : m_Profile.item_records) {
+      switch (rec.type) {
+        case MaterialType::coin: {
+          coinCount = rec.amount;
+          break;
+        }
+        case MaterialType::gem: {
+          gemCount = rec.amount;
+          break;
+        }
+        case MaterialType::healthPotion: {
+          healthPots = rec.amount;
+          break;
+        }
+        case MaterialType::manaPotion: {
+          manaPots = rec.amount;
+          break;
+        }
+        default:
+      }
+
+    }
+
+    return std::move(Inventory(healthPots, manaPots, gemCount, coinCount));
+  }
+
+
 
   // call inside switchToLevel:
   // this can happen manually clicking the level
@@ -186,14 +190,14 @@ namespace game {
     bytes.write_enum(ProfileChunkType::LevelProgress);
     bytes.write_u32(m_Profile.level_records.size());
     for (const LevelProgressRecord& lvlRec : m_Profile.level_records) {
-      bytes.write_u32(static_cast<uint32_t>(lvlRec.lvlid));
+      bytes.write_enum(lvlRec.lvlid);
       bytes.write_bool(lvlRec.complete);
     }
 
     bytes.write_enum(ProfileChunkType::CharacterProgress);
     bytes.write_u32(m_Profile.char_records.size());
     for (const CharacterProgressRecord& charRec : m_Profile.char_records) {
-      bytes.write_u32(static_cast<uint32_t>(charRec.spriteType));
+      bytes.write_enum(charRec.spriteType);
       bytes.write_bool(charRec.unlockedUltOne);
       bytes.write_bool(charRec.unlockedUltTwo);
     }
@@ -250,7 +254,7 @@ namespace game {
       m_Profile.level_records.clear();
       m_Profile.level_records.resize(levelRecordLen);
       for (size_t i = 0; i < levelRecordLen; ++i) {
-        m_Profile.level_records[i].lvlid = static_cast<LevelIndex>(r.read_u32());
+        m_Profile.level_records[i].lvlid = r.read_enum<LevelIndex>();
         m_Profile.level_records[i].complete = r.read_bool();
       }
 
@@ -262,7 +266,7 @@ namespace game {
       m_Profile.char_records.clear();
       m_Profile.char_records.resize(charRecordLen);
       for (size_t i = 0; i < charRecordLen; ++i) {
-        m_Profile.char_records[i].spriteType = static_cast<SpriteType>(r.read_u32());
+        m_Profile.char_records[i].spriteType = r.read_enum<SpriteType>();
         m_Profile.char_records[i].unlockedUltOne = r.read_bool();
         m_Profile.char_records[i].unlockedUltTwo = r.read_bool();
       }

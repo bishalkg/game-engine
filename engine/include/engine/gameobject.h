@@ -116,10 +116,11 @@ struct MaterialData{
 struct Inventory{
   // std::vector<MaterialData> consumables;
   MaterialData healthPotions;
-  MaterialData manaPotiions;
+  MaterialData manaPotions;
   MaterialData coins;
   MaterialData gems;
-  Inventory(): healthPotions(0, MaterialType::healthPotion), manaPotiions(0, MaterialType::manaPotion), coins(0, MaterialType::coin), gems(0, MaterialType::gem) {}
+  Inventory(): healthPotions(0, MaterialType::healthPotion), manaPotions(0, MaterialType::manaPotion), coins(0, MaterialType::coin), gems(0, MaterialType::gem) {}
+  Inventory(uint32_t hpots, uint32_t manaPots, uint32_t coinAmt, uint32_t gemAmt): healthPotions(hpots, MaterialType::healthPotion), manaPotions(manaPots, MaterialType::manaPotion), coins(coinAmt, MaterialType::coin), gems(gemAmt, MaterialType::gem) {}
 };
 
 struct PlayerData {

@@ -397,6 +397,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
 
           player.data.player = PlayerData(); // TODO ultUnlocked to be constructed?
           player.data.player.unlockedUltimateOne = ultOneUnlocked;
+          player.data.player.inventory = pserv.buildInventoryFromState();
           player.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
           player.currentAnimation = res.ANIM_IDLE;
           player.presentationVariant = PresentationVariant::Idle;

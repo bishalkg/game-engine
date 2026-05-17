@@ -219,7 +219,7 @@ void awardMaterialToPlayer(GameObject& player, const MaterialData& material) {
       player.data.player.inventory.healthPotions.count += material.count;
       break;
     case MaterialType::manaPotion:
-      player.data.player.inventory.manaPotiions.count += material.count;
+      player.data.player.inventory.manaPotions.count += material.count;
       break;
   }
 }
