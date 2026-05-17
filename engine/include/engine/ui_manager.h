@@ -49,6 +49,11 @@ namespace UIManager {
     DefenceUp,
   };
 
+  enum class InventoryUse {
+    HealthPotion,
+    ManaPotion,
+  };
+
   struct UIActions {
     bool finishLoading = false;
     bool blockMainGameDraw = false;
@@ -68,6 +73,7 @@ namespace UIManager {
     std::optional<LevelIndex> selectedLevel;
     std::optional<size_t> selectedSessionIndex;
     std::optional<ShopPurchase> shopPurchase;
+    std::optional<InventoryUse> inventoryUse;
     std::optional<GameView> nextView;
     bool quitGame = false;
   };
@@ -89,6 +95,10 @@ namespace UIManager {
   struct GameplayHudSnapshot {
     uint32_t playerCoins = 0;
     uint32_t playerGems = 0;
+    uint32_t playerHealthPotions = 0;
+    uint32_t playerManaPotions = 0;
+    uint32_t playerAttackUps = 0;
+    uint32_t playerDefenceUps = 0;
     Animation* coinCountHudAnim{nullptr};
     Animation* gemCountHudAnim{nullptr};
     SDL_Texture* numbersHudTex{nullptr};
@@ -180,6 +190,7 @@ namespace UIManager {
       UIActions drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawPausedMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawShopMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
+      UIActions drawInventoryMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawCharacterSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawLevelSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);

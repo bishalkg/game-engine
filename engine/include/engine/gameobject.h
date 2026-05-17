@@ -173,8 +173,8 @@ struct PlayerData {
 
   PlayerData()
     : damageTimer(0.5f),
-      manaRecoveryTimer(0.2f),
-      healthRecoveryTimer(0.2f),
+      manaRecoveryTimer(1.0f),
+      healthRecoveryTimer(1.0f),
       ultimateRecoveryTimer(1.0f),
       weaponTimer(0.1f),
       jumpWindupTimer(0.00f) { //unlockedUltimateOne(ultOneUnlocked)

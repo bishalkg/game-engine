@@ -482,6 +482,20 @@ void GameResources::loadAllAssets(
         .loopScene = false,
       },
     };
+
+    texInventory = loadTexture(state.renderer, "data/hud/inventory.png");
+    inventoryAnim = std::make_shared<Animation>(1, 1.0f, 0, true);
+    inventoryScene = {
+      UIManager::Cutscene{
+        .tex = texInventory,
+        .anim = inventoryAnim,
+        .scale = 1.0f,
+        .numFrameColumns = 1,
+        .frameH = 360.0f,
+        .frameW = 640.0f,
+        .loopScene = false,
+      },
+    };
   }
 }
 
@@ -538,12 +552,14 @@ void GameResources::unload() {
   texLevelSelect = nullptr;
   texPauseMenu = nullptr;
   texShop = nullptr;
+  texInventory = nullptr;
   texHudNumbers = nullptr;
   texCoinCountUI = nullptr;
   texGemCountUI = nullptr;
   coinCountUIAnim.reset();
   gemCountUIAnim.reset();
   shopAnim.reset();
+  inventoryAnim.reset();
 }
 
 } // namespace game

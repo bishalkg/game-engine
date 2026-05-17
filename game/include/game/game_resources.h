@@ -139,6 +139,10 @@ struct GameResources {
   SDL_Texture* texShop{};
   std::shared_ptr<Animation> shopAnim;
 
+  std::vector<UIManager::Cutscene> inventoryScene;
+  SDL_Texture* texInventory{};
+  std::shared_ptr<Animation> inventoryAnim;
+
   SDL_Texture* texHudNumbers{};
   SDL_Texture* texCoinCountUI{};
   SDL_Texture* texGemCountUI{};

@@ -78,6 +78,53 @@ bool applyShopPurchase(
   return true;
 }
 
+bool applyInventoryUse(
+  game_engine::Engine& engine,
+  game::ProgressionService& progService,
+  UIManager::InventoryUse use) {
+  auto& gameState = engine.getGameState();
+  if (gameState.playerLayer < 0 ||
+      gameState.playerLayer >= static_cast<int>(gameState.layers.size()) ||
+      gameState.playerIndex < 0 ||
+      gameState.playerIndex >= static_cast<int>(gameState.layers[gameState.playerLayer].size())) {
+    return false;
+  }
+
+  GameObject& player = gameState.layers[gameState.playerLayer][gameState.playerIndex];
+  if (player.objClass != ObjectClass::Player) {
+    return false;
+  }
+
+  auto& playerData = player.data.player;
+  auto& inventory = playerData.inventory;
+  MaterialData* item = nullptr;
+  int* statValue = nullptr;
+  int maxStatValue = 0;
+
+  switch (use) {
+    case UIManager::InventoryUse::HealthPotion:
+      item = &inventory.healthPotions;
+      statValue = &playerData.healthPoints;
+      maxStatValue = playerData.maxHealthPoints;
+      break;
+    case UIManager::InventoryUse::ManaPotion:
+      item = &inventory.manaPotions;
+      statValue = &playerData.manaPoints;
+      maxStatValue = playerData.maxManaPoints;
+      break;
+  }
+
+  if (!item || !statValue || item->count == 0 || *statValue >= maxStatValue) {
+    return false;
+  }
+
+  *statValue = std::clamp(*statValue + 20, 0, maxStatValue);
+  --item->count;
+  progService.updatePlayerInventory(inventory);
+  engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
+  return true;
+}
+
 class DefaultUIFlow final : public game::IUIFlow {
 public:
   UIManager::UIActions update(
@@ -106,6 +153,10 @@ public:
         player.data.player.ultimatePoints >= player.data.player.maxUltimatePoints;
       snaps.gameplayHud.playerCoins = player.data.player.inventory.coins.count;
       snaps.gameplayHud.playerGems = player.data.player.inventory.gems.count;
+      snaps.gameplayHud.playerHealthPotions = player.data.player.inventory.healthPotions.count;
+      snaps.gameplayHud.playerManaPotions = player.data.player.inventory.manaPotions.count;
+      snaps.gameplayHud.playerAttackUps = player.data.player.inventory.attackUps.count;
+      snaps.gameplayHud.playerDefenceUps = player.data.player.inventory.defenceUps.count;
     } else {
       snaps.playerHP = 0;
       snaps.playerMana = 0;
@@ -148,6 +199,12 @@ public:
         snaps.deltaTime = deltaTime;
         snaps.cutscene = &resources.shopScene;
         snaps.cutSceneID = -6;
+        break;
+      }
+      case UIManager::GameView::InventoryMenu: {
+        snaps.deltaTime = deltaTime;
+        snaps.cutscene = &resources.inventoryScene;
+        snaps.cutSceneID = -7;
         break;
       }
       case UIManager::GameView::MainMenu: {
@@ -244,6 +301,9 @@ public:
     }
     if (actions.shopPurchase) {
       (void)applyShopPurchase(engine, progService, *actions.shopPurchase);
+    }
+    if (actions.inventoryUse) {
+      (void)applyInventoryUse(engine, progService, *actions.inventoryUse);
     }
     if (actions.selectedPlayerSprite) {
       gameState.selectedPlayerSprite = *actions.selectedPlayerSprite;
