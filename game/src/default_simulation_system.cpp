@@ -737,6 +737,7 @@ void playSimulationAudio(
 
   GameObject* localPlayer = findPlayerById(gameState, localPlayerID);
   bool localPlayerWasSwinging = false;
+  // For Multiplayer, audio you want only local player to hear
   if (localPlayer) {
     const auto beforeIt = before.find({ObjectClass::Player, localPlayerID});
     if (beforeIt != before.end()) {
@@ -774,7 +775,8 @@ void playSimulationAudio(
         MIX_PlayAudio(resources.mixer, resources.audioShoot);
       }
 
-      if (localPlayer->data.player.inventory.coins.count > prev.coinCount &&
+      // TODO sound plays twice in single player
+      if (localPlayer->data.player.inventory.coins.count > prev.coinCount + 1 &&
           resources.audioCoinCollect) {
         MIX_PlayAudio(resources.mixer, resources.audioCoinCollect);
       }

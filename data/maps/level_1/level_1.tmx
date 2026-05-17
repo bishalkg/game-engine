@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="100" height="17" tilewidth="32" tileheight="32" infinite="0" nextlayerid="21" nextobjectid="29">
+<map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="100" height="17" tilewidth="32" tileheight="32" infinite="0" nextlayerid="21" nextobjectid="104">
  <editorsettings>
   <export format="tmx"/>
  </editorsettings>
@@ -2140,7 +2140,7 @@
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,4199,0,0,0,0,0,0,0,0,0,4281,4282,0,4320,4321,4321,4321,4325,4321,4321,4325,4321,4321,4322,0,0,0,4253,0,0,0,0,0,0,0,4255,0,0,0,0,0,0,0,0,0,4290,4291,4292,0,0,0,0,0,4265,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,4194,4197,0,4215,4216,4217,0,0,0,0,0,0,0,0,0,4299,0,4337,0,0,0,4342,0,0,4342,0,0,4339,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4306,4307,4308,4309,4310,0,0,0,4281,4282,0,0,0,0,0,0,0,0,0,0,0,0,0,4357,4191,4191,4191,4191,4191,4191,4191,4191,4191,4191,4191,4191,4358,0,0,0,0,0,
 0,0,0,0,0,4190,4191,4191,4191,4192,4211,4214,0,0,4233,0,0,0,0,0,0,0,0,4285,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4324,4325,4326,0,0,0,0,0,4299,0,0,0,0,0,0,0,0,0,0,0,0,4190,4374,4208,4208,4208,4208,4208,4208,4208,4208,4208,4208,4208,4208,4375,4191,4192,0,0,0,
-4191,4203,4203,4203,4191,4207,4225,4225,4359,4244,0,0,0,0,0,0,0,0,0,0,0,4327,0,4302,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4342,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4190,4207,4225,4208,4208,4225,4225,4308,4308,4308,4308,4308,4308,4308,4308,4391,4392,4393,0,0,0,
+4191,4203,4203,4203,4191,4207,4225,4225,4359,4244,0,0,0,0,0,0,0,0,0,0,0,4327,0,4302,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4327,0,0,0,4342,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4190,4207,4225,4208,4208,4225,4225,4308,4308,4308,4308,4308,4308,4308,4308,4391,4392,4393,0,0,0,
 4225,4225,4225,4225,4225,4225,4225,4225,4221,0,0,0,0,0,0,0,0,0,0,4327,0,0,0,0,0,0,0,0,0,0,4261,4262,4263,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4388,4389,4390,4220,4225,4225,4225,4308,4308,4308,4308,4308,4308,4308,4308,4397,0,0,0,0,0,
 4225,4225,4225,4225,4225,4225,4225,4225,4209,4313,4203,4287,4191,4287,4191,4191,4191,4192,0,0,0,0,4379,4191,4192,0,0,0,0,0,4278,4279,4280,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4269,0,0,0,0,0,0,0,4388,4389,4392,4224,4225,4225,4225,4308,4308,4308,4308,4308,4308,4308,4308,4403,0,0,0,0,0,
 4220,4220,4220,4220,4220,4220,4225,4208,4208,4208,4208,4208,4208,4220,4208,4208,4208,4382,0,0,0,0,4387,4220,4209,4287,4191,4191,4191,4191,4207,4191,4209,4191,4191,4191,4191,4192,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4190,4191,4191,4191,4191,4192,0,0,0,0,0,4311,4312,4313,4314,4314,4314,4314,4263,4286,4292,0,0,0,0,4190,4191,4406,4407,4408,4224,4225,4225,4225,4308,4308,4308,4308,4308,4308,4308,4308,4409,4410,4411,4287,4287,4287,
@@ -2198,6 +2198,66 @@
   <object id="28" name="Coin" type="Material" x="334.973" y="294.594">
    <point/>
   </object>
+  <object id="29" name="Coin" type="Material" x="623.892" y="381.537"/>
+  <object id="30" name="Coin" type="Material" x="463.729" y="410.77"/>
+  <object id="31" name="Coin" type="Material" x="495.536" y="409.534"/>
+  <object id="32" name="Coin" type="Material" x="623.72" y="361.618"/>
+  <object id="33" name="Coin" type="Material" x="623.72" y="320.665"/>
+  <object id="34" name="Coin" type="Material" x="623.72" y="341.142"/>
+  <object id="35" name="Coin" type="Material" x="685.5" y="350.979"/>
+  <object id="36" name="Coin" type="Material" x="685.328" y="331.06"/>
+  <object id="37" name="Coin" type="Material" x="685.328" y="290.107"/>
+  <object id="38" name="Coin" type="Material" x="685.328" y="310.584"/>
+  <object id="47" name="Coin" type="Material" x="751.364" y="319.75"/>
+  <object id="48" name="Coin" type="Material" x="751.192" y="299.831"/>
+  <object id="49" name="Coin" type="Material" x="751.192" y="258.878"/>
+  <object id="50" name="Coin" type="Material" x="751.192" y="279.355"/>
+  <object id="51" name="Coin" type="Material" x="815.525" y="222.089"/>
+  <object id="52" name="Coin" type="Material" x="815.353" y="202.17"/>
+  <object id="53" name="Coin" type="Material" x="815.353" y="161.217"/>
+  <object id="54" name="Coin" type="Material" x="815.353" y="181.694"/>
+  <object id="55" name="Gem" type="Material" x="1042.19" y="183.937"/>
+  <object id="56" name="Gem" type="Material" x="1101.52" y="183.965"/>
+  <object id="59" name="Gem" type="Material" x="911.597" y="181.666"/>
+  <object id="62" name="Gem" type="Material" x="1170.67" y="182.517"/>
+  <object id="63" name="Coin" type="Material" x="1231.62" y="471.991"/>
+  <object id="64" name="Coin" type="Material" x="1231.45" y="452.072"/>
+  <object id="65" name="Coin" type="Material" x="1231.45" y="411.119"/>
+  <object id="66" name="Coin" type="Material" x="1231.45" y="431.596"/>
+  <object id="67" name="Coin" type="Material" x="1081.62" y="438.792"/>
+  <object id="68" name="Coin" type="Material" x="1039.01" y="378.208"/>
+  <object id="69" name="Coin" type="Material" x="979.491" y="376.741"/>
+  <object id="70" name="Coin" type="Material" x="1007.78" y="377.77"/>
+  <object id="71" name="Coin" type="Material" x="1189.89" y="440.24"/>
+  <object id="72" name="Coin" type="Material" x="1300.21" y="120.59"/>
+  <object id="73" name="Coin" type="Material" x="1300.04" y="100.671"/>
+  <object id="74" name="Coin" type="Material" x="1300.04" y="59.7185"/>
+  <object id="75" name="Coin" type="Material" x="1300.04" y="80.1955"/>
+  <object id="76" name="Coin" type="Material" x="1612.04" y="122.234"/>
+  <object id="77" name="Coin" type="Material" x="1611.87" y="102.315"/>
+  <object id="78" name="Coin" type="Material" x="1611.87" y="61.3615"/>
+  <object id="79" name="Coin" type="Material" x="1611.87" y="81.8385"/>
+  <object id="80" name="Gem" type="Material" x="1748.17" y="118.988"/>
+  <object id="82" name="Gem" type="Material" x="1803.42" y="119.421"/>
+  <object id="83" name="Gem" type="Material" x="1875.53" y="284.585"/>
+  <object id="84" name="Gem" type="Material" x="1999.07" y="285.492"/>
+  <object id="85" name="Coin" type="Material" x="1806.73" y="440.004"/>
+  <object id="86" name="Coin" type="Material" x="1682.82" y="439.551"/>
+  <object id="87" name="Coin" type="Material" x="1711.11" y="440.58"/>
+  <object id="88" name="Coin" type="Material" x="1838.37" y="439.566"/>
+  <object id="89" name="Gem" type="Material" x="1872.73" y="480.302"/>
+  <object id="90" name="Gem" type="Material" x="1647.3" y="477.964"/>
+  <object id="91" name="Gem" type="Material" x="2159.52" y="253.675"/>
+  <object id="92" name="Coin" type="Material" x="2220.91" y="446.259"/>
+  <object id="93" name="Coin" type="Material" x="2161.39" y="444.792"/>
+  <object id="94" name="Coin" type="Material" x="2189.68" y="445.821"/>
+  <object id="96" name="Coin" type="Material" x="2482.31" y="442.359"/>
+  <object id="97" name="Coin" type="Material" x="2510.6" y="443.388"/>
+  <object id="98" name="Coin" type="Material" x="2794.11" y="282.019"/>
+  <object id="99" name="Coin" type="Material" x="2734.59" y="280.552"/>
+  <object id="100" name="Coin" type="Material" x="2762.88" y="281.581"/>
+  <object id="102" name="Coin" type="Material" x="3059.22" y="314.426"/>
+  <object id="103" name="Coin" type="Material" x="3087.51" y="315.455"/>
  </objectgroup>
  <layer id="2" name="Foreground" width="100" height="17">
   <data encoding="csv">
