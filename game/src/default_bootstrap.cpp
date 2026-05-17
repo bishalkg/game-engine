@@ -14,6 +14,64 @@ using game::GameResources;
 using game::ProgressionProfile;
 using game::ProgressionService;
 
+struct PreservedPlayerTransitionState {
+  Inventory inventory;
+  int healthPoints = 100;
+  int maxHealthPoints = 100;
+  int manaPoints = 100;
+  int maxManaPoints = 100;
+  int ultimatePoints = 0;
+  int maxUltimatePoints = 100;
+  bool unlockedUltimateOne = false;
+  int meleeDamage = 10;
+};
+
+std::optional<PreservedPlayerTransitionState> capturePreservedPlayerState(const GameState& state) {
+  if (state.playerLayer < 0 ||
+      state.playerLayer >= static_cast<int>(state.layers.size()) ||
+      state.playerIndex < 0 ||
+      state.playerIndex >= static_cast<int>(state.layers[state.playerLayer].size())) {
+    return std::nullopt;
+  }
+
+  const GameObject& player = state.layers[state.playerLayer][state.playerIndex];
+  if (player.objClass != ObjectClass::Player) {
+    return std::nullopt;
+  }
+
+  return PreservedPlayerTransitionState{
+    .inventory = player.data.player.inventory,
+    .healthPoints = player.data.player.healthPoints,
+    .maxHealthPoints = player.data.player.maxHealthPoints,
+    .manaPoints = player.data.player.manaPoints,
+    .maxManaPoints = player.data.player.maxManaPoints,
+    .ultimatePoints = player.data.player.ultimatePoints,
+    .maxUltimatePoints = player.data.player.maxUltimatePoints,
+    .unlockedUltimateOne = player.data.player.unlockedUltimateOne,
+    .meleeDamage = player.data.player.meleeDamage,
+  };
+}
+
+void applyPreservedPlayerState(
+  GameObject& player,
+  const PreservedPlayerTransitionState& preservedState) {
+  if (player.objClass != ObjectClass::Player) {
+    return;
+  }
+
+  player.data.player.inventory = preservedState.inventory;
+  player.data.player.healthPoints = preservedState.healthPoints;
+  player.data.player.maxHealthPoints = preservedState.maxHealthPoints;
+  player.data.player.manaPoints = preservedState.manaPoints;
+  player.data.player.maxManaPoints = preservedState.maxManaPoints;
+  player.data.player.ultimatePoints = preservedState.ultimatePoints;
+  player.data.player.maxUltimatePoints = preservedState.maxUltimatePoints;
+  player.data.player.unlockedUltimateOne =
+    player.data.player.unlockedUltimateOne || preservedState.unlockedUltimateOne;
+  player.data.player.meleeDamage = preservedState.meleeDamage;
+}
+
+
 bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameState, ProgressionService& progService) {
   SDLState& sdlState = engine.getSDLState();
 
@@ -395,6 +453,8 @@ bool switchToLevel(game_engine::Engine& engine, GameResources& resources, Progre
   gameState.currentView = UIManager::GameView::LevelLoading;
   gameState.setLevelLoadProgress(0);
   gameState.setLevelLoadProgress(10);
+  const auto preservedPlayerState = capturePreservedPlayerState(gameState);
+
 
   if (!resources.loadLevel(levelId, sdlState, gameState, progService, resources.m_masterAudioGain, false)) {
     return false;
@@ -403,14 +463,31 @@ bool switchToLevel(game_engine::Engine& engine, GameResources& resources, Progre
   if (oldLevel == LevelIndex::LEVEL_1 && levelId == LevelIndex::LEVEL_2) {
     progService.markLevelComplete(oldLevel);
     progService.unlockUltimateForChar(gameState.selectedPlayerSprite, 1); // TODO testing only
+
+    if (preservedPlayerState.has_value()) {
+      progService.updatePlayerInventory(preservedPlayerState->inventory);
+    }
   }
 
   GameState newGameState(sdlState);
   newGameState.currentLevelId = levelId;
   newGameState.selectedPlayerSprite = gameState.selectedPlayerSprite;
   newGameState.currentView = UIManager::GameView::LevelLoading;
+
   if (!initAllTiles(engine, resources, newGameState, progService)) {
     return false;
+  }
+
+  if (preservedPlayerState &&
+      newGameState.playerLayer >= 0 &&
+      newGameState.playerLayer < static_cast<int>(newGameState.layers.size()) &&
+      newGameState.playerIndex >= 0 &&
+      newGameState.playerIndex < static_cast<int>(newGameState.layers[newGameState.playerLayer].size())) {
+    GameObject& newPlayer =
+      newGameState.layers[newGameState.playerLayer][newGameState.playerIndex];
+    if (newPlayer.objClass == ObjectClass::Player) {
+      applyPreservedPlayerState(newPlayer, *preservedPlayerState);
+    }
   }
 
 

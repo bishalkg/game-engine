@@ -9,6 +9,22 @@ namespace game {
   static constexpr std::uint16_t SCHEMA_VERSION = 1;
   static constexpr std::uint32_t MAGIC = 65500;
 
+  namespace {
+    void upsertInventoryItemRecord(
+      std::vector<InventoryItemRecord>& records,
+      MaterialType type,
+      uint32_t amount) {
+      const uint32_t itemId = static_cast<uint32_t>(type);
+      for (InventoryItemRecord& record : records) {
+        if (record.type == itemId) {
+          record.amount = amount;
+          return;
+        }
+      }
+      records.push_back(InventoryItemRecord{itemId, amount});
+    }
+  } // namespace
+
   std::unique_ptr<game::ProgressionService> createDefaultProgressionService() {
     return std::make_unique<game::ProgressionService>();
   }
@@ -58,6 +74,30 @@ namespace game {
     }
 
   };
+
+  void ProgressionService::updatePlayerInventory(Inventory currInventory) {
+
+    //
+    std::vector<InventoryItemRecord> records;
+
+
+    upsertInventoryItemRecord(
+      m_Profile.item_records,
+      currInventory.healthPotions.type,
+      currInventory.healthPotions.count);
+    upsertInventoryItemRecord(
+      m_Profile.item_records,
+      currInventory.manaPotiions.type,
+      currInventory.manaPotiions.count);
+    upsertInventoryItemRecord(
+      m_Profile.item_records,
+      currInventory.coins.type,
+      currInventory.coins.count);
+    upsertInventoryItemRecord(
+      m_Profile.item_records,
+      currInventory.gems.type,
+      currInventory.gems.count);
+  }
 
   // call inside switchToLevel:
   // this can happen manually clicking the level
@@ -162,7 +202,7 @@ namespace game {
     bytes.write_enum(ProfileChunkType::InventoryProgress);
     bytes.write_u32(m_Profile.item_records.size());
     for (const InventoryItemRecord& invRec : m_Profile.item_records) {
-      bytes.write_u32(invRec.id);
+      bytes.write_enum(invRec.type);
       bytes.write_u32(invRec.amount);
     }
 
@@ -236,7 +276,7 @@ namespace game {
       m_Profile.item_records.clear();
       m_Profile.item_records.resize(inventoryRecordLen);
       for (size_t i = 0; i < inventoryRecordLen; ++i) {
-        m_Profile.item_records[i].id = r.read_u32();
+        m_Profile.item_records[i].type = r.read_enum<MaterialType>();
         m_Profile.item_records[i].amount = r.read_u32();
       }
 
