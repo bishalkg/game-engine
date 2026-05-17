@@ -205,6 +205,7 @@ namespace UIManager {
         ImU32 color,
         float yOffset,
         bool highlightReady);
+      void drawPlayerStatusBars(const UISnapshots& snaps);
 
       void drawGameplayHudCounts(const game_engine::SDLState& sdlState);
 

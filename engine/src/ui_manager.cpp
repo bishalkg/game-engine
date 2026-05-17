@@ -559,6 +559,7 @@ namespace UIManager {
         wantsHandCursor = true;
       }
 
+      drawPlayerStatusBars(snaps);
 
       if (snaps.togglePauseGameplay) {
          act.nextView = GameView::Playing;
@@ -631,6 +632,8 @@ namespace UIManager {
         wantsHandCursor = true;
       }
 
+      drawPlayerStatusBars(snaps);
+
       return act;
   }
 
@@ -690,6 +693,8 @@ namespace UIManager {
       if (anyHovered) {
         wantsHandCursor = true;
       }
+
+      drawPlayerStatusBars(snaps);
 
       return act;
   }
@@ -1025,6 +1030,12 @@ namespace UIManager {
       ImGui::PopStyleVar(2);
       ImGui::End();
 
+      drawPlayerStatusBars(snaps);
+
+      return act;
+  }
+
+  void UI_Manager::drawPlayerStatusBars(const UISnapshots& snaps) {
       drawPlayerBar("HP", snaps.playerHP, IM_COL32(0, 200, 0, 255), 10.0f, false);
       drawPlayerBar("Mana", snaps.playerMana, IM_COL32(186, 154, 255, 255), 56.0f, false);
       drawPlayerBar(
@@ -1033,8 +1044,6 @@ namespace UIManager {
         IM_COL32(220, 40, 40, 255),
         102.0f,
         snaps.playerUltimateReady);
-
-      return act;
   }
 
 
