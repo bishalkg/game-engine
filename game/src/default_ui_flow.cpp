@@ -28,9 +28,10 @@ public:
     UIManager::UISnapshots& snaps) override {
     auto& gameState = engine.getGameState();
     auto& sdlState = engine.getSDLState();
-    auto& uiManager = resources.m_uiManager;
     snaps.multiplayerSessions.clear();
     snaps.multiplayerStatus.clear();
+    snaps.showGameplayHud = false;
+    snaps.gameplayHud = UIManager::GameplayHudSnapshot{};
 
     // set player values for UI view -> TODO helpers
     if (gameState.playerLayer >= 0 &&
@@ -41,23 +42,21 @@ public:
       snaps.playerHP = player.data.player.healthPoints;
       snaps.playerMana = player.data.player.manaPoints;
       snaps.playerUltimate = player.data.player.ultimatePoints;
-      snaps.playerCoins = player.data.player.inventory.coins.count;
-      snaps.playerGems = player.data.player.inventory.gems.count;
       snaps.playerUltimateReady =
         player.data.player.ultimatePoints >= player.data.player.maxUltimatePoints;
+      snaps.gameplayHud.playerCoins = player.data.player.inventory.coins.count;
+      snaps.gameplayHud.playerGems = player.data.player.inventory.gems.count;
     } else {
       snaps.playerHP = 0;
       snaps.playerMana = 0;
       snaps.playerUltimate = 0;
-      snaps.playerCoins = 0;
-      snaps.playerGems = 0;
       snaps.playerUltimateReady = false;
     }
-    snaps.coinCountHudAnim = resources.coinCountUIAnim.get();
-    snaps.gemCountHudAnim = resources.gemCountUIAnim.get();
-    snaps.numbersHudTex = resources.texHudNumbers;
-    snaps.coinCountHudTex = resources.texCoinCountUI;
-    snaps.gemCountHudTex = resources.texGemCountUI;
+    snaps.gameplayHud.coinCountHudAnim = resources.coinCountUIAnim.get();
+    snaps.gameplayHud.gemCountHudAnim = resources.gemCountUIAnim.get();
+    snaps.gameplayHud.numbersHudTex = resources.texHudNumbers;
+    snaps.gameplayHud.coinCountHudTex = resources.texCoinCountUI;
+    snaps.gameplayHud.gemCountHudTex = resources.texGemCountUI;
     snaps.winDims = ImVec2(static_cast<float>(sdlState.logW), static_cast<float>(sdlState.logH));
     snaps.debugMode = gameState.debugMode;
 
@@ -71,6 +70,12 @@ public:
           snaps.cutscene = &resources.m_currLevel->cutscenes;
           snaps.cutSceneID = static_cast<int>(resources.m_currLevel->lvlIdx);
         }
+        break;
+      }
+      case UIManager::GameView::Playing: {
+        snaps.deltaTime = deltaTime;
+        snaps.showGameplayHud = true;
+        engine.stopAudioSoundtrack(resources.mainMenuTrack);
         break;
       }
       case UIManager::GameView::PauseMenu: {
@@ -134,7 +139,7 @@ public:
         break;
     }
 
-    return uiManager.getRenderViewActions(
+    return resources.m_uiManager.getRenderViewActions(
       gameState.currentView,
       snaps,
       sdlState.ImGuiWindowFlags,

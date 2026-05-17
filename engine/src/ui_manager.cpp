@@ -148,13 +148,9 @@ namespace UIManager {
     }
 
         // 800w, 540h
-    // float frameW = frameW;
-    // float frameH = frameH;
     // scene.anim->step(deltaTime); // TODO this would step twice currently
 
       // select frame from sprite sheet
-    // float srcX = m_resources.mainMenuAnim.currentFrame() * frameW;
-
     int cols = scene.numFrameColumns; // frames per row in your new sheet
     int frame = scene.anim->currentFrame();
     int col = frame % cols;
@@ -211,12 +207,12 @@ namespace UIManager {
   }
 
   void UI_Manager::drawGameplayHudCounts(const game_engine::SDLState& sdlState) {
-    if (!gameplayHudState.active) {
+    if (!gameplayHudActive) {
       return;
     }
-    if (!gameplayHudState.coinCountHudTex || !gameplayHudState.gemCountHudTex ||
-        !gameplayHudState.numbersHudTex ||
-        !gameplayHudState.coinCountHudAnim || !gameplayHudState.gemCountHudAnim) {
+    if (!cachedGameplayHud.coinCountHudTex || !cachedGameplayHud.gemCountHudTex ||
+        !cachedGameplayHud.numbersHudTex ||
+        !cachedGameplayHud.coinCountHudAnim || !cachedGameplayHud.gemCountHudAnim) {
       return;
     }
 
@@ -235,7 +231,7 @@ namespace UIManager {
       };
       SDL_FRect dst{x, y, kHudWidgetDrawSize, kHudWidgetDrawSize};
       SDL_RenderTexture(sdlState.renderer, texture, &src, &dst);
-      drawHudCountGlyph(sdlState.renderer, gameplayHudState.numbersHudTex, count, x, y);
+      drawHudCountGlyph(sdlState.renderer, cachedGameplayHud.numbersHudTex, count, x, y);
     };
 
     const float groupWidth = (kHudWidgetDrawSize * 2.0f) + kHudWidgetGap;
@@ -245,15 +241,15 @@ namespace UIManager {
       static_cast<float>(sdlState.logH) - kHudWidgetBottomMargin - kHudWidgetDrawSize;
 
     drawWidget(
-      gameplayHudState.coinCountHudTex,
-      *gameplayHudState.coinCountHudAnim,
-      gameplayHudState.playerCoins,
+      cachedGameplayHud.coinCountHudTex,
+      *cachedGameplayHud.coinCountHudAnim,
+      cachedGameplayHud.playerCoins,
       startX,
       startY);
     drawWidget(
-      gameplayHudState.gemCountHudTex,
-      *gameplayHudState.gemCountHudAnim,
-      gameplayHudState.playerGems,
+      cachedGameplayHud.gemCountHudTex,
+      *cachedGameplayHud.gemCountHudAnim,
+      cachedGameplayHud.playerGems,
       startX + kHudWidgetDrawSize + kHudWidgetGap,
       startY);
   }
@@ -794,20 +790,14 @@ namespace UIManager {
 
   UIActions UI_Manager::drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags) {
       UIActions act;
-      gameplayHudState.active = true;
-      gameplayHudState.playerCoins = snaps.playerCoins;
-      gameplayHudState.playerGems = snaps.playerGems;
-      gameplayHudState.coinCountHudAnim = snaps.coinCountHudAnim;
-      gameplayHudState.gemCountHudAnim = snaps.gemCountHudAnim;
-      gameplayHudState.numbersHudTex = snaps.numbersHudTex;
-      gameplayHudState.coinCountHudTex = snaps.coinCountHudTex;
-      gameplayHudState.gemCountHudTex = snaps.gemCountHudTex;
+      gameplayHudActive = snaps.showGameplayHud;
+      cachedGameplayHud = snaps.gameplayHud;
 
-      if (gameplayHudState.coinCountHudAnim) {
-        gameplayHudState.coinCountHudAnim->step(snaps.deltaTime);
+      if (cachedGameplayHud.coinCountHudAnim) {
+        cachedGameplayHud.coinCountHudAnim->step(snaps.deltaTime);
       }
-      if (gameplayHudState.gemCountHudAnim) {
-        gameplayHudState.gemCountHudAnim->step(snaps.deltaTime);
+      if (cachedGameplayHud.gemCountHudAnim) {
+        cachedGameplayHud.gemCountHudAnim->step(snaps.deltaTime);
       }
 
       ImGuiWindowFlags windowFlags = flags | ImGuiWindowFlags_NoBackground;
@@ -889,7 +879,7 @@ namespace UIManager {
       ImGui_ImplSDL3_NewFrame();
       ImGui::NewFrame();
       wantsHandCursor = false;
-      gameplayHudState.active = false;
+      gameplayHudActive = false;
 
       ImGui::SetNextWindowPos(ImVec2(0, 0));
       ImGui::SetNextWindowSize(io.DisplaySize);
