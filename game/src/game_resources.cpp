@@ -405,6 +405,11 @@ void GameResources::loadAllAssets(
     texBulletHit = loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
     texBullet = loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
     texMainMenu = loadTexture(state.renderer, "data/maps/title_screen/title_screen.png");
+    texHudNumbers = loadTexture(state.renderer, "data/hud/numbers.png");
+    texCoinCountUI = loadTexture(state.renderer, "data/materials/Coin/Count_UI.png");
+    texGemCountUI = loadTexture(state.renderer, "data/materials/Gem/Count_UI.png");
+    coinCountUIAnim = std::make_shared<Animation>(7, 0.7f);
+    gemCountUIAnim = std::make_shared<Animation>(4, 0.7f);
 
     mainMenuAnim = std::make_shared<Animation>(58, 7.0f);
     std::tie(mainMenuAudio, mainMenuTrack) =
@@ -518,6 +523,11 @@ void GameResources::unload() {
   texCharSelect = nullptr;
   texLevelSelect = nullptr;
   texPauseMenu = nullptr;
+  texHudNumbers = nullptr;
+  texCoinCountUI = nullptr;
+  texGemCountUI = nullptr;
+  coinCountUIAnim.reset();
+  gemCountUIAnim.reset();
 }
 
 } // namespace game

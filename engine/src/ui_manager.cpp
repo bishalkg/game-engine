@@ -5,10 +5,57 @@
 #include "imgui_impl_sdl3.h"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <iostream>
 
 namespace UIManager {
+
+  namespace {
+    constexpr float kHudWidgetScale = 1.0f;
+    constexpr float kHudWidgetFrameSize = 32.0f;
+    constexpr float kHudWidgetDrawSize = kHudWidgetFrameSize * kHudWidgetScale;
+    constexpr float kHudWidgetGap = 0.0f;
+    constexpr float kHudWidgetRightMargin = 4.0f;
+    constexpr float kHudWidgetBottomMargin = 4.0f;
+    constexpr float kHudTextBoxTopOffset = 20.0f;
+    constexpr float kHudTextBoxHeight = 1.0f;
+    constexpr float kNumbersSlotSize = 32.0f;
+    constexpr float kNumbersGlyphOffsetX = 11.0f;
+    constexpr float kNumbersGlyphWidth = 11.0f;
+    constexpr float kNumbersGlyphHeight = 16.0f;
+    constexpr int kNumbersAtlasColumns = 10;
+
+    void drawHudCountGlyph(
+      SDL_Renderer* renderer,
+      SDL_Texture* numbersHudTex,
+      uint32_t count,
+      float widgetX,
+      float widgetY) {
+      if (!numbersHudTex || count == 0) {
+        return;
+      }
+
+      const uint32_t clampedCount = std::min<uint32_t>(count, 99);
+      const uint32_t slotRow = clampedCount / static_cast<uint32_t>(kNumbersAtlasColumns);
+      const uint32_t slotCol = clampedCount % static_cast<uint32_t>(kNumbersAtlasColumns);
+
+      SDL_FRect src{
+        static_cast<float>(slotCol) * kNumbersSlotSize + kNumbersGlyphOffsetX,
+        static_cast<float>(slotRow) * kNumbersSlotSize,
+        kNumbersGlyphWidth,
+        kNumbersGlyphHeight,
+      };
+      SDL_FRect textDst{
+        widgetX + std::floor((kHudWidgetDrawSize - kNumbersGlyphWidth) * 0.5f),
+        widgetY + kHudTextBoxTopOffset +
+          std::floor((kHudTextBoxHeight - kNumbersGlyphHeight) * 0.5f),
+        kNumbersGlyphWidth,
+        kNumbersGlyphHeight,
+      };
+      SDL_RenderTexture(renderer, numbersHudTex, &src, &textDst);
+    }
+  } // namespace
 
   void UI_Manager::beginFrame() {
     ImGui_ImplSDLRenderer3_NewFrame();
@@ -34,6 +81,12 @@ namespace UIManager {
 
 
   void UI_Manager::renderPresent(const game_engine::SDLState& sdlState) {
+    SDL_SetRenderLogicalPresentation(
+      sdlState.renderer,
+      sdlState.logW,
+      sdlState.logH,
+      SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    drawGameplayHudCounts(sdlState);
 
     SDL_SetRenderLogicalPresentation(sdlState.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
 
@@ -154,6 +207,54 @@ namespace UIManager {
       }
     }
 
+  }
+
+  void UI_Manager::drawGameplayHudCounts(const game_engine::SDLState& sdlState) {
+    if (!gameplayHudState.active) {
+      return;
+    }
+    if (!gameplayHudState.coinCountHudTex || !gameplayHudState.gemCountHudTex ||
+        !gameplayHudState.numbersHudTex ||
+        !gameplayHudState.coinCountHudAnim || !gameplayHudState.gemCountHudAnim) {
+      return;
+    }
+
+    auto drawWidget = [&](SDL_Texture* texture, Animation& anim, uint32_t count, float x, float y) {
+      const int frameCount = anim.getFrameCount();
+      if (frameCount <= 0) {
+        return;
+      }
+
+      const int frame = anim.currentFrame() % frameCount;
+      SDL_FRect src{
+        static_cast<float>(frame) * kHudWidgetFrameSize,
+        0.0f,
+        kHudWidgetFrameSize,
+        kHudWidgetFrameSize,
+      };
+      SDL_FRect dst{x, y, kHudWidgetDrawSize, kHudWidgetDrawSize};
+      SDL_RenderTexture(sdlState.renderer, texture, &src, &dst);
+      drawHudCountGlyph(sdlState.renderer, gameplayHudState.numbersHudTex, count, x, y);
+    };
+
+    const float groupWidth = (kHudWidgetDrawSize * 2.0f) + kHudWidgetGap;
+    const float startX =
+      static_cast<float>(sdlState.logW) - kHudWidgetRightMargin - groupWidth;
+    const float startY =
+      static_cast<float>(sdlState.logH) - kHudWidgetBottomMargin - kHudWidgetDrawSize;
+
+    drawWidget(
+      gameplayHudState.coinCountHudTex,
+      *gameplayHudState.coinCountHudAnim,
+      gameplayHudState.playerCoins,
+      startX,
+      startY);
+    drawWidget(
+      gameplayHudState.gemCountHudTex,
+      *gameplayHudState.gemCountHudAnim,
+      gameplayHudState.playerGems,
+      startX + kHudWidgetDrawSize + kHudWidgetGap,
+      startY);
   }
 
 
@@ -692,6 +793,21 @@ namespace UIManager {
 
   UIActions UI_Manager::drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags) {
       UIActions act;
+      gameplayHudState.active = true;
+      gameplayHudState.playerCoins = snaps.playerCoins;
+      gameplayHudState.playerGems = snaps.playerGems;
+      gameplayHudState.coinCountHudAnim = snaps.coinCountHudAnim;
+      gameplayHudState.gemCountHudAnim = snaps.gemCountHudAnim;
+      gameplayHudState.numbersHudTex = snaps.numbersHudTex;
+      gameplayHudState.coinCountHudTex = snaps.coinCountHudTex;
+      gameplayHudState.gemCountHudTex = snaps.gemCountHudTex;
+
+      if (gameplayHudState.coinCountHudAnim) {
+        gameplayHudState.coinCountHudAnim->step(snaps.deltaTime);
+      }
+      if (gameplayHudState.gemCountHudAnim) {
+        gameplayHudState.gemCountHudAnim->step(snaps.deltaTime);
+      }
 
       ImGuiWindowFlags windowFlags = flags | ImGuiWindowFlags_NoBackground;
       ImGui::Begin("HUD", nullptr, windowFlags);
@@ -772,6 +888,7 @@ namespace UIManager {
       ImGui_ImplSDL3_NewFrame();
       ImGui::NewFrame();
       wantsHandCursor = false;
+      gameplayHudState.active = false;
 
       ImGui::SetNextWindowPos(ImVec2(0, 0));
       ImGui::SetNextWindowSize(io.DisplaySize);

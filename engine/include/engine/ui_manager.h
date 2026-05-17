@@ -82,10 +82,17 @@ namespace UIManager {
     int playerMana;
     int playerUltimate;
     bool playerUltimateReady = false;
+    uint32_t playerCoins = 0;
+    uint32_t playerGems = 0;
     ImVec2 winDims;
     float deltaTime;
     float currVolume;
     LevelIndex levelProgressionIdx;
+    Animation* coinCountHudAnim{nullptr};
+    Animation* gemCountHudAnim{nullptr};
+    SDL_Texture* numbersHudTex{nullptr};
+    SDL_Texture* coinCountHudTex{nullptr};
+    SDL_Texture* gemCountHudTex{nullptr};
 
     Animation* mainMenuAnim{nullptr};
     SDL_Texture* mainMenuTex{nullptr};
@@ -175,12 +182,26 @@ namespace UIManager {
         float yOffset,
         bool highlightReady);
 
+      void drawGameplayHudCounts(const game_engine::SDLState& sdlState);
+
 
     private:
+      struct GameplayHudState {
+        bool active = false;
+        uint32_t playerCoins = 0;
+        uint32_t playerGems = 0;
+        Animation* coinCountHudAnim = nullptr;
+        Animation* gemCountHudAnim = nullptr;
+        SDL_Texture* numbersHudTex = nullptr;
+        SDL_Texture* coinCountHudTex = nullptr;
+        SDL_Texture* gemCountHudTex = nullptr;
+      };
+
       ImVec2 defaultButtonSize = ImVec2(150, 50);
       CutscenePlayer cutscenePlr;
       game_engine::SDLState& sdlState;
       TTF_Font& font;
+      GameplayHudState gameplayHudState;
       bool wantsHandCursor = false;
       bool debugMode = false;
   };

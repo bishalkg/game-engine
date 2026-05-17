@@ -41,14 +41,23 @@ public:
       snaps.playerHP = player.data.player.healthPoints;
       snaps.playerMana = player.data.player.manaPoints;
       snaps.playerUltimate = player.data.player.ultimatePoints;
+      snaps.playerCoins = player.data.player.inventory.coins.count;
+      snaps.playerGems = player.data.player.inventory.gems.count;
       snaps.playerUltimateReady =
         player.data.player.ultimatePoints >= player.data.player.maxUltimatePoints;
     } else {
       snaps.playerHP = 0;
       snaps.playerMana = 0;
       snaps.playerUltimate = 0;
+      snaps.playerCoins = 0;
+      snaps.playerGems = 0;
       snaps.playerUltimateReady = false;
     }
+    snaps.coinCountHudAnim = resources.coinCountUIAnim.get();
+    snaps.gemCountHudAnim = resources.gemCountUIAnim.get();
+    snaps.numbersHudTex = resources.texHudNumbers;
+    snaps.coinCountHudTex = resources.texCoinCountUI;
+    snaps.gemCountHudTex = resources.texGemCountUI;
     snaps.winDims = ImVec2(static_cast<float>(sdlState.logW), static_cast<float>(sdlState.logH));
     snaps.debugMode = gameState.debugMode;
 

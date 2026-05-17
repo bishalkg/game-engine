@@ -135,6 +135,12 @@ struct GameResources {
   SDL_Texture* texPauseMenu{};
   std::shared_ptr<Animation> pauseMenuAnim;
 
+  SDL_Texture* texHudNumbers{};
+  SDL_Texture* texCoinCountUI{};
+  SDL_Texture* texGemCountUI{};
+  std::shared_ptr<Animation> coinCountUIAnim;
+  std::shared_ptr<Animation> gemCountUIAnim;
+
   std::pair<MIX_Audio*, MIX_Track*> loadAudioChunk(const std::string& filepath, float gain = 1.0f);
 
   SDL_Texture* loadTexture(SDL_Renderer* renderer, const std::string& filepath);
