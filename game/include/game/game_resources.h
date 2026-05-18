@@ -110,8 +110,10 @@ struct GameResources {
   MIX_Audio* audioJump{};
   MIX_Track* jumpTrack{};
 
-  MIX_Audio *audioCoinCollect{}, *audioGemCollect{};
-  MIX_Track *coinCollectTrack{}, *gemCollectTrack{};
+  MIX_Audio *audioCoinCollect{}, *audioGemCollect{}, *audioCoinPurchase{}, *audioGemPurchase{},
+    *audioDrinkSlurp{};
+  MIX_Track *coinCollectTrack{}, *gemCollectTrack{}, *coinPurchaseTrack{}, *gemPurchaseTrack{},
+    *drinkSlurpTrack{};
 
   float m_masterAudioGain = 0.0f;
   MIX_Mixer* mixer = nullptr;
