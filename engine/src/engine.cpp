@@ -499,13 +499,23 @@ void game_engine::Engine::submitLocalInput(NetGameInput input) {
     m_localInput.jumpPressed = m_localInput.jumpPressed || input.jumpPressed;
     m_localInput.meleePressed = m_localInput.meleePressed || input.meleePressed;
     m_localInput.ultimatePressed = m_localInput.ultimatePressed || input.ultimatePressed;
+    if (input.shopPurchaseCode != NetGameInput::kNoUiActionCode) {
+      m_localInput.shopPurchaseCode = input.shopPurchaseCode;
+    }
+    if (input.inventoryUseCode != NetGameInput::kNoUiActionCode) {
+      m_localInput.inventoryUseCode = input.inventoryUseCode;
+    }
     m_localInput.shouldSendMessage =
       m_localInput.leftHeld || m_localInput.rightHeld || m_localInput.fireHeld ||
-      m_localInput.jumpPressed || m_localInput.meleePressed || m_localInput.ultimatePressed;
+      m_localInput.jumpPressed || m_localInput.meleePressed || m_localInput.ultimatePressed ||
+      m_localInput.shopPurchaseCode != NetGameInput::kNoUiActionCode ||
+      m_localInput.inventoryUseCode != NetGameInput::kNoUiActionCode;
   } else {
     input.shouldSendMessage =
       input.leftHeld || input.rightHeld || input.fireHeld || input.jumpPressed ||
-      input.meleePressed || input.ultimatePressed;
+      input.meleePressed || input.ultimatePressed ||
+      input.shopPurchaseCode != NetGameInput::kNoUiActionCode ||
+      input.inventoryUseCode != NetGameInput::kNoUiActionCode;
 
     m_localInput = input;
   }
@@ -519,7 +529,9 @@ void game_engine::Engine::flushLocalInput(float deltaTime) {
   constexpr float kInputSendInterval = 1.0f / 60.0f;
   m_inputSendAccumulator += deltaTime;
   const bool hasEdgeInput =
-    m_localInput.jumpPressed || m_localInput.meleePressed || m_localInput.ultimatePressed;
+    m_localInput.jumpPressed || m_localInput.meleePressed || m_localInput.ultimatePressed ||
+    m_localInput.shopPurchaseCode != NetGameInput::kNoUiActionCode ||
+    m_localInput.inventoryUseCode != NetGameInput::kNoUiActionCode;
   if (m_inputSendAccumulator < kInputSendInterval && !hasEdgeInput) {
     return;
   }
@@ -530,12 +542,16 @@ void game_engine::Engine::flushLocalInput(float deltaTime) {
   outgoing.inputSeq = ++m_localInputSeq;
   outgoing.shouldSendMessage =
     outgoing.leftHeld || outgoing.rightHeld || outgoing.fireHeld ||
-    outgoing.jumpPressed || outgoing.meleePressed || outgoing.ultimatePressed;
+    outgoing.jumpPressed || outgoing.meleePressed || outgoing.ultimatePressed ||
+    outgoing.shopPurchaseCode != NetGameInput::kNoUiActionCode ||
+    outgoing.inventoryUseCode != NetGameInput::kNoUiActionCode;
   m_gameClient->SendInput(outgoing);
 
   m_localInput.jumpPressed = false;
   m_localInput.meleePressed = false;
   m_localInput.ultimatePressed = false;
+  m_localInput.shopPurchaseCode = NetGameInput::kNoUiActionCode;
+  m_localInput.inventoryUseCode = NetGameInput::kNoUiActionCode;
   m_localInput.shouldSendMessage =
     m_localInput.leftHeld || m_localInput.rightHeld || m_localInput.fireHeld;
 }

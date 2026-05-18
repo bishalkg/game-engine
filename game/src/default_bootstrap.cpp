@@ -71,6 +71,15 @@ void applyPreservedPlayerState(
   player.data.player.meleeDamage = preservedState.meleeDamage;
 }
 
+void restorePlayerVitalsToFull(GameObject& player) {
+  if (player.objClass != ObjectClass::Player) {
+    return;
+  }
+
+  player.data.player.healthPoints = player.data.player.maxHealthPoints;
+  player.data.player.manaPoints = player.data.player.maxManaPoints;
+}
+
 
 bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameState, ProgressionService& progService) {
   SDLState& sdlState = engine.getSDLState();
@@ -446,7 +455,12 @@ public:
 
 namespace game {
 
-bool switchToLevel(game_engine::Engine& engine, GameResources& resources, ProgressionService& progService, LevelIndex levelId) {
+bool switchToLevel(
+  game_engine::Engine& engine,
+  GameResources& resources,
+  ProgressionService& progService,
+  LevelIndex levelId,
+  bool restoreFullVitals) {
   auto& gameState = engine.getGameState();
   auto& sdlState = engine.getSDLState();
   const auto oldLevel = gameState.currentLevelId;
@@ -488,6 +502,9 @@ bool switchToLevel(game_engine::Engine& engine, GameResources& resources, Progre
       newGameState.layers[newGameState.playerLayer][newGameState.playerIndex];
     if (newPlayer.objClass == ObjectClass::Player) {
       applyPreservedPlayerState(newPlayer, *preservedPlayerState);
+      if (restoreFullVitals) {
+        restorePlayerVitalsToFull(newPlayer);
+      }
     }
   }
 

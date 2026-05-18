@@ -4,6 +4,7 @@
 
 #include "engine/engine.h"
 #include "engine/gameplay_simulation.h"
+#include "engine/ui_manager.h"
 
 namespace game_engine {
 
@@ -92,6 +93,83 @@ void markPlayerDeadFromFall(GameObject& player) {
   }
   player.spriteFrame = 1;
   player.velocity = glm::vec2(0.0f);
+}
+
+bool applyShopPurchaseRequest(GameObject& player, std::uint8_t purchaseCode) {
+  if (player.objClass != ObjectClass::Player ||
+      purchaseCode == NetGameInput::kNoUiActionCode) {
+    return false;
+  }
+
+  auto& inventory = player.data.player.inventory;
+  MaterialData* currency = nullptr;
+  MaterialData* item = nullptr;
+  std::uint32_t cost = 0;
+
+  switch (static_cast<UIManager::ShopPurchase>(purchaseCode)) {
+    case UIManager::ShopPurchase::HealthPotion:
+      currency = &inventory.coins;
+      item = &inventory.healthPotions;
+      cost = 15;
+      break;
+    case UIManager::ShopPurchase::ManaPotion:
+      currency = &inventory.coins;
+      item = &inventory.manaPotions;
+      cost = 15;
+      break;
+    case UIManager::ShopPurchase::AttackUp:
+      currency = &inventory.gems;
+      item = &inventory.attackUps;
+      cost = 10;
+      break;
+    case UIManager::ShopPurchase::DefenceUp:
+      currency = &inventory.gems;
+      item = &inventory.defenceUps;
+      cost = 10;
+      break;
+  }
+
+  if (!currency || !item || currency->count < cost) {
+    return false;
+  }
+
+  currency->count -= cost;
+  ++item->count;
+  return true;
+}
+
+bool applyInventoryUseRequest(GameObject& player, std::uint8_t useCode) {
+  if (player.objClass != ObjectClass::Player ||
+      useCode == NetGameInput::kNoUiActionCode) {
+    return false;
+  }
+
+  auto& playerData = player.data.player;
+  auto& inventory = playerData.inventory;
+  MaterialData* item = nullptr;
+  int* statValue = nullptr;
+  int maxStatValue = 0;
+
+  switch (static_cast<UIManager::InventoryUse>(useCode)) {
+    case UIManager::InventoryUse::HealthPotion:
+      item = &inventory.healthPotions;
+      statValue = &playerData.healthPoints;
+      maxStatValue = playerData.maxHealthPoints;
+      break;
+    case UIManager::InventoryUse::ManaPotion:
+      item = &inventory.manaPotions;
+      statValue = &playerData.manaPoints;
+      maxStatValue = playerData.maxManaPoints;
+      break;
+  }
+
+  if (!item || !statValue || item->count == 0 || *statValue >= maxStatValue) {
+    return false;
+  }
+
+  *statValue = std::clamp(*statValue + 20, 0, maxStatValue);
+  --item->count;
+  return true;
 }
 
 } // namespace
@@ -217,6 +295,13 @@ void GameServer::step(float deltaTime) {
   ++m_authCtx->serverTick;
   state.m_stateLastUpdatedAt = m_authCtx->serverTick;
 
+  for (const auto& [playerID, input] : m_authCtx->latestPlayerInputs) {
+    if (GameObject* player = findPlayerById(playerID)) {
+      (void)applyShopPurchaseRequest(*player, input.shopPurchaseCode);
+      (void)applyInventoryUseRequest(*player, input.inventoryUseCode);
+    }
+  }
+
   GameplaySimulationHooks hooks;
   hooks.onPortalTriggered = [this](LevelIndex nextLevel) {
     std::scoped_lock lock(m_pendingLevelTransitionMu);
@@ -250,6 +335,8 @@ void GameServer::step(float deltaTime) {
     input.jumpPressed = false;
     input.meleePressed = false;
     input.ultimatePressed = false;
+    input.shopPurchaseCode = NetGameInput::kNoUiActionCode;
+    input.inventoryUseCode = NetGameInput::kNoUiActionCode;
     (void)playerID;
   }
 

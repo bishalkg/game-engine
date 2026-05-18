@@ -31,6 +31,8 @@ namespace game_engine {
   // read from message.body (byte array) using ByteReader
   // write from NetGameInput -> ByteWriter. pass the ByteWriterBuff as message.body
   struct NetGameInput {
+    static constexpr std::uint8_t kNoUiActionCode = 0xFF;
+
     uint32_t playerID = 0;
     uint32_t inputSeq = 0;
     bool leftHeld = false;
@@ -39,6 +41,8 @@ namespace game_engine {
     bool jumpPressed = false;
     bool meleePressed = false;
     bool ultimatePressed = false;
+    std::uint8_t shopPurchaseCode = kNoUiActionCode;
+    std::uint8_t inventoryUseCode = kNoUiActionCode;
     bool shouldSendMessage = false; // not serialized; frame-local send hint only
 
     std::vector<uint8_t> serealizeNetGameInput() const {
@@ -52,6 +56,8 @@ namespace game_engine {
       bytes.write_bool(jumpPressed);
       bytes.write_bool(meleePressed);
       bytes.write_bool(ultimatePressed);
+      bytes.write_u8(shopPurchaseCode);
+      bytes.write_u8(inventoryUseCode);
 
       return bytes.buff;
     };
@@ -68,6 +74,8 @@ namespace game_engine {
       jumpPressed = reader.read_bool();
       meleePressed = reader.read_bool();
       ultimatePressed = reader.read_bool();
+      shopPurchaseCode = reader.read_u8();
+      inventoryUseCode = reader.read_u8();
 
     };
   };

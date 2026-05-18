@@ -6,6 +6,17 @@
 
 namespace {
 
+void playOneShotUiAudio(game::GameResources& resources, MIX_Audio* audio) {
+  if (resources.mixer && audio) {
+    MIX_PlayAudio(resources.mixer, audio);
+  }
+}
+
+void submitMultiplayerUiInput(game_engine::Engine& engine, game_engine::NetGameInput input) {
+  engine.submitLocalInput(input);
+  engine.flushLocalInput(1.0f);
+}
+
 const char* levelName(LevelIndex levelId) {
   switch (levelId) {
     case LevelIndex::LEVEL_1:
@@ -24,6 +35,7 @@ const char* levelName(LevelIndex levelId) {
 
 bool applyShopPurchase(
   game_engine::Engine& engine,
+  game::GameResources& resources,
   game::ProgressionService& progService,
   UIManager::ShopPurchase purchase) {
   auto& gameState = engine.getGameState();
@@ -42,27 +54,32 @@ bool applyShopPurchase(
   auto& inventory = player.data.player.inventory;
   MaterialData* currency = nullptr;
   MaterialData* item = nullptr;
+  MIX_Audio* purchaseAudio = nullptr;
   uint32_t cost = 0;
 
   switch (purchase) {
     case UIManager::ShopPurchase::HealthPotion:
       currency = &inventory.coins;
       item = &inventory.healthPotions;
+      purchaseAudio = resources.audioCoinPurchase;
       cost = 15;
       break;
     case UIManager::ShopPurchase::ManaPotion:
       currency = &inventory.coins;
       item = &inventory.manaPotions;
+      purchaseAudio = resources.audioCoinPurchase;
       cost = 15;
       break;
     case UIManager::ShopPurchase::AttackUp:
       currency = &inventory.gems;
       item = &inventory.attackUps;
+      purchaseAudio = resources.audioGemPurchase;
       cost = 10;
       break;
     case UIManager::ShopPurchase::DefenceUp:
       currency = &inventory.gems;
       item = &inventory.defenceUps;
+      purchaseAudio = resources.audioGemPurchase;
       cost = 10;
       break;
   }
@@ -75,11 +92,13 @@ bool applyShopPurchase(
   ++item->count;
   progService.updatePlayerInventory(inventory);
   engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
+  playOneShotUiAudio(resources, purchaseAudio);
   return true;
 }
 
 bool applyInventoryUse(
   game_engine::Engine& engine,
+  game::GameResources& resources,
   game::ProgressionService& progService,
   UIManager::InventoryUse use) {
   auto& gameState = engine.getGameState();
@@ -122,6 +141,7 @@ bool applyInventoryUse(
   --item->count;
   progService.updatePlayerInventory(inventory);
   engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
+  playOneShotUiAudio(resources, resources.audioDrinkSlurp);
   return true;
 }
 
@@ -300,10 +320,32 @@ public:
       (void)engine.selectDiscoveredSession(*actions.selectedSessionIndex);
     }
     if (actions.shopPurchase) {
-      (void)applyShopPurchase(engine, progService, *actions.shopPurchase);
+      if (engine.isClientMode()) {
+        game_engine::NetGameInput input{};
+        input.shopPurchaseCode = static_cast<std::uint8_t>(*actions.shopPurchase);
+        submitMultiplayerUiInput(engine, input);
+      } else {
+        const bool purchased =
+          applyShopPurchase(engine, resources, progService, *actions.shopPurchase);
+        if (purchased && engine.isHostMode()) {
+          engine.synchronizeHostAuthoritativeState();
+          engine.broadcastHostSnapshot();
+        }
+      }
     }
     if (actions.inventoryUse) {
-      (void)applyInventoryUse(engine, progService, *actions.inventoryUse);
+      if (engine.isClientMode()) {
+        game_engine::NetGameInput input{};
+        input.inventoryUseCode = static_cast<std::uint8_t>(*actions.inventoryUse);
+        submitMultiplayerUiInput(engine, input);
+      } else {
+        const bool used =
+          applyInventoryUse(engine, resources, progService, *actions.inventoryUse);
+        if (used && engine.isHostMode()) {
+          engine.synchronizeHostAuthoritativeState();
+          engine.broadcastHostSnapshot();
+        }
+      }
     }
     if (actions.selectedPlayerSprite) {
       gameState.selectedPlayerSprite = *actions.selectedPlayerSprite;
@@ -343,13 +385,23 @@ public:
     // TODO: IF HOST DIES BOTH PLAYERS RESPAWN FROM START; IF CLIENT DIES ONLY CLIENT STARTS FROM START. CHANGE THIS.
     if (actions.restartLevel && resources.m_currLevel) {
       if (engine.isHostMode()) {
-        if (game::switchToLevel(engine, resources, progService, resources.m_currLevelIdx)) {
+        if (game::switchToLevel(
+              engine,
+              resources,
+              progService,
+              resources.m_currLevelIdx,
+              true)) {
           engine.restartMultiplayerSession();
         }
       } else if (engine.isClientMode()) {
         engine.restartMultiplayerSession();
       } else {
-        (void)game::switchToLevel(engine, resources, progService, resources.m_currLevelIdx);
+        (void)game::switchToLevel(
+          engine,
+          resources,
+          progService,
+          resources.m_currLevelIdx,
+          true);
       }
     }
   }
