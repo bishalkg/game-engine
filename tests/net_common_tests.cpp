@@ -45,6 +45,9 @@ bool equalSnapshots(const game_engine::NetGameObjectSnapshot& a,
              a.data.player.meleeDamage == b.data.player.meleeDamage &&
              a.data.player.coinPickupCueCount == b.data.player.coinPickupCueCount &&
              a.data.player.gemPickupCueCount == b.data.player.gemPickupCueCount &&
+             a.data.player.coinPurchaseCueCount == b.data.player.coinPurchaseCueCount &&
+             a.data.player.gemPurchaseCueCount == b.data.player.gemPurchaseCueCount &&
+             a.data.player.consumableUseCueCount == b.data.player.consumableUseCueCount &&
              a.data.player.inventory.coins.count == b.data.player.inventory.coins.count &&
              a.data.player.inventory.gems.count == b.data.player.inventory.gems.count &&
              a.data.player.inventory.healthPotions.count == b.data.player.inventory.healthPotions.count &&
@@ -122,6 +125,9 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   player.data.player.meleeDamage = 19;
   player.data.player.coinPickupCueCount = 3;
   player.data.player.gemPickupCueCount = 4;
+  player.data.player.coinPurchaseCueCount = 5;
+  player.data.player.gemPurchaseCueCount = 6;
+  player.data.player.consumableUseCueCount = 7;
   player.data.player.inventory.coins.count = 11;
   player.data.player.inventory.gems.count = 7;
   player.data.player.inventory.healthPotions.count = 2;

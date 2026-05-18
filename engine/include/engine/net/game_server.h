@@ -41,6 +41,7 @@ public:
   std::vector<uint32_t> m_vGarbageIDs;
   NetGameStateSnapshot m_currGameSnapshot; // extracted out of m_authCtx
   net::tsqueue<NetGameInput> m_playerInputQueue;
+  net::tsqueue<NetPlayerCommand> m_playerCommandQueue;
   std::unique_ptr<AuthoritativeContext> m_authCtx;
   mutable std::recursive_mutex m_stateMu;
   mutable std::mutex m_pendingLevelTransitionMu;
@@ -57,7 +58,10 @@ protected:
 
 public:
   GameObject* findPlayerById(uint32_t playerID);
+  bool copyPlayerData(uint32_t playerID, PlayerData& out) const;
+  bool updatePlayerData(uint32_t playerID, const PlayerData& playerData);
   void applyPlayerInputs();
+  std::vector<NetPlayerCommand> drainPendingPlayerCommands();
   void step(float deltaTime);
   void refreshGameSnapshot();
   void broadcastSnapshot();

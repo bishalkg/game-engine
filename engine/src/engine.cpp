@@ -462,6 +462,7 @@ void game_engine::Engine::resetMultiplayerNetworkingState() {
   m_serverLoopRunning.store(false);
   m_gameState.localHitStop = {};
   m_localInput = NetGameInput{};
+  m_localHostPlayerCommands.clear();
   m_localInputSeq = 0;
   m_inputSendAccumulator = 0.0f;
   m_multiplayerStatus.clear();
@@ -499,25 +500,46 @@ void game_engine::Engine::submitLocalInput(NetGameInput input) {
     m_localInput.jumpPressed = m_localInput.jumpPressed || input.jumpPressed;
     m_localInput.meleePressed = m_localInput.meleePressed || input.meleePressed;
     m_localInput.ultimatePressed = m_localInput.ultimatePressed || input.ultimatePressed;
-    if (input.shopPurchaseCode != NetGameInput::kNoUiActionCode) {
-      m_localInput.shopPurchaseCode = input.shopPurchaseCode;
-    }
-    if (input.inventoryUseCode != NetGameInput::kNoUiActionCode) {
-      m_localInput.inventoryUseCode = input.inventoryUseCode;
-    }
     m_localInput.shouldSendMessage =
       m_localInput.leftHeld || m_localInput.rightHeld || m_localInput.fireHeld ||
-      m_localInput.jumpPressed || m_localInput.meleePressed || m_localInput.ultimatePressed ||
-      m_localInput.shopPurchaseCode != NetGameInput::kNoUiActionCode ||
-      m_localInput.inventoryUseCode != NetGameInput::kNoUiActionCode;
+      m_localInput.jumpPressed || m_localInput.meleePressed || m_localInput.ultimatePressed;
   } else {
     input.shouldSendMessage =
       input.leftHeld || input.rightHeld || input.fireHeld || input.jumpPressed ||
-      input.meleePressed || input.ultimatePressed ||
-      input.shopPurchaseCode != NetGameInput::kNoUiActionCode ||
-      input.inventoryUseCode != NetGameInput::kNoUiActionCode;
+      input.meleePressed || input.ultimatePressed;
 
     m_localInput = input;
+  }
+}
+
+void game_engine::Engine::submitLocalPlayerCommand(const std::vector<uint8_t>& payload) {
+  if (!isMultiplayerActive()) {
+    return;
+  }
+
+  if (isHostMode()) {
+    uint32_t playerID = 0;
+    if (m_gameClient && m_gameClient->IsRegistered()) {
+      playerID = m_gameClient->GetPlayerID();
+    } else if (m_gameState.playerLayer >= 0 &&
+               m_gameState.playerLayer < static_cast<int>(m_gameState.layers.size()) &&
+               m_gameState.playerIndex >= 0 &&
+               m_gameState.playerIndex <
+                 static_cast<int>(m_gameState.layers[m_gameState.playerLayer].size())) {
+      playerID = m_gameState.layers[m_gameState.playerLayer][m_gameState.playerIndex].id;
+    }
+
+    if (playerID != 0) {
+      m_localHostPlayerCommands.push_back(NetPlayerCommand{
+        .playerID = playerID,
+        .payload = payload,
+      });
+    }
+    return;
+  }
+
+  if (isClientMode() && m_gameClient) {
+    m_gameClient->SendPlayerCommand(payload);
   }
 }
 
@@ -529,9 +551,7 @@ void game_engine::Engine::flushLocalInput(float deltaTime) {
   constexpr float kInputSendInterval = 1.0f / 60.0f;
   m_inputSendAccumulator += deltaTime;
   const bool hasEdgeInput =
-    m_localInput.jumpPressed || m_localInput.meleePressed || m_localInput.ultimatePressed ||
-    m_localInput.shopPurchaseCode != NetGameInput::kNoUiActionCode ||
-    m_localInput.inventoryUseCode != NetGameInput::kNoUiActionCode;
+    m_localInput.jumpPressed || m_localInput.meleePressed || m_localInput.ultimatePressed;
   if (m_inputSendAccumulator < kInputSendInterval && !hasEdgeInput) {
     return;
   }
@@ -542,18 +562,52 @@ void game_engine::Engine::flushLocalInput(float deltaTime) {
   outgoing.inputSeq = ++m_localInputSeq;
   outgoing.shouldSendMessage =
     outgoing.leftHeld || outgoing.rightHeld || outgoing.fireHeld ||
-    outgoing.jumpPressed || outgoing.meleePressed || outgoing.ultimatePressed ||
-    outgoing.shopPurchaseCode != NetGameInput::kNoUiActionCode ||
-    outgoing.inventoryUseCode != NetGameInput::kNoUiActionCode;
+    outgoing.jumpPressed || outgoing.meleePressed || outgoing.ultimatePressed;
   m_gameClient->SendInput(outgoing);
 
   m_localInput.jumpPressed = false;
   m_localInput.meleePressed = false;
   m_localInput.ultimatePressed = false;
-  m_localInput.shopPurchaseCode = NetGameInput::kNoUiActionCode;
-  m_localInput.inventoryUseCode = NetGameInput::kNoUiActionCode;
   m_localInput.shouldSendMessage =
     m_localInput.leftHeld || m_localInput.rightHeld || m_localInput.fireHeld;
+}
+
+std::vector<game_engine::NetPlayerCommand> game_engine::Engine::consumePendingHostPlayerCommands() {
+  std::vector<NetPlayerCommand> commands;
+  if (!isHostMode()) {
+    return commands;
+  }
+
+  if (!m_localHostPlayerCommands.empty()) {
+    commands = std::move(m_localHostPlayerCommands);
+    m_localHostPlayerCommands.clear();
+  }
+
+  if (m_gameServer) {
+    auto remoteCommands = m_gameServer->drainPendingPlayerCommands();
+    commands.insert(
+      commands.end(),
+      std::make_move_iterator(remoteCommands.begin()),
+      std::make_move_iterator(remoteCommands.end()));
+  }
+
+  return commands;
+}
+
+bool game_engine::Engine::copyHostAuthoritativePlayerData(uint32_t playerID, PlayerData& out) const {
+  if (!isHostMode() || !m_gameServer) {
+    return false;
+  }
+  return m_gameServer->copyPlayerData(playerID, out);
+}
+
+bool game_engine::Engine::updateHostAuthoritativePlayerData(
+  uint32_t playerID,
+  const PlayerData& playerData) {
+  if (!isHostMode() || !m_gameServer) {
+    return false;
+  }
+  return m_gameServer->updatePlayerData(playerID, playerData);
 }
 
 void game_engine::Engine::restartMultiplayerSession() {
@@ -562,6 +616,7 @@ void game_engine::Engine::restartMultiplayerSession() {
   }
 
   m_localInput = NetGameInput{};
+  m_localHostPlayerCommands.clear();
   m_inputSendAccumulator = 0.0f;
 
   if (isHostMode() && m_gameServer) {

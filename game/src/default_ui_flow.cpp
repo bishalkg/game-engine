@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "engine/engine.h"
+#include "game/player_command.h"
 
 namespace {
 
@@ -12,9 +13,83 @@ void playOneShotUiAudio(game::GameResources& resources, MIX_Audio* audio) {
   }
 }
 
-void submitMultiplayerUiInput(game_engine::Engine& engine, game_engine::NetGameInput input) {
-  engine.submitLocalInput(input);
-  engine.flushLocalInput(1.0f);
+void playAudioCue(game::GameResources& resources, game::PlayerCommandAudioCue cue) {
+  switch (cue) {
+    case game::PlayerCommandAudioCue::CoinPurchase:
+      playOneShotUiAudio(resources, resources.audioCoinPurchase);
+      break;
+    case game::PlayerCommandAudioCue::GemPurchase:
+      playOneShotUiAudio(resources, resources.audioGemPurchase);
+      break;
+    case game::PlayerCommandAudioCue::ConsumableUse:
+      playOneShotUiAudio(resources, resources.audioDrinkSlurp);
+      break;
+    case game::PlayerCommandAudioCue::None:
+      break;
+  }
+}
+
+void persistInventoryProgress(
+  game_engine::Engine& engine,
+  game::ProgressionService& progService,
+  const Inventory& inventory) {
+  progService.updatePlayerInventory(inventory);
+  engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
+}
+
+GameObject* resolveLocalPlayer(game_engine::Engine& engine) {
+  auto& gameState = engine.getGameState();
+  if (gameState.playerLayer < 0 ||
+      gameState.playerLayer >= static_cast<int>(gameState.layers.size()) ||
+      gameState.playerIndex < 0 ||
+      gameState.playerIndex >= static_cast<int>(gameState.layers[gameState.playerLayer].size())) {
+    return nullptr;
+  }
+
+  GameObject& player = gameState.layers[gameState.playerLayer][gameState.playerIndex];
+  return player.objClass == ObjectClass::Player ? &player : nullptr;
+}
+
+std::optional<game::PlayerCommand> shopPurchaseToCommand(UIManager::ShopPurchase purchase) {
+  switch (purchase) {
+    case UIManager::ShopPurchase::HealthPotion:
+      return game::PlayerCommand{
+        .type = game::PlayerCommandType::ShopPurchase,
+        .value = static_cast<std::uint8_t>(game::ShopPurchaseCommand::HealthPotion),
+      };
+    case UIManager::ShopPurchase::ManaPotion:
+      return game::PlayerCommand{
+        .type = game::PlayerCommandType::ShopPurchase,
+        .value = static_cast<std::uint8_t>(game::ShopPurchaseCommand::ManaPotion),
+      };
+    case UIManager::ShopPurchase::AttackUp:
+      return game::PlayerCommand{
+        .type = game::PlayerCommandType::ShopPurchase,
+        .value = static_cast<std::uint8_t>(game::ShopPurchaseCommand::AttackUp),
+      };
+    case UIManager::ShopPurchase::DefenceUp:
+      return game::PlayerCommand{
+        .type = game::PlayerCommandType::ShopPurchase,
+        .value = static_cast<std::uint8_t>(game::ShopPurchaseCommand::DefenceUp),
+      };
+  }
+  return std::nullopt;
+}
+
+std::optional<game::PlayerCommand> inventoryUseToCommand(UIManager::InventoryUse use) {
+  switch (use) {
+    case UIManager::InventoryUse::HealthPotion:
+      return game::PlayerCommand{
+        .type = game::PlayerCommandType::InventoryUse,
+        .value = static_cast<std::uint8_t>(game::InventoryUseCommand::HealthPotion),
+      };
+    case UIManager::InventoryUse::ManaPotion:
+      return game::PlayerCommand{
+        .type = game::PlayerCommandType::InventoryUse,
+        .value = static_cast<std::uint8_t>(game::InventoryUseCommand::ManaPotion),
+      };
+  }
+  return std::nullopt;
 }
 
 const char* levelName(LevelIndex levelId) {
@@ -38,61 +113,23 @@ bool applyShopPurchase(
   game::GameResources& resources,
   game::ProgressionService& progService,
   UIManager::ShopPurchase purchase) {
-  auto& gameState = engine.getGameState();
-  if (gameState.playerLayer < 0 ||
-      gameState.playerLayer >= static_cast<int>(gameState.layers.size()) ||
-      gameState.playerIndex < 0 ||
-      gameState.playerIndex >= static_cast<int>(gameState.layers[gameState.playerLayer].size())) {
+  auto* player = resolveLocalPlayer(engine);
+  if (!player) {
     return false;
   }
 
-  GameObject& player = gameState.layers[gameState.playerLayer][gameState.playerIndex];
-  if (player.objClass != ObjectClass::Player) {
+  const auto command = shopPurchaseToCommand(purchase);
+  if (!command) {
     return false;
   }
 
-  auto& inventory = player.data.player.inventory;
-  MaterialData* currency = nullptr;
-  MaterialData* item = nullptr;
-  MIX_Audio* purchaseAudio = nullptr;
-  uint32_t cost = 0;
-
-  switch (purchase) {
-    case UIManager::ShopPurchase::HealthPotion:
-      currency = &inventory.coins;
-      item = &inventory.healthPotions;
-      purchaseAudio = resources.audioCoinPurchase;
-      cost = 15;
-      break;
-    case UIManager::ShopPurchase::ManaPotion:
-      currency = &inventory.coins;
-      item = &inventory.manaPotions;
-      purchaseAudio = resources.audioCoinPurchase;
-      cost = 15;
-      break;
-    case UIManager::ShopPurchase::AttackUp:
-      currency = &inventory.gems;
-      item = &inventory.attackUps;
-      purchaseAudio = resources.audioGemPurchase;
-      cost = 10;
-      break;
-    case UIManager::ShopPurchase::DefenceUp:
-      currency = &inventory.gems;
-      item = &inventory.defenceUps;
-      purchaseAudio = resources.audioGemPurchase;
-      cost = 10;
-      break;
-  }
-
-  if (!currency || !item || currency->count < cost) {
+  const auto result = game::applyPlayerCommand(player->data.player, *command);
+  if (!result.applied) {
     return false;
   }
 
-  currency->count -= cost;
-  ++item->count;
-  progService.updatePlayerInventory(inventory);
-  engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
-  playOneShotUiAudio(resources, purchaseAudio);
+  persistInventoryProgress(engine, progService, player->data.player.inventory);
+  playAudioCue(resources, result.audioCue);
   return true;
 }
 
@@ -101,47 +138,23 @@ bool applyInventoryUse(
   game::GameResources& resources,
   game::ProgressionService& progService,
   UIManager::InventoryUse use) {
-  auto& gameState = engine.getGameState();
-  if (gameState.playerLayer < 0 ||
-      gameState.playerLayer >= static_cast<int>(gameState.layers.size()) ||
-      gameState.playerIndex < 0 ||
-      gameState.playerIndex >= static_cast<int>(gameState.layers[gameState.playerLayer].size())) {
+  auto* player = resolveLocalPlayer(engine);
+  if (!player) {
     return false;
   }
 
-  GameObject& player = gameState.layers[gameState.playerLayer][gameState.playerIndex];
-  if (player.objClass != ObjectClass::Player) {
+  const auto command = inventoryUseToCommand(use);
+  if (!command) {
     return false;
   }
 
-  auto& playerData = player.data.player;
-  auto& inventory = playerData.inventory;
-  MaterialData* item = nullptr;
-  int* statValue = nullptr;
-  int maxStatValue = 0;
-
-  switch (use) {
-    case UIManager::InventoryUse::HealthPotion:
-      item = &inventory.healthPotions;
-      statValue = &playerData.healthPoints;
-      maxStatValue = playerData.maxHealthPoints;
-      break;
-    case UIManager::InventoryUse::ManaPotion:
-      item = &inventory.manaPotions;
-      statValue = &playerData.manaPoints;
-      maxStatValue = playerData.maxManaPoints;
-      break;
-  }
-
-  if (!item || !statValue || item->count == 0 || *statValue >= maxStatValue) {
+  const auto result = game::applyPlayerCommand(player->data.player, *command);
+  if (!result.applied) {
     return false;
   }
 
-  *statValue = std::clamp(*statValue + 20, 0, maxStatValue);
-  --item->count;
-  progService.updatePlayerInventory(inventory);
-  engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
-  playOneShotUiAudio(resources, resources.audioDrinkSlurp);
+  persistInventoryProgress(engine, progService, player->data.player.inventory);
+  playAudioCue(resources, result.audioCue);
   return true;
 }
 
@@ -320,31 +333,23 @@ public:
       (void)engine.selectDiscoveredSession(*actions.selectedSessionIndex);
     }
     if (actions.shopPurchase) {
-      if (engine.isClientMode()) {
-        game_engine::NetGameInput input{};
-        input.shopPurchaseCode = static_cast<std::uint8_t>(*actions.shopPurchase);
-        submitMultiplayerUiInput(engine, input);
-      } else {
-        const bool purchased =
-          applyShopPurchase(engine, resources, progService, *actions.shopPurchase);
-        if (purchased && engine.isHostMode()) {
-          engine.synchronizeHostAuthoritativeState();
-          engine.broadcastHostSnapshot();
+      if (engine.isMultiplayerActive()) {
+        const auto command = shopPurchaseToCommand(*actions.shopPurchase);
+        if (command) {
+          engine.submitLocalPlayerCommand(command->serialize());
         }
+      } else {
+        (void)applyShopPurchase(engine, resources, progService, *actions.shopPurchase);
       }
     }
     if (actions.inventoryUse) {
-      if (engine.isClientMode()) {
-        game_engine::NetGameInput input{};
-        input.inventoryUseCode = static_cast<std::uint8_t>(*actions.inventoryUse);
-        submitMultiplayerUiInput(engine, input);
-      } else {
-        const bool used =
-          applyInventoryUse(engine, resources, progService, *actions.inventoryUse);
-        if (used && engine.isHostMode()) {
-          engine.synchronizeHostAuthoritativeState();
-          engine.broadcastHostSnapshot();
+      if (engine.isMultiplayerActive()) {
+        const auto command = inventoryUseToCommand(*actions.inventoryUse);
+        if (command) {
+          engine.submitLocalPlayerCommand(command->serialize());
         }
+      } else {
+        (void)applyInventoryUse(engine, resources, progService, *actions.inventoryUse);
       }
     }
     if (actions.selectedPlayerSprite) {

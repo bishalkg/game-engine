@@ -168,6 +168,9 @@ struct PlayerData {
   int meleeDamage = 10;
   uint32_t coinPickupCueCount = 0;
   uint32_t gemPickupCueCount = 0;
+  uint32_t coinPurchaseCueCount = 0;
+  uint32_t gemPurchaseCueCount = 0;
+  uint32_t consumableUseCueCount = 0;
   uint32_t activeUltimateCastId = 0;
   uint32_t nextUltimateCastId = 1;
 

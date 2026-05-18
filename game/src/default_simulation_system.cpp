@@ -7,6 +7,7 @@
 
 #include "engine/engine.h"
 #include "engine/gameplay_simulation.h"
+#include "game/player_command.h"
 
 namespace {
 
@@ -29,7 +30,28 @@ struct AudioObjectState {
   int manaPoints = 0;
   uint32_t coinPickupCueCount = 0;
   uint32_t gemPickupCueCount = 0;
+  uint32_t coinPurchaseCueCount = 0;
+  uint32_t gemPurchaseCueCount = 0;
+  uint32_t consumableUseCueCount = 0;
   bool jumpImpulseApplied = false;
+};
+
+struct InventorySnapshot {
+  uint32_t coins = 0;
+  uint32_t gems = 0;
+  uint32_t healthPotions = 0;
+  uint32_t manaPotions = 0;
+  uint32_t attackUps = 0;
+  uint32_t defenceUps = 0;
+
+  bool operator==(const InventorySnapshot& other) const {
+    return coins == other.coins &&
+           gems == other.gems &&
+           healthPotions == other.healthPotions &&
+           manaPotions == other.manaPotions &&
+           attackUps == other.attackUps &&
+           defenceUps == other.defenceUps;
+  }
 };
 
 using AudioStateMap =
@@ -538,6 +560,9 @@ AudioStateMap captureAudioState(const game_engine::GameState& gameState) {
         state.manaPoints = obj.data.player.manaPoints;
         state.coinPickupCueCount = obj.data.player.coinPickupCueCount;
         state.gemPickupCueCount = obj.data.player.gemPickupCueCount;
+        state.coinPurchaseCueCount = obj.data.player.coinPurchaseCueCount;
+        state.gemPurchaseCueCount = obj.data.player.gemPurchaseCueCount;
+        state.consumableUseCueCount = obj.data.player.consumableUseCueCount;
         state.jumpImpulseApplied = obj.data.player.jumpImpulseApplied;
       } else if (obj.objClass == ObjectClass::Enemy) {
         state.enemyState = obj.data.enemy.state;
@@ -566,6 +591,68 @@ GameObject* findPlayerById(game_engine::GameState& gameState, uint32_t playerID)
     }
   }
   return nullptr;
+}
+
+InventorySnapshot captureInventorySnapshot(
+  game_engine::GameState& gameState,
+  uint32_t playerID) {
+  if (GameObject* player = findPlayerById(gameState, playerID)) {
+    return InventorySnapshot{
+      .coins = player->data.player.inventory.coins.count,
+      .gems = player->data.player.inventory.gems.count,
+      .healthPotions = player->data.player.inventory.healthPotions.count,
+      .manaPotions = player->data.player.inventory.manaPotions.count,
+      .attackUps = player->data.player.inventory.attackUps.count,
+      .defenceUps = player->data.player.inventory.defenceUps.count,
+    };
+  }
+
+  return {};
+}
+
+void persistInventorySnapshot(
+  game_engine::Engine& engine,
+  game::ProgressionService& progService,
+  const Inventory& inventory) {
+  progService.updatePlayerInventory(inventory);
+  engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
+}
+
+bool processPendingHostPlayerCommands(
+  SimContext& ctx,
+  uint32_t localPlayerID) {
+  bool anyApplied = false;
+  for (auto& netCommand : ctx.engine.consumePendingHostPlayerCommands()) {
+    auto command = game::PlayerCommand::deserialize(netCommand.payload);
+    if (!command) {
+      continue;
+    }
+
+    PlayerData playerData;
+    if (!ctx.engine.copyHostAuthoritativePlayerData(netCommand.playerID, playerData)) {
+      continue;
+    }
+
+    const auto result = game::applyPlayerCommand(playerData, *command);
+    if (!result.applied) {
+      continue;
+    }
+
+    if (!ctx.engine.updateHostAuthoritativePlayerData(netCommand.playerID, playerData)) {
+      continue;
+    }
+
+    anyApplied = true;
+    if (netCommand.playerID == localPlayerID) {
+      persistInventorySnapshot(ctx.engine, ctx.progService, playerData.inventory);
+    }
+  }
+
+  if (anyApplied) {
+    ctx.engine.broadcastHostSnapshot();
+  }
+
+  return anyApplied;
 }
 
 GameObject* findObjectByKey(game_engine::GameState& gameState, GameObjectKey key) {
@@ -777,6 +864,18 @@ void playSimulationAudio(
           resources.audioGemCollect) {
         MIX_PlayAudio(resources.mixer, resources.audioGemCollect);
       }
+      if (localPlayer->data.player.coinPurchaseCueCount > prev.coinPurchaseCueCount &&
+          resources.audioCoinPurchase) {
+        MIX_PlayAudio(resources.mixer, resources.audioCoinPurchase);
+      }
+      if (localPlayer->data.player.gemPurchaseCueCount > prev.gemPurchaseCueCount &&
+          resources.audioGemPurchase) {
+        MIX_PlayAudio(resources.mixer, resources.audioGemPurchase);
+      }
+      if (localPlayer->data.player.consumableUseCueCount > prev.consumableUseCueCount &&
+          resources.audioDrinkSlurp) {
+        MIX_PlayAudio(resources.mixer, resources.audioDrinkSlurp);
+      }
 
       if (localPlayer->data.player.healthPoints < prev.healthPoints && resources.boneImpactHitTrack) {
         MIX_PlayTrack(resources.boneImpactHitTrack, 0);
@@ -920,9 +1019,13 @@ public:
               }
             }
           }
+
+          (void)processPendingHostPlayerCommands(ctx, client->GetPlayerID());
         }
 
         const AudioStateMap before = captureAudioState(ctx.gameState);
+        const InventorySnapshot beforeInventory =
+          captureInventorySnapshot(ctx.gameState, client->GetPlayerID());
 
         // read in GameState snapshot coming from the server
         client->ProcessServerMessages();
@@ -942,6 +1045,18 @@ public:
           startReplicatedHitStop(ctx.gameState, latestSnapshot.hitStopEvent);
           if (client->NeedsFullRebuild()) {
             client->MarkFullRebuildApplied();
+          }
+          if (engine.isClientMode()) {
+            const InventorySnapshot afterInventory =
+              captureInventorySnapshot(ctx.gameState, client->GetPlayerID());
+            if (!(afterInventory == beforeInventory)) {
+              if (GameObject* localPlayer = findPlayerById(ctx.gameState, client->GetPlayerID())) {
+                persistInventorySnapshot(
+                  ctx.engine,
+                  ctx.progService,
+                  localPlayer->data.player.inventory);
+              }
+            }
           }
           playSimulationAudio(
             resources,

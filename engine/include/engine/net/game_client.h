@@ -123,6 +123,22 @@ public:
     Send(msg);
   }
 
+  void SendPlayerCommand(const std::vector<uint8_t>& payload) {
+    if (!IsConnected() || !m_isRegistered) {
+      return;
+    }
+
+    NetPlayerCommand command;
+    command.playerID = m_playerID;
+    command.payload = payload;
+
+    net::message<GameMsgHeaders> msg;
+    msg.header.id = GameMsgHeaders::Game_PlayerCommand;
+    msg.body = command.serialize();
+    msg.header.bodySize = msg.body.size();
+    Send(msg);
+  }
+
   void UnregisterFromServer() {
     if (!IsConnected() || !m_isRegistered) {
       return;

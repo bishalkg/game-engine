@@ -303,6 +303,7 @@ namespace game_engine {
       std::atomic<bool> m_serverLoopRunning{false};
       std::thread m_levelLoadThd;
       NetGameInput m_localInput{};
+      std::vector<NetPlayerCommand> m_localHostPlayerCommands;
       uint32_t m_localInputSeq = 0;
       float m_inputSendAccumulator = 0.0f;
       std::string m_selectedJoinHost = "127.0.0.1";
@@ -343,7 +344,11 @@ namespace game_engine {
       void runGameServerLoopThread();
       void resetMultiplayerNetworkingState();
       void submitLocalInput(NetGameInput input);
+      void submitLocalPlayerCommand(const std::vector<uint8_t>& payload);
       void flushLocalInput(float deltaTime);
+      std::vector<NetPlayerCommand> consumePendingHostPlayerCommands();
+      bool copyHostAuthoritativePlayerData(uint32_t playerID, PlayerData& out) const;
+      bool updateHostAuthoritativePlayerData(uint32_t playerID, const PlayerData& playerData);
       void restartMultiplayerSession();
       void synchronizeHostAuthoritativeState(bool refreshSpawnPositions = false);
       std::optional<LevelIndex> consumePendingHostLevelTransition();

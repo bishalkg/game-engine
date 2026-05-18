@@ -31,8 +31,6 @@ namespace game_engine {
   // read from message.body (byte array) using ByteReader
   // write from NetGameInput -> ByteWriter. pass the ByteWriterBuff as message.body
   struct NetGameInput {
-    static constexpr std::uint8_t kNoUiActionCode = 0xFF;
-
     uint32_t playerID = 0;
     uint32_t inputSeq = 0;
     bool leftHeld = false;
@@ -41,8 +39,6 @@ namespace game_engine {
     bool jumpPressed = false;
     bool meleePressed = false;
     bool ultimatePressed = false;
-    std::uint8_t shopPurchaseCode = kNoUiActionCode;
-    std::uint8_t inventoryUseCode = kNoUiActionCode;
     bool shouldSendMessage = false; // not serialized; frame-local send hint only
 
     std::vector<uint8_t> serealizeNetGameInput() const {
@@ -56,8 +52,6 @@ namespace game_engine {
       bytes.write_bool(jumpPressed);
       bytes.write_bool(meleePressed);
       bytes.write_bool(ultimatePressed);
-      bytes.write_u8(shopPurchaseCode);
-      bytes.write_u8(inventoryUseCode);
 
       return bytes.buff;
     };
@@ -74,10 +68,34 @@ namespace game_engine {
       jumpPressed = reader.read_bool();
       meleePressed = reader.read_bool();
       ultimatePressed = reader.read_bool();
-      shopPurchaseCode = reader.read_u8();
-      inventoryUseCode = reader.read_u8();
 
     };
+  };
+
+  struct NetPlayerCommand {
+    uint32_t playerID = 0;
+    std::vector<uint8_t> payload;
+
+    std::vector<uint8_t> serialize() const {
+      net::ByteWriter writer;
+      writer.write_u32(playerID);
+      writer.write_u32(static_cast<uint32_t>(payload.size()));
+      for (std::uint8_t byte : payload) {
+        writer.write_u8(byte);
+      }
+      return writer.buff;
+    }
+
+    void deserialize(const std::vector<uint8_t>& bytes) {
+      net::ByteReader reader(bytes);
+      playerID = reader.read_u32();
+      const uint32_t payloadSize = reader.read_u32();
+      payload.clear();
+      payload.reserve(payloadSize);
+      for (uint32_t i = 0; i < payloadSize; ++i) {
+        payload.push_back(reader.read_u8());
+      }
+    }
   };
 
   struct NetPersistedPlayerState {
@@ -281,6 +299,9 @@ namespace game_engine {
             w.write_u32(static_cast<uint32_t>(obj.data.player.meleeDamage));
             w.write_u32(obj.data.player.coinPickupCueCount);
             w.write_u32(obj.data.player.gemPickupCueCount);
+            w.write_u32(obj.data.player.coinPurchaseCueCount);
+            w.write_u32(obj.data.player.gemPurchaseCueCount);
+            w.write_u32(obj.data.player.consumableUseCueCount);
             w.write_u32(obj.data.player.inventory.coins.count);
             w.write_u32(obj.data.player.inventory.gems.count);
             w.write_u32(obj.data.player.inventory.healthPotions.count);
@@ -380,6 +401,9 @@ namespace game_engine {
             obj.data.player.meleeDamage = static_cast<int>(r.read_u32());
             obj.data.player.coinPickupCueCount = r.read_u32();
             obj.data.player.gemPickupCueCount = r.read_u32();
+            obj.data.player.coinPurchaseCueCount = r.read_u32();
+            obj.data.player.gemPurchaseCueCount = r.read_u32();
+            obj.data.player.consumableUseCueCount = r.read_u32();
             obj.data.player.inventory.coins.count = r.read_u32();
             obj.data.player.inventory.gems.count = r.read_u32();
             obj.data.player.inventory.healthPotions.count = r.read_u32();
@@ -449,6 +473,7 @@ namespace game_engine {
 
     Game_Snapshot,
     Game_PlayerInput,
+    Game_PlayerCommand,
     Game_PlayerRespawnRequest
   };
 
