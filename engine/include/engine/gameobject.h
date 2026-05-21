@@ -71,9 +71,9 @@ struct PortalData {
 
 struct EnemyData {
   EnemyState state;
-  Timer damageTimer;
-  Timer attackTimer;
-  Timer idleTimer;
+  Timer damageTimer; // how long enemy is in hurt state
+  Timer attackTimer; // how long enemy is in attack state
+  Timer idleTimer; // ??
   int healthPoints;
   int srcH, srcW;
   uint32_t lastUltimatePlayerId;
@@ -82,10 +82,22 @@ struct EnemyData {
   float pendingKnockbackDirection;
   float pendingKnockbackMagnitude;
   bool hasPendingKnockback;
+  bool isBoss = false;
 
 
   EnemyData(): state(EnemyState::idle), damageTimer(0.4f), attackTimer(1.0), idleTimer(1.0) {
     healthPoints = 100;
+    srcH = 0;
+    srcW = 0;
+    lastUltimatePlayerId = 0;
+    lastUltimateCastId = 0;
+    hitStopRemainingSeconds = 0.0f;
+    pendingKnockbackDirection = 0.0f;
+    pendingKnockbackMagnitude = 0.0f;
+    hasPendingKnockback = false;
+  };
+
+  EnemyData(bool isBoss, float damageResetTime, float attackResetTime, float idleResetTime, int healthPoints): isBoss(isBoss), healthPoints(healthPoints), state(EnemyState::idle), damageTimer(damageResetTime), attackTimer(attackResetTime), idleTimer(idleResetTime) {
     srcH = 0;
     srcW = 0;
     lastUltimatePlayerId = 0;

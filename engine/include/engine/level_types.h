@@ -30,7 +30,7 @@ const int ANIM_COLLECT = 13;
 
 enum class SpriteType: std::uint32_t {
   // Characters
-  Player_Knight, Player_Mage, Minotaur_1, Skeleton_Warrior, Red_Werewolf, Player_Marie, Skeleton_Pikeman, Player_Bonkfather,
+  Player_Knight, Player_Mage, Minotaur_1, Skeleton_Warrior, Red_Werewolf, Player_Marie, Skeleton_Pikeman, Player_Bonkfather, Boss_Evil_Clown, Boss_Purple_Dragon,
 
   // Materials
   Coin, Gem

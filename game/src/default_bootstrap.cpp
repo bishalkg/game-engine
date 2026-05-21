@@ -312,6 +312,59 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           newLayer.push_back(std::move(enemy));
         }
 
+        if (obj.type == "Boss") {
+          SpriteType spriteType = CHARACTER_NAME_TO_SPRITE_TYPE.at(obj.name);
+          GameObject enemy = createObject(
+            1,
+            1,
+            res.m_currLevel->texCharacterMap.at(spriteType).texIdle,
+            ObjectClass::Enemy,
+            128,
+            128,
+            0,
+            0);
+          enemy.id = nextDynamicId++;
+          enemy.spriteType = spriteType;
+
+          float damageResetTime = 1.0;
+          float attackResetTime = 0.5;
+          float idleResetTime = 1.0;
+          int healthPoints = 300;
+          float maxSpeedX = 15;
+
+          switch (spriteType) {
+            case SpriteType::Boss_Evil_Clown: {
+              enemy.drawScale = 1.0f;
+              healthPoints = 300;
+              maxSpeedX = 25;
+              break;
+            }
+            case SpriteType::Boss_Purple_Dragon: {
+              enemy.drawScale = 0.50f;
+              int healthPoints = 1000;
+              break;
+            }
+            default:
+              enemy.drawScale = 4.0f;
+              break;
+          }
+          float wFrac = 0.30f;
+          enemy.colliderNorm = {.x = 0.35f, .y = 0.4f, .w = wFrac, .h = 0.6f};
+          enemy.applyScale();
+
+          float feetY = objStartingPos.y;
+          float centerX = objStartingPos.x;
+          enemy.position.x = centerX - enemy.collider.w * 0.5f;
+          enemy.position.y = feetY - (enemy.collider.y + enemy.collider.h);
+          enemy.data.enemy = EnemyData(true, damageResetTime, attackResetTime, idleResetTime, healthPoints);
+          enemy.currentAnimation = res.ANIM_IDLE;
+          enemy.presentationVariant = PresentationVariant::Idle;
+          enemy.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
+          enemy.dynamic = true;
+          enemy.maxSpeedX = maxSpeedX;
+          newLayer.push_back(std::move(enemy));
+        }
+
         if (obj.type == "Material") {
           SpriteType spriteType = MATERIAL_NAME_TO_SPRITE_TYPE.at(obj.name);
           GameObject material = createObject(
@@ -477,7 +530,9 @@ bool switchToLevel(
 
   if (oldLevel == LevelIndex::LEVEL_1 && levelId == LevelIndex::LEVEL_2) {
     progService.markLevelComplete(oldLevel);
-    progService.unlockUltimateForChar(gameState.selectedPlayerSprite, 1); // TODO testing only
+
+    // TODO testing only, this will be triggered by if the boss has been defeated
+    progService.unlockUltimateForChar(gameState.selectedPlayerSprite, 1);
 
     if (preservedPlayerState.has_value()) {
       progService.updatePlayerInventory(preservedPlayerState->inventory);

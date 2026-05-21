@@ -10,6 +10,11 @@ const std::unordered_map<std::string, SpriteType> CHARACTER_NAME_TO_SPRITE_TYPE 
   {"Skeleton_Warrior", SpriteType::Skeleton_Warrior},
   {"Skeleton_Pikeman", SpriteType::Skeleton_Pikeman},
   {"Red_Werewolf", SpriteType::Red_Werewolf},
+
+
+  // Boss Characters
+  {"Boss_Evil_Clown", SpriteType::Boss_Evil_Clown},
+  {"Boss_Purple_Dragon", SpriteType::Boss_Purple_Dragon},
 };
 
 const std::unordered_map<std::string, SpriteType> MATERIAL_NAME_TO_SPRITE_TYPE = {
@@ -237,6 +242,26 @@ const std::unordered_map<SpriteType, SpriteAssets> ENEMY_CONFIG = {
       },
     },
   },
+  {
+    SpriteType::Boss_Evil_Clown,
+    SpriteAssets{
+      .paths = SpriteAssetPaths{
+        .idleTex = "data/enemies/Red_Werewolf/Idle.png",
+        .walkTex = "data/enemies/Red_Werewolf/Walk.png",  // 11 frames
+        .runTex = "data/enemies/Red_Werewolf/Walk.png",
+        .attackTex = "data/enemies/Red_Werewolf/Attack_1.png",
+        .hitTex = "data/enemies/Red_Werewolf/Hurt.png",
+        .dieTex = "data/enemies/Red_Werewolf/Dead.png",
+      },
+      .animSettings = {
+        { ANIM_IDLE,{ 8, 1.0f } },
+        { ANIM_RUN, { 11, 1.0f } },
+        { ANIM_HIT, { 2, 0.5f } },
+        { ANIM_DIE , { 2, 0.5f } },
+        { ANIM_SWING , { 5, 1.0f } },
+      },
+    },
+  },
 };
 
 const std::unordered_map<SpriteType, SpriteAssets> MATERIAL_CONFIG = {
@@ -285,7 +310,7 @@ const std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
       .backgroundAudioPath = "data/audio/1. Dawn of Blades.wav",
       .gameOverAudioPath = DEFAULT_GAME_OVER_SOUND,
       .stepAudioPath = "data/audio/movement/step_grass.wav",
-      .enemyTypes = { SpriteType::Minotaur_1,  SpriteType::Skeleton_Warrior},
+      .enemyTypes = { SpriteType::Minotaur_1,  SpriteType::Skeleton_Warrior, SpriteType::Boss_Evil_Clown},
       .materialTypes = { SpriteType::Gem, SpriteType::Coin},
       .cutsceneData = {
         {
