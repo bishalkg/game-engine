@@ -36,8 +36,24 @@ bool equalSnapshots(const game_engine::NetGameObjectSnapshot& a,
     case ObjectClass::Player:
       return a.data.player.state == b.data.player.state &&
              a.data.player.healthPoints == b.data.player.healthPoints &&
+             a.data.player.maxHealthPoints == b.data.player.maxHealthPoints &&
              a.data.player.manaPoints == b.data.player.manaPoints &&
-             a.data.player.ultimatePoints == b.data.player.ultimatePoints;
+             a.data.player.maxManaPoints == b.data.player.maxManaPoints &&
+             a.data.player.ultimatePoints == b.data.player.ultimatePoints &&
+             a.data.player.maxUltimatePoints == b.data.player.maxUltimatePoints &&
+             a.data.player.unlockedUltimateOne == b.data.player.unlockedUltimateOne &&
+             a.data.player.meleeDamage == b.data.player.meleeDamage &&
+             a.data.player.coinPickupCueCount == b.data.player.coinPickupCueCount &&
+             a.data.player.gemPickupCueCount == b.data.player.gemPickupCueCount &&
+             a.data.player.coinPurchaseCueCount == b.data.player.coinPurchaseCueCount &&
+             a.data.player.gemPurchaseCueCount == b.data.player.gemPurchaseCueCount &&
+             a.data.player.consumableUseCueCount == b.data.player.consumableUseCueCount &&
+             a.data.player.inventory.coins.count == b.data.player.inventory.coins.count &&
+             a.data.player.inventory.gems.count == b.data.player.inventory.gems.count &&
+             a.data.player.inventory.healthPotions.count == b.data.player.inventory.healthPotions.count &&
+             a.data.player.inventory.manaPotions.count == b.data.player.inventory.manaPotions.count &&
+             a.data.player.inventory.attackUps.count == b.data.player.inventory.attackUps.count &&
+             a.data.player.inventory.defenceUps.count == b.data.player.inventory.defenceUps.count;
     case ObjectClass::Enemy:
       return a.data.enemy.state == b.data.enemy.state &&
              a.data.enemy.healthPoints == b.data.enemy.healthPoints &&
@@ -60,6 +76,7 @@ bool equalSnapshots(const game_engine::NetGameObjectSnapshot& a,
              a.data.level.dst.h == b.data.level.dst.h;
     case ObjectClass::Portal:
     case ObjectClass::Background:
+    case ObjectClass::Material:
       return true;
   }
   return false;
@@ -99,8 +116,22 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   new (&player.data.player) PlayerData{};
   player.data.player.state = PlayerState::running;
   player.data.player.healthPoints = 88;
+  player.data.player.maxHealthPoints = 120;
   player.data.player.manaPoints = 42;
+  player.data.player.maxManaPoints = 140;
   player.data.player.ultimatePoints = 17;
+  player.data.player.maxUltimatePoints = 175;
+  player.data.player.unlockedUltimateOne = true;
+  player.data.player.meleeDamage = 19;
+  player.data.player.coinPickupCueCount = 3;
+  player.data.player.gemPickupCueCount = 4;
+  player.data.player.coinPurchaseCueCount = 5;
+  player.data.player.gemPurchaseCueCount = 6;
+  player.data.player.consumableUseCueCount = 7;
+  player.data.player.inventory.coins.count = 11;
+  player.data.player.inventory.gems.count = 7;
+  player.data.player.inventory.healthPotions.count = 2;
+  player.data.player.inventory.manaPotions.count = 5;
   snap.m_gameObjects[{player.type, player.id}] = player;
 
   NetGameObjectSnapshot enemy{};

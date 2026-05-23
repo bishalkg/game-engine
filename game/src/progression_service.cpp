@@ -38,6 +38,8 @@ namespace game {
       case LevelIndex::LEVEL_2:
         return LevelIndex::LEVEL_3;
       case LevelIndex::LEVEL_3:
+      case LevelIndex::LEVEL_4:
+      case LevelIndex::LEVEL_5:
         return LevelIndex::LEVEL_3;
     }
 
@@ -58,6 +60,62 @@ namespace game {
     }
 
   };
+
+  void ProgressionService::updatePlayerInventory(Inventory currInventory) {
+    std::vector<InventoryItemRecord> records;
+    records.reserve(6);
+    records.emplace_back(InventoryItemRecord{currInventory.coins.type, currInventory.coins.count});
+    records.emplace_back(InventoryItemRecord{currInventory.gems.type, currInventory.gems.count});
+    records.emplace_back(InventoryItemRecord{currInventory.healthPotions.type, currInventory.healthPotions.count});
+    records.emplace_back(InventoryItemRecord{currInventory.manaPotions.type, currInventory.manaPotions.count});
+    records.emplace_back(InventoryItemRecord{currInventory.attackUps.type, currInventory.attackUps.count});
+    records.emplace_back(InventoryItemRecord{currInventory.defenceUps.type, currInventory.defenceUps.count});
+    m_Profile.item_records = std::move(records);
+  }
+
+  Inventory ProgressionService::buildInventoryFromState() {
+    uint32_t gemCount = 0;
+    uint32_t coinCount = 0;
+    uint32_t healthPots = 0;
+    uint32_t manaPots = 0;
+    uint32_t attackUpCount = 0;
+    uint32_t defenceUpCount = 0;
+
+    for (auto const &rec : m_Profile.item_records) {
+      switch (rec.type) {
+        case MaterialType::coin: {
+          coinCount = rec.amount;
+          break;
+        }
+        case MaterialType::gem: {
+          gemCount = rec.amount;
+          break;
+        }
+        case MaterialType::healthPotion: {
+          healthPots = rec.amount;
+          break;
+        }
+        case MaterialType::manaPotion: {
+          manaPots = rec.amount;
+          break;
+        }
+        case MaterialType::attackUp: {
+          attackUpCount = rec.amount;
+          break;
+        }
+        case MaterialType::defenceUp: {
+          defenceUpCount = rec.amount;
+          break;
+        }
+        default:
+      }
+
+    }
+
+    return Inventory(healthPots, manaPots, attackUpCount, defenceUpCount, coinCount, gemCount);
+  }
+
+
 
   // call inside switchToLevel:
   // this can happen manually clicking the level
@@ -146,14 +204,14 @@ namespace game {
     bytes.write_enum(ProfileChunkType::LevelProgress);
     bytes.write_u32(m_Profile.level_records.size());
     for (const LevelProgressRecord& lvlRec : m_Profile.level_records) {
-      bytes.write_u32(static_cast<uint32_t>(lvlRec.lvlid));
+      bytes.write_enum(lvlRec.lvlid);
       bytes.write_bool(lvlRec.complete);
     }
 
     bytes.write_enum(ProfileChunkType::CharacterProgress);
     bytes.write_u32(m_Profile.char_records.size());
     for (const CharacterProgressRecord& charRec : m_Profile.char_records) {
-      bytes.write_u32(static_cast<uint32_t>(charRec.spriteType));
+      bytes.write_enum(charRec.spriteType);
       bytes.write_bool(charRec.unlockedUltOne);
       bytes.write_bool(charRec.unlockedUltTwo);
     }
@@ -162,7 +220,7 @@ namespace game {
     bytes.write_enum(ProfileChunkType::InventoryProgress);
     bytes.write_u32(m_Profile.item_records.size());
     for (const InventoryItemRecord& invRec : m_Profile.item_records) {
-      bytes.write_u32(invRec.id);
+      bytes.write_enum(invRec.type);
       bytes.write_u32(invRec.amount);
     }
 
@@ -210,7 +268,7 @@ namespace game {
       m_Profile.level_records.clear();
       m_Profile.level_records.resize(levelRecordLen);
       for (size_t i = 0; i < levelRecordLen; ++i) {
-        m_Profile.level_records[i].lvlid = static_cast<LevelIndex>(r.read_u32());
+        m_Profile.level_records[i].lvlid = r.read_enum<LevelIndex>();
         m_Profile.level_records[i].complete = r.read_bool();
       }
 
@@ -222,7 +280,7 @@ namespace game {
       m_Profile.char_records.clear();
       m_Profile.char_records.resize(charRecordLen);
       for (size_t i = 0; i < charRecordLen; ++i) {
-        m_Profile.char_records[i].spriteType = static_cast<SpriteType>(r.read_u32());
+        m_Profile.char_records[i].spriteType = r.read_enum<SpriteType>();
         m_Profile.char_records[i].unlockedUltOne = r.read_bool();
         m_Profile.char_records[i].unlockedUltTwo = r.read_bool();
       }
@@ -236,7 +294,7 @@ namespace game {
       m_Profile.item_records.clear();
       m_Profile.item_records.resize(inventoryRecordLen);
       for (size_t i = 0; i < inventoryRecordLen; ++i) {
-        m_Profile.item_records[i].id = r.read_u32();
+        m_Profile.item_records[i].type = r.read_enum<MaterialType>();
         m_Profile.item_records[i].amount = r.read_u32();
       }
 

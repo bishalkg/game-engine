@@ -26,9 +26,14 @@ const int ANIM_DIE = 9;
 const int ANIM_RUN_ATTACK = 10;
 const int ANIM_SWING_2 = 11;
 const int ANIM_ULTIMATE = 12;
+const int ANIM_COLLECT = 13;
 
 enum class SpriteType: std::uint32_t {
-  Player_Knight, Player_Mage, Minotaur_1, Skeleton_Warrior, Red_Werewolf, Player_Marie, Skeleton_Pikeman, Player_Bonkfather
+  // Characters
+  Player_Knight, Player_Mage, Minotaur_1, Skeleton_Warrior, Red_Werewolf, Player_Marie, Skeleton_Pikeman, Player_Bonkfather,
+
+  // Materials
+  Coin, Gem
 };
 
 struct SpriteAssetPaths {
@@ -79,11 +84,14 @@ struct LevelAssets {
   std::string gameOverAudioPath;
   std::string stepAudioPath;
   std::vector<SpriteType> enemyTypes;
+  std::vector<SpriteType> materialTypes;
   std::vector<CutsceneAsset> cutsceneData;
 };
 
 extern const char* DEFAULT_GAME_OVER_SOUND;
 extern const std::unordered_map<std::string, SpriteType> CHARACTER_NAME_TO_SPRITE_TYPE;
+extern const std::unordered_map<std::string, SpriteType> MATERIAL_NAME_TO_SPRITE_TYPE;
 extern const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG;
 extern const std::unordered_map<SpriteType, SpriteAssets> ENEMY_CONFIG;
 extern const std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG;
+extern const std::unordered_map<SpriteType, SpriteAssets> MATERIAL_CONFIG;

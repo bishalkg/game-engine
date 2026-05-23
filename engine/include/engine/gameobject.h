@@ -23,6 +23,14 @@ enum class EnemyState: std::uint32_t {
   idle, hurt, dead, attack
 };
 
+enum class MaterialType: std::uint32_t {
+  none, coin, gem, healthPotion, manaPotion, attackUp, defenceUp
+};
+
+enum class MaterialState: std::uint32_t {
+  present, collapsing, collected
+};
+
 enum class PresentationVariant : std::uint32_t {
   Idle,
   Run,
@@ -40,51 +48,14 @@ enum class PresentationVariant : std::uint32_t {
   Die,
   ProjectileMoving,
   ProjectileHit,
+  Present,
+  Collapsing,
+  // Collected
 };
 
 enum class HitStopStrength : uint8_t {
   Normal,
   Heavy,
-};
-
-struct PlayerData {
-  PlayerState state;
-  Timer damageTimer;
-  int healthPoints;
-  int maxHealthPoints;
-  int manaPoints;
-  int maxManaPoints;
-  int ultimatePoints;
-  int maxUltimatePoints;
-  Timer manaRecoveryTimer;
-  Timer healthRecoveryTimer;
-  Timer ultimateRecoveryTimer;
-  Timer weaponTimer;
-  Timer jumpWindupTimer;
-  bool jumpImpulseApplied;
-  bool playLandingFrame = false;
-  PlayerSwingStage swingStage = PlayerSwingStage::None;
-  bool queuedFollowupSwing = false;
-  bool meleePressedThisFrame = false;
-  bool ultimatePressedThisFrame = false;
-  bool unlockedUltimateOne = false;
-  int meleeDamage = 10;
-  uint32_t activeUltimateCastId = 0;
-  uint32_t nextUltimateCastId = 1;
-
-  PlayerData()
-    : damageTimer(0.5f),
-      manaRecoveryTimer(0.2f),
-      healthRecoveryTimer(0.2f),
-      ultimateRecoveryTimer(1.0f),
-      weaponTimer(0.1f),
-      jumpWindupTimer(0.00f) { //unlockedUltimateOne(ultOneUnlocked)
-    state = PlayerState::idle;
-    healthPoints = maxHealthPoints = 100;
-    manaPoints = maxManaPoints = 100;
-    ultimatePoints = 0;
-    maxUltimatePoints = 100;
-  };
 };
 
 struct LevelData {
@@ -133,12 +104,99 @@ struct BulletData{
   BulletData(): state(BulletState::moving), liveTimer(0.7f), ownerPlayerId(0) {};
 };
 
+struct MaterialData{
+  uint32_t count; // how many of this item player has
+  MaterialType type;
+  MaterialState state = MaterialState::present;
+  MaterialData(uint32_t count, MaterialType type): count(count), type(type){};
+};
+
+// either an array of all materials
+// or just one of each type
+struct Inventory{
+  // std::vector<MaterialData> consumables;
+  MaterialData healthPotions;
+  MaterialData manaPotions;
+  MaterialData attackUps;
+  MaterialData defenceUps;
+  MaterialData coins;
+  MaterialData gems;
+  Inventory()
+    : healthPotions(0, MaterialType::healthPotion),
+      manaPotions(0, MaterialType::manaPotion),
+      attackUps(0, MaterialType::attackUp),
+      defenceUps(0, MaterialType::defenceUp),
+      coins(0, MaterialType::coin),
+      gems(0, MaterialType::gem) {}
+  Inventory(
+    uint32_t hpots,
+    uint32_t manaPots,
+    uint32_t attackUpAmt,
+    uint32_t defenceUpAmt,
+    uint32_t coinAmt,
+    uint32_t gemAmt)
+    : healthPotions(hpots, MaterialType::healthPotion),
+      manaPotions(manaPots, MaterialType::manaPotion),
+      attackUps(attackUpAmt, MaterialType::attackUp),
+      defenceUps(defenceUpAmt, MaterialType::defenceUp),
+      coins(coinAmt, MaterialType::coin),
+      gems(gemAmt, MaterialType::gem) {}
+};
+
+struct PlayerData {
+  PlayerState state;
+  Inventory inventory;
+  Timer damageTimer;
+  int healthPoints;
+  int maxHealthPoints;
+  int manaPoints;
+  int maxManaPoints;
+  int ultimatePoints;
+  int maxUltimatePoints;
+  Timer manaRecoveryTimer;
+  Timer healthRecoveryTimer;
+  Timer ultimateRecoveryTimer;
+  Timer weaponTimer;
+  Timer jumpWindupTimer;
+  bool jumpImpulseApplied;
+  bool playLandingFrame = false;
+  PlayerSwingStage swingStage = PlayerSwingStage::None;
+  bool queuedFollowupSwing = false;
+  bool meleePressedThisFrame = false;
+  bool ultimatePressedThisFrame = false;
+  bool unlockedUltimateOne = false;
+  int meleeDamage = 10;
+  uint32_t coinPickupCueCount = 0;
+  uint32_t gemPickupCueCount = 0;
+  uint32_t coinPurchaseCueCount = 0;
+  uint32_t gemPurchaseCueCount = 0;
+  uint32_t consumableUseCueCount = 0;
+  uint32_t activeUltimateCastId = 0;
+  uint32_t nextUltimateCastId = 1;
+
+  PlayerData()
+    : damageTimer(0.5f),
+      manaRecoveryTimer(1.0f),
+      healthRecoveryTimer(1.0f),
+      ultimateRecoveryTimer(1.0f),
+      weaponTimer(0.1f),
+      jumpWindupTimer(0.00f) { //unlockedUltimateOne(ultOneUnlocked)
+    state = PlayerState::idle;
+    healthPoints = maxHealthPoints = 100;
+    manaPoints = maxManaPoints = 100;
+    ultimatePoints = 0;
+    maxUltimatePoints = 100;
+    inventory = Inventory();
+  };
+};
+
 union ObjectData {
   PlayerData player;
   LevelData level;
   EnemyData enemy;
   PortalData portal;
   BulletData bullet;
+  MaterialData material;
 
   ObjectData() { new (&level) LevelData{}; }   // pick one as default
   ~ObjectData() {}  // and destroy the active member appropriately if you change it
@@ -146,7 +204,7 @@ union ObjectData {
 
 enum class ObjectClass : std::uint32_t
 {
-  Player, Level, Portal, Background, Enemy, Projectile
+  Player, Level, Portal, Background, Enemy, Projectile, Material
 };
 
 // define all objects in the game

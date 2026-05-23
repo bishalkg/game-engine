@@ -18,6 +18,9 @@ ObjectData cloneObjectData(const GameObject& src) {
     case ObjectClass::Enemy:
       new (&data.enemy) EnemyData(src.data.enemy);
       break;
+    case ObjectClass::Material:
+      new (&data.material) MaterialData(src.data.material);
+      break;
     case ObjectClass::Projectile:
       new (&data.bullet) BulletData(src.data.bullet);
       break;
@@ -108,6 +111,28 @@ bool isMultiplayerBootstrapView(UIManager::GameView view) {
     default:
       return false;
   }
+}
+
+std::optional<game_engine::NetPersistedPlayerState> captureLocalPersistedPlayerState(
+  const game_engine::GameState& state) {
+  if (state.playerLayer >= 0 &&
+      state.playerLayer < static_cast<int>(state.layers.size()) &&
+      state.playerIndex >= 0 &&
+      state.playerIndex < static_cast<int>(state.layers[state.playerLayer].size())) {
+    const GameObject& player = state.layers[state.playerLayer][state.playerIndex];
+    if (player.objClass == ObjectClass::Player) {
+      return game_engine::NetPersistedPlayerState::fromPlayerData(player.data.player);
+    }
+  }
+
+  for (const auto& layer : state.layers) {
+    for (const auto& obj : layer) {
+      if (obj.objClass == ObjectClass::Player) {
+        return game_engine::NetPersistedPlayerState::fromPlayerData(obj.data.player);
+      }
+    }
+  }
+  return std::nullopt;
 }
 
 } // namespace
@@ -400,7 +425,11 @@ bool game_engine::Engine::handleMultiplayerConnections() {
 
 
     if (m_gameClient->IsClientValidated() && !m_gameClient->IsRegistered()) {
-      m_gameClient->RegisterWithServer(m_gameState.selectedPlayerSprite);
+      const NetPersistedPlayerState persistedPlayerState =
+        captureLocalPersistedPlayerState(m_gameState).value_or(NetPersistedPlayerState{});
+      m_gameClient->RegisterWithServer(
+        m_gameState.selectedPlayerSprite,
+        persistedPlayerState);
       m_multiplayerStatus = "Registering with server...";
     } else if (m_gameClient->IsRegistered()) {
       m_multiplayerStatus = "Connected";
@@ -433,6 +462,7 @@ void game_engine::Engine::resetMultiplayerNetworkingState() {
   m_serverLoopRunning.store(false);
   m_gameState.localHitStop = {};
   m_localInput = NetGameInput{};
+  m_localHostPlayerCommands.clear();
   m_localInputSeq = 0;
   m_inputSendAccumulator = 0.0f;
   m_multiplayerStatus.clear();
@@ -482,6 +512,37 @@ void game_engine::Engine::submitLocalInput(NetGameInput input) {
   }
 }
 
+void game_engine::Engine::submitLocalPlayerCommand(const std::vector<uint8_t>& payload) {
+  if (!isMultiplayerActive()) {
+    return;
+  }
+
+  if (isHostMode()) {
+    uint32_t playerID = 0;
+    if (m_gameClient && m_gameClient->IsRegistered()) {
+      playerID = m_gameClient->GetPlayerID();
+    } else if (m_gameState.playerLayer >= 0 &&
+               m_gameState.playerLayer < static_cast<int>(m_gameState.layers.size()) &&
+               m_gameState.playerIndex >= 0 &&
+               m_gameState.playerIndex <
+                 static_cast<int>(m_gameState.layers[m_gameState.playerLayer].size())) {
+      playerID = m_gameState.layers[m_gameState.playerLayer][m_gameState.playerIndex].id;
+    }
+
+    if (playerID != 0) {
+      m_localHostPlayerCommands.push_back(NetPlayerCommand{
+        .playerID = playerID,
+        .payload = payload,
+      });
+    }
+    return;
+  }
+
+  if (isClientMode() && m_gameClient) {
+    m_gameClient->SendPlayerCommand(payload);
+  }
+}
+
 void game_engine::Engine::flushLocalInput(float deltaTime) {
   if (!isMultiplayerActive() || !m_gameClient || !m_gameClient->IsRegistered()) {
     return;
@@ -511,12 +572,51 @@ void game_engine::Engine::flushLocalInput(float deltaTime) {
     m_localInput.leftHeld || m_localInput.rightHeld || m_localInput.fireHeld;
 }
 
+std::vector<game_engine::NetPlayerCommand> game_engine::Engine::consumePendingHostPlayerCommands() {
+  std::vector<NetPlayerCommand> commands;
+  if (!isHostMode()) {
+    return commands;
+  }
+
+  if (!m_localHostPlayerCommands.empty()) {
+    commands = std::move(m_localHostPlayerCommands);
+    m_localHostPlayerCommands.clear();
+  }
+
+  if (m_gameServer) {
+    auto remoteCommands = m_gameServer->drainPendingPlayerCommands();
+    commands.insert(
+      commands.end(),
+      std::make_move_iterator(remoteCommands.begin()),
+      std::make_move_iterator(remoteCommands.end()));
+  }
+
+  return commands;
+}
+
+bool game_engine::Engine::copyHostAuthoritativePlayerData(uint32_t playerID, PlayerData& out) const {
+  if (!isHostMode() || !m_gameServer) {
+    return false;
+  }
+  return m_gameServer->copyPlayerData(playerID, out);
+}
+
+bool game_engine::Engine::updateHostAuthoritativePlayerData(
+  uint32_t playerID,
+  const PlayerData& playerData) {
+  if (!isHostMode() || !m_gameServer) {
+    return false;
+  }
+  return m_gameServer->updatePlayerData(playerID, playerData);
+}
+
 void game_engine::Engine::restartMultiplayerSession() {
   if (!isMultiplayerActive()) {
     return;
   }
 
   m_localInput = NetGameInput{};
+  m_localHostPlayerCommands.clear();
   m_inputSendAccumulator = 0.0f;
 
   if (isHostMode() && m_gameServer) {

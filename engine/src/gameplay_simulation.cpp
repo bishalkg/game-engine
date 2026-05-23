@@ -207,6 +207,31 @@ void awardUltimateCharge(GameState& state, uint32_t playerID, int amount) {
   }
 }
 
+void awardMaterialToPlayer(GameObject& player, const MaterialData& material) {
+  switch (material.type) {
+    case MaterialType::coin:
+      player.data.player.inventory.coins.count = std::min(
+        player.data.player.inventory.coins.count + material.count,
+        99u);
+      break;
+    case MaterialType::gem:
+      player.data.player.inventory.gems.count = std::min(
+        player.data.player.inventory.gems.count + material.count,
+        99u);
+      break;
+    case MaterialType::healthPotion:
+      player.data.player.inventory.healthPotions.count += material.count;
+      break;
+    case MaterialType::manaPotion:
+      player.data.player.inventory.manaPotions.count += material.count;
+      break;
+    case MaterialType::attackUp:
+    case MaterialType::defenceUp:
+    case MaterialType::none:
+      break;
+  }
+}
+
 void emitHitConfirmed(
   const GameplaySimulationHooks& hooks,
   GameObjectKey attacker,
@@ -403,7 +428,7 @@ void updateDynamicObject(
 
   clearFlash(obj, deltaTime);
 
-  if (obj.dynamic && !obj.grounded) {
+  if (obj.dynamic && !obj.grounded && obj.objClass != ObjectClass::Material && obj.objClass != ObjectClass::Projectile) {
     obj.velocity += Engine::GRAVITY * deltaTime;
   }
 
@@ -881,6 +906,16 @@ void updateDynamicObject(
         }
         break;
     }
+  } else if (obj.objClass == ObjectClass::Material) {
+    if (obj.data.material.state == MaterialState::collapsing) {
+      setAnimationAndPresentation(obj, ANIM_COLLECT, PresentationVariant::Collapsing, false);
+      if (obj.currentAnimation != -1 &&
+          obj.currentAnimation == ANIM_COLLECT &&
+          obj.animations[obj.currentAnimation].isDone()) {
+        obj.data.material.state = MaterialState::collected;
+        obj.currentAnimation = -1;
+      }
+    }
   }
 
   if (currDirection != 0.0f && obj.direction != currDirection) {
@@ -1022,6 +1057,25 @@ void collisionResponse(
           hooks.onPortalTriggered(objB.data.portal.nextLevel);
         }
         break;
+      case ObjectClass::Material:
+        // player colliding with item
+
+        if (objB.data.material.state == MaterialState::present) {
+          awardMaterialToPlayer(objA, objB.data.material);
+          clearDynamicCollider(objB);
+          objB.data.material.state = MaterialState::collapsing;
+          switch (objB.data.material.type) {
+            case MaterialType::coin:
+              ++objA.data.player.coinPickupCueCount;
+              break;
+            case MaterialType::gem:
+              ++objA.data.player.gemPickupCueCount;
+              break;
+            default:
+              break;
+          }
+        }
+        break;
       case ObjectClass::Player:
       case ObjectClass::Background:
       case ObjectClass::Projectile:
@@ -1065,6 +1119,7 @@ void collisionResponse(
       case ObjectClass::Portal:
       case ObjectClass::Background:
       case ObjectClass::Projectile:
+      case ObjectClass::Material:
         passthrough = true;
         break;
     }
@@ -1098,6 +1153,7 @@ void collisionResponse(
       case ObjectClass::Portal:
       case ObjectClass::Background:
       case ObjectClass::Projectile:
+      case ObjectClass::Material:
         break;
     }
   }
@@ -1190,6 +1246,21 @@ void resolveBulletCollisions(
   }
 }
 
+void purgeCollectedMaterials(GameState& state) {
+  for (auto& layer : state.layers) {
+    layer.erase(
+      std::remove_if(
+        layer.begin(),
+        layer.end(),
+        [](const GameObject& obj) {
+          return obj.objClass == ObjectClass::Material &&
+                 obj.data.material.state == MaterialState::collected &&
+                 obj.currentAnimation == -1;
+        }),
+      layer.end());
+  }
+}
+
 void purgeFinishedDeadEnemies(GameState& state) {
   for (auto& layer : state.layers) {
     layer.erase(
@@ -1272,6 +1343,8 @@ void stepGameplaySimulation(
     state.bullets.end());
 
   purgeFinishedDeadEnemies(state);
+
+  purgeCollectedMaterials(state);
 }
 
 } // namespace game_engine

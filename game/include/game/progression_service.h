@@ -4,6 +4,7 @@
 #include <memory>
 #include "net/net_message.h"
 #include "engine/level_types.h"
+#include "engine/gameobject.h"
 
 
 namespace game {
@@ -28,7 +29,7 @@ namespace game {
   };
 
   struct InventoryItemRecord {
-    uint32_t id;
+    MaterialType type;
     uint32_t amount;
   };
 
@@ -83,6 +84,8 @@ namespace game {
       void initCharIfNotExists(SpriteType spriteType);
       void unlockUltimateForChar(SpriteType spriteType, uint32_t ultID);
       bool isUltUnlockedForChar(SpriteType spriteType, uint32_t ultID);
+      void updatePlayerInventory(Inventory inventory);
+      Inventory buildInventoryFromState();
 
       // void addItem();
       // void consumeItem();

@@ -110,6 +110,11 @@ struct GameResources {
   MIX_Audio* audioJump{};
   MIX_Track* jumpTrack{};
 
+  MIX_Audio *audioCoinCollect{}, *audioGemCollect{}, *audioCoinPurchase{}, *audioGemPurchase{},
+    *audioDrinkSlurp{};
+  MIX_Track *coinCollectTrack{}, *gemCollectTrack{}, *coinPurchaseTrack{}, *gemPurchaseTrack{},
+    *drinkSlurpTrack{};
+
   float m_masterAudioGain = 0.0f;
   MIX_Mixer* mixer = nullptr;
   size_t projectileTrackIdx = 0;
@@ -131,6 +136,20 @@ struct GameResources {
   std::vector<UIManager::Cutscene> pauseMenuScene;
   SDL_Texture* texPauseMenu{};
   std::shared_ptr<Animation> pauseMenuAnim;
+
+  std::vector<UIManager::Cutscene> shopScene;
+  SDL_Texture* texShop{};
+  std::shared_ptr<Animation> shopAnim;
+
+  std::vector<UIManager::Cutscene> inventoryScene;
+  SDL_Texture* texInventory{};
+  std::shared_ptr<Animation> inventoryAnim;
+
+  SDL_Texture* texHudNumbers{};
+  SDL_Texture* texCoinCountUI{};
+  SDL_Texture* texGemCountUI{};
+  std::shared_ptr<Animation> coinCountUIAnim;
+  std::shared_ptr<Animation> gemCountUIAnim;
 
   std::pair<MIX_Audio*, MIX_Track*> loadAudioChunk(const std::string& filepath, float gain = 1.0f);
 

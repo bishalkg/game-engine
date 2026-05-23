@@ -14,6 +14,73 @@ using game::GameResources;
 using game::ProgressionProfile;
 using game::ProgressionService;
 
+struct PreservedPlayerTransitionState {
+  Inventory inventory;
+  int healthPoints = 100;
+  int maxHealthPoints = 100;
+  int manaPoints = 100;
+  int maxManaPoints = 100;
+  int ultimatePoints = 0;
+  int maxUltimatePoints = 100;
+  bool unlockedUltimateOne = false;
+  int meleeDamage = 10;
+};
+
+std::optional<PreservedPlayerTransitionState> capturePreservedPlayerState(const GameState& state) {
+  if (state.playerLayer < 0 ||
+      state.playerLayer >= static_cast<int>(state.layers.size()) ||
+      state.playerIndex < 0 ||
+      state.playerIndex >= static_cast<int>(state.layers[state.playerLayer].size())) {
+    return std::nullopt;
+  }
+
+  const GameObject& player = state.layers[state.playerLayer][state.playerIndex];
+  if (player.objClass != ObjectClass::Player) {
+    return std::nullopt;
+  }
+
+  return PreservedPlayerTransitionState{
+    .inventory = player.data.player.inventory,
+    .healthPoints = player.data.player.healthPoints,
+    .maxHealthPoints = player.data.player.maxHealthPoints,
+    .manaPoints = player.data.player.manaPoints,
+    .maxManaPoints = player.data.player.maxManaPoints,
+    .ultimatePoints = player.data.player.ultimatePoints,
+    .maxUltimatePoints = player.data.player.maxUltimatePoints,
+    .unlockedUltimateOne = player.data.player.unlockedUltimateOne,
+    .meleeDamage = player.data.player.meleeDamage,
+  };
+}
+
+void applyPreservedPlayerState(
+  GameObject& player,
+  const PreservedPlayerTransitionState& preservedState) {
+  if (player.objClass != ObjectClass::Player) {
+    return;
+  }
+
+  player.data.player.inventory = preservedState.inventory;
+  player.data.player.healthPoints = preservedState.healthPoints;
+  player.data.player.maxHealthPoints = preservedState.maxHealthPoints;
+  player.data.player.manaPoints = preservedState.manaPoints;
+  player.data.player.maxManaPoints = preservedState.maxManaPoints;
+  player.data.player.ultimatePoints = preservedState.ultimatePoints;
+  player.data.player.maxUltimatePoints = preservedState.maxUltimatePoints;
+  player.data.player.unlockedUltimateOne =
+    player.data.player.unlockedUltimateOne || preservedState.unlockedUltimateOne;
+  player.data.player.meleeDamage = preservedState.meleeDamage;
+}
+
+void restorePlayerVitalsToFull(GameObject& player) {
+  if (player.objClass != ObjectClass::Player) {
+    return;
+  }
+
+  player.data.player.healthPoints = player.data.player.maxHealthPoints;
+  player.data.player.manaPoints = player.data.player.maxManaPoints;
+}
+
+
 bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameState, ProgressionService& progService) {
   SDLState& sdlState = engine.getSDLState();
 
@@ -245,6 +312,46 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           newLayer.push_back(std::move(enemy));
         }
 
+        if (obj.type == "Material") {
+          SpriteType spriteType = MATERIAL_NAME_TO_SPRITE_TYPE.at(obj.name);
+          GameObject material = createObject(
+            1,
+            1,
+            res.m_currLevel->texCharacterMap.at(spriteType).texIdle, // texCharMap also has materials
+            ObjectClass::Material,
+            16,
+            16,
+            0,
+            0);
+          material.id = nextDynamicId++;
+          material.spriteType = spriteType;
+
+          float feetY = objStartingPos.y;
+          float centerX = objStartingPos.x;
+
+          material.position.y = objStartingPos.y;
+          material.position.x = centerX + material.collider.w * 0.5f;
+
+          MaterialType materialType = MaterialType::coin;
+          switch (spriteType) {
+            case SpriteType::Coin:
+              materialType = MaterialType::coin;
+              break;
+            case SpriteType::Gem:
+              materialType = MaterialType::gem;
+              break;
+            default:
+              break;
+          }
+
+          material.data.material = MaterialData(1, materialType);
+          material.currentAnimation = res.ANIM_IDLE;
+          material.dynamic = true; // materials need to be dynamic to animate and apply collisions
+          material.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
+          material.presentationVariant = PresentationVariant::Idle;
+          newLayer.push_back(std::move(material));
+        }
+
         if (obj.type == "Player") {
           SpriteType spriteType = gs.selectedPlayerSprite;
           int texDim = 128;
@@ -299,6 +406,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
 
           player.data.player = PlayerData(); // TODO ultUnlocked to be constructed?
           player.data.player.unlockedUltimateOne = ultOneUnlocked;
+          player.data.player.inventory = pserv.buildInventoryFromState();
           player.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
           player.currentAnimation = res.ANIM_IDLE;
           player.presentationVariant = PresentationVariant::Idle;
@@ -347,7 +455,12 @@ public:
 
 namespace game {
 
-bool switchToLevel(game_engine::Engine& engine, GameResources& resources, ProgressionService& progService, LevelIndex levelId) {
+bool switchToLevel(
+  game_engine::Engine& engine,
+  GameResources& resources,
+  ProgressionService& progService,
+  LevelIndex levelId,
+  bool restoreFullVitals) {
   auto& gameState = engine.getGameState();
   auto& sdlState = engine.getSDLState();
   const auto oldLevel = gameState.currentLevelId;
@@ -355,6 +468,8 @@ bool switchToLevel(game_engine::Engine& engine, GameResources& resources, Progre
   gameState.currentView = UIManager::GameView::LevelLoading;
   gameState.setLevelLoadProgress(0);
   gameState.setLevelLoadProgress(10);
+  const auto preservedPlayerState = capturePreservedPlayerState(gameState);
+
 
   if (!resources.loadLevel(levelId, sdlState, gameState, progService, resources.m_masterAudioGain, false)) {
     return false;
@@ -363,14 +478,34 @@ bool switchToLevel(game_engine::Engine& engine, GameResources& resources, Progre
   if (oldLevel == LevelIndex::LEVEL_1 && levelId == LevelIndex::LEVEL_2) {
     progService.markLevelComplete(oldLevel);
     progService.unlockUltimateForChar(gameState.selectedPlayerSprite, 1); // TODO testing only
+
+    if (preservedPlayerState.has_value()) {
+      progService.updatePlayerInventory(preservedPlayerState->inventory);
+    }
   }
 
   GameState newGameState(sdlState);
   newGameState.currentLevelId = levelId;
   newGameState.selectedPlayerSprite = gameState.selectedPlayerSprite;
   newGameState.currentView = UIManager::GameView::LevelLoading;
+
   if (!initAllTiles(engine, resources, newGameState, progService)) {
     return false;
+  }
+
+  if (preservedPlayerState &&
+      newGameState.playerLayer >= 0 &&
+      newGameState.playerLayer < static_cast<int>(newGameState.layers.size()) &&
+      newGameState.playerIndex >= 0 &&
+      newGameState.playerIndex < static_cast<int>(newGameState.layers[newGameState.playerLayer].size())) {
+    GameObject& newPlayer =
+      newGameState.layers[newGameState.playerLayer][newGameState.playerIndex];
+    if (newPlayer.objClass == ObjectClass::Player) {
+      applyPreservedPlayerState(newPlayer, *preservedPlayerState);
+      if (restoreFullVitals) {
+        restorePlayerVitalsToFull(newPlayer);
+      }
+    }
   }
 
 

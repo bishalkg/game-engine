@@ -21,6 +21,7 @@ namespace UIManager {
       Playing,
       MainMenu,
       PauseMenu,
+      ShopMenu,
       CutScene,
       CharacterSelect,
       LevelSelection,
@@ -40,6 +41,19 @@ namespace UIManager {
   };
 
   struct LoadingSnapshot { float progress01; bool done; };
+
+  enum class ShopPurchase {
+    HealthPotion,
+    ManaPotion,
+    AttackUp,
+    DefenceUp,
+  };
+
+  enum class InventoryUse {
+    HealthPotion,
+    ManaPotion,
+  };
+
   struct UIActions {
     bool finishLoading = false;
     bool blockMainGameDraw = false;
@@ -58,6 +72,8 @@ namespace UIManager {
     std::optional<SpriteType> selectedPlayerSprite;
     std::optional<LevelIndex> selectedLevel;
     std::optional<size_t> selectedSessionIndex;
+    std::optional<ShopPurchase> shopPurchase;
+    std::optional<InventoryUse> inventoryUse;
     std::optional<GameView> nextView;
     bool quitGame = false;
   };
@@ -76,6 +92,20 @@ namespace UIManager {
     bool loopScene = false;
   };
 
+  struct GameplayHudSnapshot {
+    uint32_t playerCoins = 0;
+    uint32_t playerGems = 0;
+    uint32_t playerHealthPotions = 0;
+    uint32_t playerManaPotions = 0;
+    uint32_t playerAttackUps = 0;
+    uint32_t playerDefenceUps = 0;
+    Animation* coinCountHudAnim{nullptr};
+    Animation* gemCountHudAnim{nullptr};
+    SDL_Texture* numbersHudTex{nullptr};
+    SDL_Texture* coinCountHudTex{nullptr};
+    SDL_Texture* gemCountHudTex{nullptr};
+  };
+
   struct UISnapshots {
     LoadingSnapshot loading; /* add title/pause data */
     int playerHP;
@@ -86,9 +116,8 @@ namespace UIManager {
     float deltaTime;
     float currVolume;
     LevelIndex levelProgressionIdx;
-
-    Animation* mainMenuAnim{nullptr};
-    SDL_Texture* mainMenuTex{nullptr};
+    GameplayHudSnapshot gameplayHud{};
+    bool showGameplayHud = false;
 
     bool debugMode = false;
     bool advanceToNextScene = false;
@@ -160,6 +189,8 @@ namespace UIManager {
       UIActions drawMainMenu(const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState);
       UIActions drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawPausedMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
+      UIActions drawShopMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
+      UIActions drawInventoryMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawCharacterSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawLevelSelectScreen(const UISnapshots& snaps, ImGuiWindowFlags flags);
       UIActions drawMultiplayerOptionsMenu(const UISnapshots& snaps, ImGuiWindowFlags flags);
@@ -174,6 +205,9 @@ namespace UIManager {
         ImU32 color,
         float yOffset,
         bool highlightReady);
+      void drawPlayerStatusBars(const UISnapshots& snaps);
+
+      void drawGameplayHudCounts(const game_engine::SDLState& sdlState);
 
 
     private:
@@ -181,6 +215,8 @@ namespace UIManager {
       CutscenePlayer cutscenePlr;
       game_engine::SDLState& sdlState;
       TTF_Font& font;
+      GameplayHudSnapshot cachedGameplayHud;
+      bool gameplayHudActive = false;
       bool wantsHandCursor = false;
       bool debugMode = false;
   };

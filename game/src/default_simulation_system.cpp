@@ -7,6 +7,7 @@
 
 #include "engine/engine.h"
 #include "engine/gameplay_simulation.h"
+#include "game/player_command.h"
 
 namespace {
 
@@ -27,7 +28,30 @@ struct AudioObjectState {
   BulletState bulletState = BulletState::inactive;
   int healthPoints = 0;
   int manaPoints = 0;
+  uint32_t coinPickupCueCount = 0;
+  uint32_t gemPickupCueCount = 0;
+  uint32_t coinPurchaseCueCount = 0;
+  uint32_t gemPurchaseCueCount = 0;
+  uint32_t consumableUseCueCount = 0;
   bool jumpImpulseApplied = false;
+};
+
+struct InventorySnapshot {
+  uint32_t coins = 0;
+  uint32_t gems = 0;
+  uint32_t healthPotions = 0;
+  uint32_t manaPotions = 0;
+  uint32_t attackUps = 0;
+  uint32_t defenceUps = 0;
+
+  bool operator==(const InventorySnapshot& other) const {
+    return coins == other.coins &&
+           gems == other.gems &&
+           healthPotions == other.healthPotions &&
+           manaPotions == other.manaPotions &&
+           attackUps == other.attackUps &&
+           defenceUps == other.defenceUps;
+  }
 };
 
 using AudioStateMap =
@@ -91,6 +115,10 @@ SDL_Texture* pickEntityTexture(
       return entityRes.texRunAttack ? entityRes.texRunAttack : entityRes.texRun;
     case PresentationVariant::Swing2:
       return entityRes.texAttack2 ? entityRes.texAttack2 : entityRes.texAttack;
+    case PresentationVariant::Collapsing:
+      if (objClass == ObjectClass::Material && entityRes.texDie) {
+        return entityRes.texDie;
+      }
     case PresentationVariant::Ultimate:
       if (entityRes.texUltimate) {
         return entityRes.texUltimate;
@@ -226,7 +254,11 @@ GameObject buildReplicatedObject(SimContext& ctx, const game_engine::NetGameObje
   obj.shouldFlash = snap.shouldFlash;
   obj.dynamic = true;
 
-  if (snap.type == ObjectClass::Projectile) {
+  if (snap.type == ObjectClass::Material) {
+    obj.drawScale = 1.0f;
+    obj.collider = {.x = 0, .y = 0, .w = obj.spritePixelW, .h = obj.spritePixelW};
+    obj.data.material = snap.data.material;
+  } else if (snap.type == ObjectClass::Projectile) {
     obj.drawScale = 2.0f;
     obj.colliderNorm = {.x = 0.0f, .y = 0.40f, .w = 0.5f, .h = 0.1f};
     obj.applyScale();
@@ -313,6 +345,8 @@ void updateReplicatedObject(
     obj.data.player = snap.data.player;
   } else if (obj.objClass == ObjectClass::Enemy) {
     obj.data.enemy = snap.data.enemy;
+  } else if (obj.objClass == ObjectClass::Material) {
+    obj.data.material = snap.data.material;
   }
 
   const bool isRespawn =
@@ -353,7 +387,7 @@ void reconcileReplicatedActors(
     auto& layer = ctx.gameState.layers[layerIdx];
     for (std::size_t objIdx = 0; objIdx < layer.size(); ++objIdx) {
       const auto& obj = layer[objIdx];
-      if (obj.dynamic && (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy)) {
+      if (obj.dynamic && (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy || obj.objClass == ObjectClass::Material)) {
         existing[{static_cast<uint32_t>(layerIdx), obj.objClass, obj.id}] = objIdx;
       }
     }
@@ -361,7 +395,7 @@ void reconcileReplicatedActors(
 
   std::unordered_set<LayeredDynamicKey, LayeredDynamicKeyHash> seen;
   for (const auto& [_, snap] : snapshot.m_gameObjects) {
-    if (snap.type != ObjectClass::Player && snap.type != ObjectClass::Enemy) {
+    if (snap.type != ObjectClass::Player && snap.type != ObjectClass::Enemy && snap.type !=   ObjectClass::Material) {
       continue;
     }
     if (snap.layer >= ctx.gameState.layers.size()) {
@@ -380,6 +414,7 @@ void reconcileReplicatedActors(
     }
   }
 
+  // remove objects
   for (std::size_t layerIdx = 0; layerIdx < ctx.gameState.layers.size(); ++layerIdx) {
     auto& layer = ctx.gameState.layers[layerIdx];
     layer.erase(
@@ -388,7 +423,7 @@ void reconcileReplicatedActors(
         layer.end(),
         [&seen, layerIdx](const GameObject& obj) {
           return obj.dynamic &&
-                 (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy) &&
+                 (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy || obj.objClass == ObjectClass::Material) &&
                  !seen.contains({static_cast<uint32_t>(layerIdx), obj.objClass, obj.id});
         }),
       layer.end());
@@ -523,6 +558,11 @@ AudioStateMap captureAudioState(const game_engine::GameState& gameState) {
         state.playerState = obj.data.player.state;
         state.healthPoints = obj.data.player.healthPoints;
         state.manaPoints = obj.data.player.manaPoints;
+        state.coinPickupCueCount = obj.data.player.coinPickupCueCount;
+        state.gemPickupCueCount = obj.data.player.gemPickupCueCount;
+        state.coinPurchaseCueCount = obj.data.player.coinPurchaseCueCount;
+        state.gemPurchaseCueCount = obj.data.player.gemPurchaseCueCount;
+        state.consumableUseCueCount = obj.data.player.consumableUseCueCount;
         state.jumpImpulseApplied = obj.data.player.jumpImpulseApplied;
       } else if (obj.objClass == ObjectClass::Enemy) {
         state.enemyState = obj.data.enemy.state;
@@ -551,6 +591,68 @@ GameObject* findPlayerById(game_engine::GameState& gameState, uint32_t playerID)
     }
   }
   return nullptr;
+}
+
+InventorySnapshot captureInventorySnapshot(
+  game_engine::GameState& gameState,
+  uint32_t playerID) {
+  if (GameObject* player = findPlayerById(gameState, playerID)) {
+    return InventorySnapshot{
+      .coins = player->data.player.inventory.coins.count,
+      .gems = player->data.player.inventory.gems.count,
+      .healthPotions = player->data.player.inventory.healthPotions.count,
+      .manaPotions = player->data.player.inventory.manaPotions.count,
+      .attackUps = player->data.player.inventory.attackUps.count,
+      .defenceUps = player->data.player.inventory.defenceUps.count,
+    };
+  }
+
+  return {};
+}
+
+void persistInventorySnapshot(
+  game_engine::Engine& engine,
+  game::ProgressionService& progService,
+  const Inventory& inventory) {
+  progService.updatePlayerInventory(inventory);
+  engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
+}
+
+bool processPendingHostPlayerCommands(
+  SimContext& ctx,
+  uint32_t localPlayerID) {
+  bool anyApplied = false;
+  for (auto& netCommand : ctx.engine.consumePendingHostPlayerCommands()) {
+    auto command = game::PlayerCommand::deserialize(netCommand.payload);
+    if (!command) {
+      continue;
+    }
+
+    PlayerData playerData;
+    if (!ctx.engine.copyHostAuthoritativePlayerData(netCommand.playerID, playerData)) {
+      continue;
+    }
+
+    const auto result = game::applyPlayerCommand(playerData, *command);
+    if (!result.applied) {
+      continue;
+    }
+
+    if (!ctx.engine.updateHostAuthoritativePlayerData(netCommand.playerID, playerData)) {
+      continue;
+    }
+
+    anyApplied = true;
+    if (netCommand.playerID == localPlayerID) {
+      persistInventorySnapshot(ctx.engine, ctx.progService, playerData.inventory);
+    }
+  }
+
+  if (anyApplied) {
+    ctx.engine.broadcastHostSnapshot();
+  }
+
+  return anyApplied;
 }
 
 GameObject* findObjectByKey(game_engine::GameState& gameState, GameObjectKey key) {
@@ -716,6 +818,7 @@ void playSimulationAudio(
 
   GameObject* localPlayer = findPlayerById(gameState, localPlayerID);
   bool localPlayerWasSwinging = false;
+  // For Multiplayer, audio you want only local player to hear
   if (localPlayer) {
     const auto beforeIt = before.find({ObjectClass::Player, localPlayerID});
     if (beforeIt != before.end()) {
@@ -753,6 +856,27 @@ void playSimulationAudio(
         MIX_PlayAudio(resources.mixer, resources.audioShoot);
       }
 
+      if (localPlayer->data.player.coinPickupCueCount > prev.coinPickupCueCount &&
+          resources.audioCoinCollect) {
+        MIX_PlayAudio(resources.mixer, resources.audioCoinCollect);
+      }
+      if (localPlayer->data.player.gemPickupCueCount > prev.gemPickupCueCount &&
+          resources.audioGemCollect) {
+        MIX_PlayAudio(resources.mixer, resources.audioGemCollect);
+      }
+      if (localPlayer->data.player.coinPurchaseCueCount > prev.coinPurchaseCueCount &&
+          resources.audioCoinPurchase) {
+        MIX_PlayAudio(resources.mixer, resources.audioCoinPurchase);
+      }
+      if (localPlayer->data.player.gemPurchaseCueCount > prev.gemPurchaseCueCount &&
+          resources.audioGemPurchase) {
+        MIX_PlayAudio(resources.mixer, resources.audioGemPurchase);
+      }
+      if (localPlayer->data.player.consumableUseCueCount > prev.consumableUseCueCount &&
+          resources.audioDrinkSlurp) {
+        MIX_PlayAudio(resources.mixer, resources.audioDrinkSlurp);
+      }
+
       if (localPlayer->data.player.healthPoints < prev.healthPoints && resources.boneImpactHitTrack) {
         MIX_PlayTrack(resources.boneImpactHitTrack, 0);
       }
@@ -773,7 +897,6 @@ void playSimulationAudio(
   bool enemyDied = false;
   bool enemyDamagedByMelee = false;
   bool localPlayerDied = false;
-
   AudioStateMap after = captureAudioState(gameState);
   for (const auto& [key, prev] : before) {
     const auto afterIt = after.find(key);
@@ -823,7 +946,9 @@ void playSimulationAudio(
 void refreshPresentation(game::GameResources& resources, game_engine::GameState& gameState) {
   for (auto& layer : gameState.layers) {
     for (auto& obj : layer) {
-      if (obj.objClass == ObjectClass::Player || obj.objClass == ObjectClass::Enemy) {
+      if (obj.objClass == ObjectClass::Player ||
+          obj.objClass == ObjectClass::Enemy ||
+          obj.objClass == ObjectClass::Material) {
         applyPresentation(resources, obj);
       }
     }
@@ -854,7 +979,9 @@ public:
     if (engine.isMultiplayerActive()) {
       if (auto* client = engine.getGameClient()) {
         if (ctx.gameState.currentView == UIManager::GameView::Playing ||
-            ctx.gameState.currentView == UIManager::GameView::PauseMenu) {
+            ctx.gameState.currentView == UIManager::GameView::PauseMenu ||
+            ctx.gameState.currentView == UIManager::GameView::ShopMenu ||
+            ctx.gameState.currentView == UIManager::GameView::InventoryMenu) {
           engine.setAudioSoundtrack(
             resources.m_currLevel ? resources.m_currLevel->backgroundTrack : nullptr);
         }
@@ -892,9 +1019,13 @@ public:
               }
             }
           }
+
+          (void)processPendingHostPlayerCommands(ctx, client->GetPlayerID());
         }
 
         const AudioStateMap before = captureAudioState(ctx.gameState);
+        const InventorySnapshot beforeInventory =
+          captureInventorySnapshot(ctx.gameState, client->GetPlayerID());
 
         // read in GameState snapshot coming from the server
         client->ProcessServerMessages();
@@ -915,7 +1046,25 @@ public:
           if (client->NeedsFullRebuild()) {
             client->MarkFullRebuildApplied();
           }
-          playSimulationAudio(resources, before, ctx.gameState, client->GetPlayerID(), deltaTime, false);
+          if (engine.isClientMode()) {
+            const InventorySnapshot afterInventory =
+              captureInventorySnapshot(ctx.gameState, client->GetPlayerID());
+            if (!(afterInventory == beforeInventory)) {
+              if (GameObject* localPlayer = findPlayerById(ctx.gameState, client->GetPlayerID())) {
+                persistInventorySnapshot(
+                  ctx.engine,
+                  ctx.progService,
+                  localPlayer->data.player.inventory);
+              }
+            }
+          }
+          playSimulationAudio(
+            resources,
+            before,
+            ctx.gameState,
+            client->GetPlayerID(),
+            deltaTime,
+            false);
           if (ctx.gameState.playerIndex >= 0) {
             auto& player = engine.getPlayer();
             updateMapViewport(ctx, player);
@@ -937,7 +1086,9 @@ public:
     }
 
     if (ctx.gameState.currentView != UIManager::GameView::Playing &&
-        ctx.gameState.currentView != UIManager::GameView::PauseMenu) {
+        ctx.gameState.currentView != UIManager::GameView::PauseMenu &&
+        ctx.gameState.currentView != UIManager::GameView::ShopMenu &&
+        ctx.gameState.currentView != UIManager::GameView::InventoryMenu) {
       return;
     }
 

@@ -21,6 +21,9 @@ ObjectData cloneObjectData(const GameObject& src) {
     case ObjectClass::Enemy:
       new (&data.enemy) EnemyData(src.data.enemy);
       break;
+    case ObjectClass::Material:
+      new (&data.material) MaterialData(src.data.material);
+      break;
     case ObjectClass::Projectile:
       new (&data.bullet) BulletData(src.data.bullet);
       break;
@@ -67,9 +70,10 @@ GameObject cloneGameObject(const GameObject& src) {
 }
 
 void resetPlayerRuntimeStatePreservingUnlocks(PlayerData& playerData) {
-  const bool unlockedUltimateOne = playerData.unlockedUltimateOne;
+  const NetPersistedPlayerState persistedState =
+    NetPersistedPlayerState::fromPlayerData(playerData);
   playerData = PlayerData();
-  playerData.unlockedUltimateOne = unlockedUltimateOne;
+  persistedState.applyToPlayerData(playerData);
 }
 
 void markPlayerDeadFromFall(GameObject& player) {
@@ -129,7 +133,9 @@ void GameServer::OnMessage(
     case GameMsgHeaders::Client_RegisterWithServer: {
       net::ByteReader reader(msg.body);
       const SpriteType spriteType = reader.read_enum<SpriteType>();
-      if (registerPlayer(client->GetID(), spriteType)) {
+      NetPersistedPlayerState persistedPlayerState;
+      persistedPlayerState.readFrom(reader);
+      if (registerPlayer(client->GetID(), spriteType, persistedPlayerState)) {
         net::message<GameMsgHeaders> reply;
         reply.header.id = GameMsgHeaders::Client_AssignID;
         net::ByteWriter writer;
@@ -151,6 +157,13 @@ void GameServer::OnMessage(
       input.deserealizeNetGameInput(msg.body);
       input.playerID = client->GetID();
       m_playerInputQueue.push_back(input);
+      break;
+    }
+    case GameMsgHeaders::Game_PlayerCommand: {
+      NetPlayerCommand command;
+      command.deserialize(msg.body);
+      command.playerID = client->GetID();
+      m_playerCommandQueue.push_back(std::move(command));
       break;
     }
     case GameMsgHeaders::Game_PlayerRespawnRequest:
@@ -182,6 +195,48 @@ GameObject* GameServer::findPlayerById(uint32_t playerID) {
   return nullptr;
 }
 
+bool GameServer::copyPlayerData(uint32_t playerID, PlayerData& out) const {
+  std::scoped_lock lock(m_stateMu);
+  if (!m_authCtx || !m_authCtx->state) {
+    return false;
+  }
+
+  const auto& state = *m_authCtx->state;
+  if (state.playerLayer < 0 || state.playerLayer >= static_cast<int>(state.layers.size())) {
+    return false;
+  }
+
+  for (const auto& obj : state.layers[state.playerLayer]) {
+    if (obj.objClass == ObjectClass::Player && obj.id == playerID) {
+      out = obj.data.player;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool GameServer::updatePlayerData(uint32_t playerID, const PlayerData& playerData) {
+  std::scoped_lock lock(m_stateMu);
+  if (!m_authCtx || !m_authCtx->state) {
+    return false;
+  }
+
+  auto& state = *m_authCtx->state;
+  if (state.playerLayer < 0 || state.playerLayer >= static_cast<int>(state.layers.size())) {
+    return false;
+  }
+
+  for (auto& obj : state.layers[state.playerLayer]) {
+    if (obj.objClass == ObjectClass::Player && obj.id == playerID) {
+      obj.data.player = playerData;
+      return true;
+    }
+  }
+
+  return false;
+}
+
 void GameServer::applyPlayerInputs() {
   std::scoped_lock lock(m_stateMu);
   while (!m_playerInputQueue.empty()) {
@@ -199,6 +254,14 @@ void GameServer::applyPlayerInputs() {
     sessionIt->second.lastInputSeq = input.inputSeq;
     m_authCtx->latestPlayerInputs[input.playerID] = input; // store only the latest input from each player
   }
+}
+
+std::vector<NetPlayerCommand> GameServer::drainPendingPlayerCommands() {
+  std::vector<NetPlayerCommand> commands;
+  while (!m_playerCommandQueue.empty()) {
+    commands.push_back(m_playerCommandQueue.pop_front());
+  }
+  return commands;
 }
 
 void GameServer::step(float deltaTime) {
@@ -293,6 +356,20 @@ bool GameServer::copyCurrentSnapshot(NetGameStateSnapshot& out) const {
 // rebuilds the host/server’s authoritative game world from a fresh GameState, while preserving the currently connected multiplayer roster.
 void GameServer::resetAuthoritativeState(GameState&& initialState, bool refreshSpawnPositions) {
   std::scoped_lock lock(m_stateMu);
+  std::unordered_map<uint32_t, NetPersistedPlayerState> persistedStatesByPlayerId;
+  if (m_authCtx && m_authCtx->state) {
+    auto& previousState = *m_authCtx->state;
+    if (previousState.playerLayer >= 0 &&
+        previousState.playerLayer < static_cast<int>(previousState.layers.size())) {
+      for (const auto& obj : previousState.layers[previousState.playerLayer]) {
+        if (obj.objClass == ObjectClass::Player) {
+          persistedStatesByPlayerId[obj.id] =
+            NetPersistedPlayerState::fromPlayerData(obj.data.player);
+        }
+      }
+    }
+  }
+
   if (!m_authCtx) {
     m_authCtx = std::make_unique<AuthoritativeContext>(std::move(initialState));
     refreshGameSnapshot();
@@ -356,6 +433,11 @@ void GameServer::resetAuthoritativeState(GameState&& initialState, bool refreshS
     player.velocity = glm::vec2(0.0f);
     player.acceleration = templatePlayer.acceleration;
     player.data.player = templatePlayer.data.player;
+    if (const auto persistedIt = persistedStatesByPlayerId.find(roster[idx].first);
+        persistedIt != persistedStatesByPlayerId.end()) {
+      persistedIt->second.applyToPlayerData(player.data.player);
+    }
+    resetPlayerRuntimeStatePreservingUnlocks(player.data.player);
     player.currentAnimation = ANIM_IDLE;
     player.presentationVariant = PresentationVariant::Idle;
     if (player.currentAnimation >= 0 &&
@@ -374,7 +456,10 @@ void GameServer::resetAuthoritativeState(GameState&& initialState, bool refreshS
   refreshGameSnapshot();
 }
 
-bool GameServer::registerPlayer(uint32_t playerID, SpriteType spriteType) {
+bool GameServer::registerPlayer(
+  uint32_t playerID,
+  SpriteType spriteType,
+  const NetPersistedPlayerState& persistedPlayerState) {
   std::scoped_lock lock(m_stateMu);
   if (!m_authCtx || !m_authCtx->state) {
     return false;
@@ -404,6 +489,7 @@ bool GameServer::registerPlayer(uint32_t playerID, SpriteType spriteType) {
     const glm::vec2 spawnPosition = templatePlayer->position;
     templatePlayer->id = playerID;
     templatePlayer->spriteType = spriteType;
+    persistedPlayerState.applyToPlayerData(templatePlayer->data.player);
     resetPlayerRuntimeStatePreservingUnlocks(templatePlayer->data.player);
     templatePlayer->velocity = glm::vec2(0.0f);
     templatePlayer->currentAnimation = ANIM_IDLE;
@@ -423,6 +509,7 @@ bool GameServer::registerPlayer(uint32_t playerID, SpriteType spriteType) {
   newPlayer.spriteType = spriteType;
   newPlayer.position.x += 48.0f * static_cast<float>(m_playerSessions.size());
   newPlayer.velocity = glm::vec2(0.0f);
+  persistedPlayerState.applyToPlayerData(newPlayer.data.player);
   resetPlayerRuntimeStatePreservingUnlocks(newPlayer.data.player);
   newPlayer.currentAnimation = ANIM_IDLE;
   newPlayer.presentationVariant = PresentationVariant::Idle;

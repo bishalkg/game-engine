@@ -49,6 +49,18 @@ std::vector<UIAction> UIController::fromEngineActions(const UIManager::UIActions
     out.push_back(action);
   }
 
+  if (actions.shopPurchase.has_value()) {
+    UIAction action{UIActionType::ShopPurchase};
+    action.shopPurchase = actions.shopPurchase;
+    out.push_back(action);
+  }
+
+  if (actions.inventoryUse.has_value()) {
+    UIAction action{UIActionType::InventoryUse};
+    action.inventoryUse = actions.inventoryUse;
+    out.push_back(action);
+  }
+
   if (actions.nextView.has_value()) {
     UIAction action{UIActionType::NextView};
     action.nextView = actions.nextView;
@@ -83,6 +95,8 @@ UIManager::UIActions UIController::toEngineActions(const std::vector<UIAction>& 
       case UIActionType::StartMultiPlayerClient: out.startMultiPlayerClient = true; break;
       case UIActionType::SelectPlayerCharacter: out.selectedPlayerSprite = action.selectedPlayerSprite; break;
       case UIActionType::SelectMultiplayerSession: out.selectedSessionIndex = action.selectedSessionIndex; break;
+      case UIActionType::ShopPurchase: out.shopPurchase = action.shopPurchase; break;
+      case UIActionType::InventoryUse: out.inventoryUse = action.inventoryUse; break;
       case UIActionType::NextView: out.nextView = action.nextView; break;
       case UIActionType::QuitGame: out.quitGame = true; break;
       case UIActionType::LevelSelect: out.selectedLevel = action.selectedLevelIdx; break;

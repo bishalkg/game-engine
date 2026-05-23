@@ -187,6 +187,28 @@ bool GameResources::loadLevel(
       Animation(attackFrames, attackSeconds);
   }
 
+  for (const SpriteType& material : assets.materialTypes) {
+    const SpriteAssets& spriteAssets = MATERIAL_CONFIG.at(material);
+
+    if (!headless) {
+      m_currLevel->texCharacterMap[material].texIdle =
+        m_currLevel->loadTexture(state.renderer, spriteAssets.paths.idleTex);
+
+      m_currLevel->texCharacterMap[material].texDie =
+        m_currLevel->loadTexture(state.renderer, spriteAssets.paths.dieTex);
+    }
+
+    m_currLevel->texCharacterMap[material].anims.resize(ANIM_COLLECT + 1);
+    auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
+    m_currLevel->texCharacterMap[material].anims[ANIM_IDLE] =
+      Animation(idleFrames, idleSeconds);
+
+    auto [collapseFrames, collapseSeconds] = spriteAssets.animSettings.at(ANIM_COLLECT);
+    m_currLevel->texCharacterMap[material].anims[ANIM_COLLECT] =
+      Animation(collapseFrames, collapseSeconds);
+
+  }
+
   gs.setLevelLoadProgress(60);
   for (const auto& [character, spriteAssets] : SPRITE_CONFIG) {
     if (!headless) {
@@ -361,6 +383,16 @@ void GameResources::loadAllAssets(
     loadAudioChunk("data/audio/monster_die.wav", chunkAudioGain);
   std::tie(audioJump, jumpTrack) =
     loadAudioChunk("data/audio/movement/jump.wav", chunkAudioGain);
+  std::tie(audioCoinCollect, coinCollectTrack) =
+    loadAudioChunk("data/materials/Coin/Collect.wav", chunkAudioGain);
+  std::tie(audioGemCollect, gemCollectTrack) =
+    loadAudioChunk("data/materials/Gem/Collect.wav", chunkAudioGain);
+  std::tie(audioCoinPurchase, coinPurchaseTrack) =
+    loadAudioChunk("data/materials/Coin/Purchase.wav", chunkAudioGain);
+  std::tie(audioGemPurchase, gemPurchaseTrack) =
+    loadAudioChunk("data/materials/Gem/Purchase.wav", chunkAudioGain);
+  std::tie(audioDrinkSlurp, drinkSlurpTrack) =
+    loadAudioChunk("data/materials/Consumable/drink_slurp.wav", chunkAudioGain);
 
   const bool lvlLoaded = loadLevel(
     progService.getLastCompletedLevel(), state,
@@ -379,6 +411,11 @@ void GameResources::loadAllAssets(
     texBulletHit = loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
     texBullet = loadTexture(state.renderer, "data/players/Mage/Charge_1.png");
     texMainMenu = loadTexture(state.renderer, "data/maps/title_screen/title_screen.png");
+    texHudNumbers = loadTexture(state.renderer, "data/hud/numbers.png");
+    texCoinCountUI = loadTexture(state.renderer, "data/materials/Coin/Count_UI.png");
+    texGemCountUI = loadTexture(state.renderer, "data/materials/Gem/Count_UI.png");
+    coinCountUIAnim = std::make_shared<Animation>(7, 0.7f);
+    gemCountUIAnim = std::make_shared<Animation>(4, 0.7f);
 
     mainMenuAnim = std::make_shared<Animation>(58, 7.0f);
     std::tie(mainMenuAudio, mainMenuTrack) =
@@ -437,6 +474,34 @@ void GameResources::loadAllAssets(
         .loopScene = false,
       },
     };
+
+    texShop = loadTexture(state.renderer, "data/hud/shop.png");
+    shopAnim = std::make_shared<Animation>(1, 1.0f, 0, true);
+    shopScene = {
+      UIManager::Cutscene{
+        .tex = texShop,
+        .anim = shopAnim,
+        .scale = 1.0f,
+        .numFrameColumns = 1,
+        .frameH = 360.0f,
+        .frameW = 640.0f,
+        .loopScene = false,
+      },
+    };
+
+    texInventory = loadTexture(state.renderer, "data/hud/inventory.png");
+    inventoryAnim = std::make_shared<Animation>(1, 1.0f, 0, true);
+    inventoryScene = {
+      UIManager::Cutscene{
+        .tex = texInventory,
+        .anim = inventoryAnim,
+        .scale = 1.0f,
+        .numFrameColumns = 1,
+        .frameH = 360.0f,
+        .frameW = 640.0f,
+        .loopScene = false,
+      },
+    };
   }
 }
 
@@ -477,6 +542,16 @@ void GameResources::unload() {
   destroyAudio(audioEnemyDie);
   destroyTrack(jumpTrack);
   destroyAudio(audioJump);
+  destroyTrack(coinCollectTrack);
+  destroyAudio(audioCoinCollect);
+  destroyTrack(gemCollectTrack);
+  destroyAudio(audioGemCollect);
+  destroyTrack(coinPurchaseTrack);
+  destroyAudio(audioCoinPurchase);
+  destroyTrack(gemPurchaseTrack);
+  destroyAudio(audioGemPurchase);
+  destroyTrack(drinkSlurpTrack);
+  destroyAudio(audioDrinkSlurp);
 
   for (SDL_Texture* tex : textures) {
     if (tex) {
@@ -490,6 +565,15 @@ void GameResources::unload() {
   texCharSelect = nullptr;
   texLevelSelect = nullptr;
   texPauseMenu = nullptr;
+  texShop = nullptr;
+  texInventory = nullptr;
+  texHudNumbers = nullptr;
+  texCoinCountUI = nullptr;
+  texGemCountUI = nullptr;
+  coinCountUIAnim.reset();
+  gemCountUIAnim.reset();
+  shopAnim.reset();
+  inventoryAnim.reset();
 }
 
 } // namespace game

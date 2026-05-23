@@ -5,10 +5,94 @@
 #include "imgui_impl_sdl3.h"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <iostream>
 
 namespace UIManager {
+
+  namespace {
+    constexpr float kHudWidgetScale = 1.0f;
+    constexpr float kHudWidgetFrameSize = 32.0f;
+    constexpr float kHudWidgetDrawSize = kHudWidgetFrameSize * kHudWidgetScale;
+    constexpr float kHudWidgetGap = 0.0f;
+    constexpr float kHudWidgetRightMargin = 4.0f;
+    constexpr float kHudWidgetBottomMargin = 4.0f;
+    constexpr float kHudTextBoxTopOffset = 20.0f;
+    constexpr float kHudTextBoxHeight = 1.0f;
+    constexpr float kNumbersSlotWidth = 32.0f;
+    constexpr float kNumbersRowHeight = 16.0f;
+    constexpr float kNumbersGlyphOffsetX = 11.0f;
+    constexpr float kNumbersGlyphWidth = 11.0f;
+    constexpr float kNumbersGlyphHeight = 16.0f;
+    constexpr int kNumbersAtlasColumns = 10;
+    constexpr float kShopWalletCountY = 296.0f;
+    constexpr float kShopCoinCountX = 256.0f;
+    constexpr float kShopGemCountX = 386.0f;
+    constexpr float kInventoryWalletCountY = 296.0f;
+    constexpr float kInventoryCoinCountX = 256.0f;
+    constexpr float kInventoryGemCountX = 386.0f;
+
+    struct InventoryCountAnchor {
+      float x;
+      float y;
+    };
+
+    constexpr InventoryCountAnchor kInventoryCountAnchors[] = {
+      {219.0f, 108.0f},
+      {268.0f, 108.0f},
+      {318.0f, 108.0f},
+      {366.0f, 108.0f},
+    };
+
+    void drawCountGlyph(
+      SDL_Renderer* renderer,
+      SDL_Texture* numbersHudTex,
+      uint32_t count,
+      float dstX,
+      float dstY) {
+      if (!numbersHudTex || count == 0) {
+        return;
+      }
+
+      const uint32_t clampedCount = std::min<uint32_t>(count, 99);
+      const uint32_t slotRow = clampedCount < 10 ? 0 : clampedCount / 10;
+      const uint32_t slotCol = clampedCount < 10 ? (clampedCount - 1) : (clampedCount % 10);
+
+      SDL_FRect src{
+        static_cast<float>(slotCol) * kNumbersSlotWidth + kNumbersGlyphOffsetX,
+        static_cast<float>(slotRow) * kNumbersRowHeight,
+        kNumbersGlyphWidth,
+        kNumbersGlyphHeight,
+      };
+      SDL_FRect textDst{
+        dstX,
+        dstY,
+        kNumbersGlyphWidth,
+        kNumbersGlyphHeight,
+      };
+      SDL_RenderTexture(renderer, numbersHudTex, &src, &textDst);
+    }
+
+    void drawHudCountGlyph(
+      SDL_Renderer* renderer,
+      SDL_Texture* numbersHudTex,
+      uint32_t count,
+      float widgetX,
+      float widgetY) {
+      if (!numbersHudTex || count == 0) {
+        return;
+      }
+
+      drawCountGlyph(
+        renderer,
+        numbersHudTex,
+        count,
+        widgetX + std::floor((kHudWidgetDrawSize - kNumbersGlyphWidth) * 0.5f),
+        widgetY + kHudTextBoxTopOffset +
+          std::floor((kHudTextBoxHeight - kNumbersGlyphHeight) * 0.5f));
+    }
+  } // namespace
 
   void UI_Manager::beginFrame() {
     ImGui_ImplSDLRenderer3_NewFrame();
@@ -34,6 +118,12 @@ namespace UIManager {
 
 
   void UI_Manager::renderPresent(const game_engine::SDLState& sdlState) {
+    SDL_SetRenderLogicalPresentation(
+      sdlState.renderer,
+      sdlState.logW,
+      sdlState.logH,
+      SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    drawGameplayHudCounts(sdlState);
 
     SDL_SetRenderLogicalPresentation(sdlState.renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
 
@@ -94,13 +184,9 @@ namespace UIManager {
     }
 
         // 800w, 540h
-    // float frameW = frameW;
-    // float frameH = frameH;
     // scene.anim->step(deltaTime); // TODO this would step twice currently
 
       // select frame from sprite sheet
-    // float srcX = m_resources.mainMenuAnim.currentFrame() * frameW;
-
     int cols = scene.numFrameColumns; // frames per row in your new sheet
     int frame = scene.anim->currentFrame();
     int col = frame % cols;
@@ -124,6 +210,49 @@ namespace UIManager {
     };
 
     SDL_RenderTexture(sdlState.renderer, scene.tex, &src, &dst);
+
+    if (cutscenePlr.cutSceneID == -6 && cachedGameplayHud.numbersHudTex) {
+      drawCountGlyph(
+        sdlState.renderer,
+        cachedGameplayHud.numbersHudTex,
+        cachedGameplayHud.playerCoins,
+        dst.x + kShopCoinCountX,
+        dst.y + kShopWalletCountY);
+      drawCountGlyph(
+        sdlState.renderer,
+        cachedGameplayHud.numbersHudTex,
+        cachedGameplayHud.playerGems,
+        dst.x + kShopGemCountX,
+        dst.y + kShopWalletCountY);
+    } else if (cutscenePlr.cutSceneID == -7 && cachedGameplayHud.numbersHudTex) {
+      drawCountGlyph(
+        sdlState.renderer,
+        cachedGameplayHud.numbersHudTex,
+        cachedGameplayHud.playerCoins,
+        dst.x + kInventoryCoinCountX,
+        dst.y + kInventoryWalletCountY);
+      drawCountGlyph(
+        sdlState.renderer,
+        cachedGameplayHud.numbersHudTex,
+        cachedGameplayHud.playerGems,
+        dst.x + kInventoryGemCountX,
+        dst.y + kInventoryWalletCountY);
+
+      const uint32_t itemCounts[] = {
+        cachedGameplayHud.playerHealthPotions,
+        cachedGameplayHud.playerManaPotions,
+        cachedGameplayHud.playerAttackUps,
+        cachedGameplayHud.playerDefenceUps,
+      };
+      for (size_t idx = 0; idx < std::size(itemCounts); ++idx) {
+        drawCountGlyph(
+          sdlState.renderer,
+          cachedGameplayHud.numbersHudTex,
+          itemCounts[idx],
+          dst.x + kInventoryCountAnchors[idx].x,
+          dst.y + kInventoryCountAnchors[idx].y);
+      }
+    }
 
     // renderPresent(sdlState);
     if (drawDialogue && !scene.dialogue.empty()) {
@@ -154,6 +283,54 @@ namespace UIManager {
       }
     }
 
+  }
+
+  void UI_Manager::drawGameplayHudCounts(const game_engine::SDLState& sdlState) {
+    if (!gameplayHudActive) {
+      return;
+    }
+    if (!cachedGameplayHud.coinCountHudTex || !cachedGameplayHud.gemCountHudTex ||
+        !cachedGameplayHud.numbersHudTex ||
+        !cachedGameplayHud.coinCountHudAnim || !cachedGameplayHud.gemCountHudAnim) {
+      return;
+    }
+
+    auto drawWidget = [&](SDL_Texture* texture, Animation& anim, uint32_t count, float x, float y) {
+      const int frameCount = anim.getFrameCount();
+      if (frameCount <= 0) {
+        return;
+      }
+
+      const int frame = anim.currentFrame() % frameCount;
+      SDL_FRect src{
+        static_cast<float>(frame) * kHudWidgetFrameSize,
+        0.0f,
+        kHudWidgetFrameSize,
+        kHudWidgetFrameSize,
+      };
+      SDL_FRect dst{x, y, kHudWidgetDrawSize, kHudWidgetDrawSize};
+      SDL_RenderTexture(sdlState.renderer, texture, &src, &dst);
+      drawHudCountGlyph(sdlState.renderer, cachedGameplayHud.numbersHudTex, count, x, y);
+    };
+
+    const float groupWidth = (kHudWidgetDrawSize * 2.0f) + kHudWidgetGap;
+    const float startX =
+      static_cast<float>(sdlState.logW) - kHudWidgetRightMargin - groupWidth;
+    const float startY =
+      static_cast<float>(sdlState.logH) - kHudWidgetBottomMargin - kHudWidgetDrawSize;
+
+    drawWidget(
+      cachedGameplayHud.coinCountHudTex,
+      *cachedGameplayHud.coinCountHudAnim,
+      cachedGameplayHud.playerCoins,
+      startX,
+      startY);
+    drawWidget(
+      cachedGameplayHud.gemCountHudTex,
+      *cachedGameplayHud.gemCountHudAnim,
+      cachedGameplayHud.playerGems,
+      startX + kHudWidgetDrawSize + kHudWidgetGap,
+      startY);
   }
 
 
@@ -370,9 +547,9 @@ namespace UIManager {
       });
       place("##settings", [&]{ act.nextView = GameView::MultiPlayerOptionsMenu;  });
       place("##levels", [&]{ act.nextView = GameView::LevelSelection; });
-      place("##inventory", [&]{  });
+      place("##inventory", [&]{ act.nextView = GameView::InventoryMenu; });
       place("##equipment",  [&]{ });
-      place("##shop",   [&]{ });
+      place("##shop",   [&]{ act.nextView = GameView::ShopMenu; });
       place("##craft",   [&]{ });
       place("##quit",   [&]{ act.nextView = UIManager::GameView::MainMenu; act.stopBackgroundTrack = true; });
       ImGui::PopStyleVar(2);
@@ -382,10 +559,142 @@ namespace UIManager {
         wantsHandCursor = true;
       }
 
+      drawPlayerStatusBars(snaps);
 
       if (snaps.togglePauseGameplay) {
          act.nextView = GameView::Playing;
       }
+
+      return act;
+  }
+
+  UIActions UI_Manager::drawShopMenu(const UISnapshots& snaps, ImGuiWindowFlags flags) {
+      UIActions act;
+      act.blockGameplayUpdates = true;
+      act.drawSceneOverlay = true;
+      act.dimBackground = true;
+
+      if (snaps.cutSceneID != cutscenePlr.cutSceneID && snaps.cutscene) {
+        cutscenePlr.start(snaps.cutSceneID, snaps.cutscene);
+      }
+
+      auto scn = cutscenePlr.currScene();
+
+      const float refW = scn.frameW;
+      const float refH = scn.frameH;
+
+      int outW, outH;
+      SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
+      float scale = std::min(outW / refW, outH / refH);
+      float offX = (outW - refW * scale) * 0.5f;
+      float offY = (outH - refH * scale) * 0.5f;
+
+      ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1,1,1,0.15f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1,1,1,0.25f));
+      ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+      ImGui::SetNextWindowSize(ImVec2(static_cast<float>(outW), static_cast<float>(outH)));
+      ImGui::Begin("##shop_hitboxes", nullptr,
+          ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
+          ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
+          ImGuiWindowFlags_NoScrollbar);
+
+      bool anyHovered = false;
+      auto place = [&](const char* id, float x, float y, float w, float h, auto onClick) {
+        ImGui::SetCursorScreenPos(ImVec2(offX + x * scale, offY + y * scale));
+        if (ImGui::Button(id, ImVec2(w * scale, h * scale))) onClick();
+        anyHovered |= ImGui::IsItemHovered();
+      };
+
+      place("##close_shop", 408.0f, 35.0f, 18.0f, 18.0f, [&]{
+        act.nextView = GameView::PauseMenu;
+      });
+      place("##shop_hp", 223.0f, 130.0f, 50.0f, 28.0f, [&]{
+        act.shopPurchase = ShopPurchase::HealthPotion;
+      });
+      place("##shop_mana", 293.0f, 130.0f, 50.0f, 28.0f, [&]{
+        act.shopPurchase = ShopPurchase::ManaPotion;
+      });
+      place("##shop_attack", 223.0f, 247.0f, 50.0f, 28.0f, [&]{
+        act.shopPurchase = ShopPurchase::AttackUp;
+      });
+      place("##shop_defence", 293.0f, 247.0f, 50.0f, 28.0f, [&]{
+        act.shopPurchase = ShopPurchase::DefenceUp;
+      });
+
+      ImGui::PopStyleVar(2);
+      ImGui::PopStyleColor(4);
+      ImGui::End();
+      if (anyHovered) {
+        wantsHandCursor = true;
+      }
+
+      drawPlayerStatusBars(snaps);
+
+      return act;
+  }
+
+  UIActions UI_Manager::drawInventoryMenu(const UISnapshots& snaps, ImGuiWindowFlags flags) {
+      UIActions act;
+      act.blockGameplayUpdates = true;
+      act.drawSceneOverlay = true;
+      act.dimBackground = true;
+
+      if (snaps.cutSceneID != cutscenePlr.cutSceneID && snaps.cutscene) {
+        cutscenePlr.start(snaps.cutSceneID, snaps.cutscene);
+      }
+
+      auto scn = cutscenePlr.currScene();
+      const float refW = scn.frameW;
+      const float refH = scn.frameH;
+
+      int outW, outH;
+      SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
+      float scale = std::min(outW / refW, outH / refH);
+      float offX = (outW - refW * scale) * 0.5f;
+      float offY = (outH - refH * scale) * 0.5f;
+
+      ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1,1,1,0.15f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1,1,1,0.25f));
+      ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+      ImGui::SetNextWindowSize(ImVec2(static_cast<float>(outW), static_cast<float>(outH)));
+      ImGui::Begin("##inventory_hitboxes", nullptr,
+          ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|
+          ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
+          ImGuiWindowFlags_NoScrollbar);
+
+      bool anyHovered = false;
+      auto place = [&](const char* id, float x, float y, float w, float h, auto onClick) {
+        ImGui::SetCursorScreenPos(ImVec2(offX + x * scale, offY + y * scale));
+        if (ImGui::Button(id, ImVec2(w * scale, h * scale))) onClick();
+        anyHovered |= ImGui::IsItemHovered();
+      };
+
+      place("##close_inventory", 449.0f, 40.0f, 18.0f, 18.0f, [&]{
+        act.nextView = GameView::PauseMenu;
+      });
+      place("##inventory_hp", 219.0f, 82.0f, 42.0f, 42.0f, [&]{
+        act.inventoryUse = InventoryUse::HealthPotion;
+      });
+      place("##inventory_mana", 269.0f, 82.0f, 42.0f, 42.0f, [&]{
+        act.inventoryUse = InventoryUse::ManaPotion;
+      });
+
+      ImGui::PopStyleVar(2);
+      ImGui::PopStyleColor(4);
+      ImGui::End();
+      if (anyHovered) {
+        wantsHandCursor = true;
+      }
+
+      drawPlayerStatusBars(snaps);
 
       return act;
   }
@@ -692,6 +1001,15 @@ namespace UIManager {
 
   UIActions UI_Manager::drawGameplay(const UISnapshots& snaps, ImGuiWindowFlags flags) {
       UIActions act;
+      gameplayHudActive = snaps.showGameplayHud;
+      cachedGameplayHud = snaps.gameplayHud;
+
+      if (cachedGameplayHud.coinCountHudAnim) {
+        cachedGameplayHud.coinCountHudAnim->step(snaps.deltaTime);
+      }
+      if (cachedGameplayHud.gemCountHudAnim) {
+        cachedGameplayHud.gemCountHudAnim->step(snaps.deltaTime);
+      }
 
       ImGuiWindowFlags windowFlags = flags | ImGuiWindowFlags_NoBackground;
       ImGui::Begin("HUD", nullptr, windowFlags);
@@ -712,6 +1030,12 @@ namespace UIManager {
       ImGui::PopStyleVar(2);
       ImGui::End();
 
+      drawPlayerStatusBars(snaps);
+
+      return act;
+  }
+
+  void UI_Manager::drawPlayerStatusBars(const UISnapshots& snaps) {
       drawPlayerBar("HP", snaps.playerHP, IM_COL32(0, 200, 0, 255), 10.0f, false);
       drawPlayerBar("Mana", snaps.playerMana, IM_COL32(186, 154, 255, 255), 56.0f, false);
       drawPlayerBar(
@@ -720,8 +1044,6 @@ namespace UIManager {
         IM_COL32(220, 40, 40, 255),
         102.0f,
         snaps.playerUltimateReady);
-
-      return act;
   }
 
 
@@ -772,6 +1094,8 @@ namespace UIManager {
       ImGui_ImplSDL3_NewFrame();
       ImGui::NewFrame();
       wantsHandCursor = false;
+      gameplayHudActive = false;
+      cachedGameplayHud = snaps.gameplayHud;
 
       ImGui::SetNextWindowPos(ImVec2(0, 0));
       ImGui::SetNextWindowSize(io.DisplaySize);
@@ -783,8 +1107,9 @@ namespace UIManager {
         case GameView::LevelLoading: return drawLoading(snaps, flags);
         case GameView::GameOver: return drawGameOver(snaps.loading, flags);
         case GameView::Playing: return drawGameplay(snaps, flags);
-        case GameView::InventoryMenu: return drawPausedMenu(snaps, flags);
+        case GameView::InventoryMenu: return drawInventoryMenu(snaps, flags);
         case GameView::PauseMenu: return drawPausedMenu(snaps, flags); // same as inventory menu because pauses game
+        case GameView::ShopMenu: return drawShopMenu(snaps, flags);
         case GameView::LevelSelection: return drawLevelSelectScreen(snaps, flags);
         case GameView::MultiPlayerOptionsMenu: return drawMultiplayerOptionsMenu(snaps, flags);
         case GameView::MultiplayerBrowse: return drawMultiplayerBrowse(snaps, flags);
