@@ -857,11 +857,14 @@ void updateDynamicObject(
         }
 
         const glm::vec2 distToPlayer = target->position - obj.position;
-        if (glm::length(distToPlayer) < 100.0f) {
+
+        if (std::abs(glm::length(distToPlayer)) < enemy.distanceTrigger) {
           currDirection = distToPlayer.x < 0.0f ? -1.0f : 1.0f;
-          obj.acceleration = glm::vec2(30.0f, 0.0f);
+          obj.acceleration = glm::vec2(enemy.accelX, 0.0f);
           setAnimation(obj, ANIM_RUN, false);
           setPresentation(obj, PresentationVariant::Run);
+
+
           if (enemy.attackTimer.step(deltaTime)) {
             enemy.state = EnemyState::attack;
             setAnimationAndPresentation(obj, ANIM_SWING, PresentationVariant::Swing);

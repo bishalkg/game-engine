@@ -83,6 +83,8 @@ struct EnemyData {
   float pendingKnockbackMagnitude;
   bool hasPendingKnockback;
   bool isBoss = false;
+  float accelX = 30.0f;
+  float distanceTrigger = 100.0f;
 
 
   EnemyData(): state(EnemyState::idle), damageTimer(0.4f), attackTimer(1.0), idleTimer(1.0) {
@@ -97,7 +99,7 @@ struct EnemyData {
     hasPendingKnockback = false;
   };
 
-  EnemyData(bool isBoss, float damageResetTime, float attackResetTime, float idleResetTime, int healthPoints): isBoss(isBoss), healthPoints(healthPoints), state(EnemyState::idle), damageTimer(damageResetTime), attackTimer(attackResetTime), idleTimer(idleResetTime) {
+  EnemyData(bool isBoss, float damageResetTime, float attackResetTime, float idleResetTime, float accelX, float distanceTrigger, int healthPoints): isBoss(isBoss), healthPoints(healthPoints), accelX(accelX), distanceTrigger(distanceTrigger), state(EnemyState::idle), damageTimer(damageResetTime), attackTimer(attackResetTime), idleTimer(idleResetTime) {
     srcH = 0;
     srcW = 0;
     lastUltimatePlayerId = 0;

@@ -326,9 +326,11 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           enemy.id = nextDynamicId++;
           enemy.spriteType = spriteType;
 
-          float damageResetTime = 1.0;
-          float attackResetTime = 0.5;
-          float idleResetTime = 1.0;
+          float damageResetTime = 0.3f;
+          float attackResetTime = 0.5f;
+          float idleResetTime = 1.0f;
+          float accelX = 40.0f;
+          float distanceTrigger = 250.0f;
           int healthPoints = 300;
           float maxSpeedX = 15;
 
@@ -337,11 +339,13 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
               enemy.drawScale = 1.0f;
               healthPoints = 300;
               maxSpeedX = 25;
+              accelX = 50.0f;
               break;
             }
             case SpriteType::Boss_Purple_Dragon: {
               enemy.drawScale = 0.50f;
               int healthPoints = 1000;
+              accelX = 60.0f;
               break;
             }
             default:
@@ -356,7 +360,7 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           float centerX = objStartingPos.x;
           enemy.position.x = centerX - enemy.collider.w * 0.5f;
           enemy.position.y = feetY - (enemy.collider.y + enemy.collider.h);
-          enemy.data.enemy = EnemyData(true, damageResetTime, attackResetTime, idleResetTime, healthPoints);
+          enemy.data.enemy = EnemyData(true, damageResetTime, attackResetTime, idleResetTime, accelX, distanceTrigger, healthPoints);
           enemy.currentAnimation = res.ANIM_IDLE;
           enemy.presentationVariant = PresentationVariant::Idle;
           enemy.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
