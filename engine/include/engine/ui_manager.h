@@ -110,6 +110,7 @@ namespace UIManager {
     LoadingSnapshot loading; /* add title/pause data */
     int playerHP;
     int playerMana;
+    int currBossHP;
     int playerUltimate;
     bool playerUltimateReady = false;
     ImVec2 winDims;
@@ -203,9 +204,16 @@ namespace UIManager {
         const std::string& name,
         int value,
         ImU32 color,
+        float xOffset,
+        float yOffset,
+        int sizeX, int sizeY,
+        bool highlightReady);
+      void drawStatusBars(const UISnapshots& snaps);
+      void drawBossStatusBar(const UISnapshots& snaps, const std::string& name,
+        int value,
+        ImU32 color,
         float yOffset,
         bool highlightReady);
-      void drawPlayerStatusBars(const UISnapshots& snaps);
 
       void drawGameplayHudCounts(const game_engine::SDLState& sdlState);
 

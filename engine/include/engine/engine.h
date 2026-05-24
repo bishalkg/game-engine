@@ -164,6 +164,7 @@ namespace game_engine {
       SpriteType selectedPlayerSprite{SpriteType::Player_Marie};
 
       int playerLayer, playerIndex;
+      int currBossLayer, currBossIndex;
       SDL_FRect mapViewport; // viewable part of map
       float bg2scroll, bg3scroll, bg4scroll;
       LocalHitStopState localHitStop;
@@ -375,6 +376,7 @@ namespace game_engine {
 
       // getters
       GameObject &getPlayer();
+      GameObject *getActiveCurrBoss();
       SDLState &getSDLState();
       GameState &getGameState();
       MIX_Mixer* getMixer();

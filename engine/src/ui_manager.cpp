@@ -559,7 +559,7 @@ namespace UIManager {
         wantsHandCursor = true;
       }
 
-      drawPlayerStatusBars(snaps);
+      drawStatusBars(snaps);
 
       if (snaps.togglePauseGameplay) {
          act.nextView = GameView::Playing;
@@ -632,7 +632,7 @@ namespace UIManager {
         wantsHandCursor = true;
       }
 
-      drawPlayerStatusBars(snaps);
+      drawStatusBars(snaps);
 
       return act;
   }
@@ -694,7 +694,7 @@ namespace UIManager {
         wantsHandCursor = true;
       }
 
-      drawPlayerStatusBars(snaps);
+      drawStatusBars(snaps);
 
       return act;
   }
@@ -1030,30 +1030,44 @@ namespace UIManager {
       ImGui::PopStyleVar(2);
       ImGui::End();
 
-      drawPlayerStatusBars(snaps);
+      drawStatusBars(snaps);
 
       return act;
   }
 
-  void UI_Manager::drawPlayerStatusBars(const UISnapshots& snaps) {
-      drawPlayerBar("HP", snaps.playerHP, IM_COL32(0, 200, 0, 255), 10.0f, false);
-      drawPlayerBar("Mana", snaps.playerMana, IM_COL32(186, 154, 255, 255), 56.0f, false);
+  void UI_Manager::drawStatusBars(const UISnapshots& snaps) {
+      drawPlayerBar("HP", snaps.playerHP, IM_COL32(0, 200, 0, 255), 10.0f, 10.0f, 150, 24, false);
+      drawPlayerBar("Mana", snaps.playerMana, IM_COL32(186, 154, 255, 255), 10.0f, 56.0f, 150, 24, false);
       drawPlayerBar(
         "Ultimate",
         snaps.playerUltimate,
         IM_COL32(220, 40, 40, 255),
+        10.0f,
         102.0f,
+        150, 24,
         snaps.playerUltimateReady);
-  }
 
+
+
+      // get effective bottom, and effective left edge. do
+      // x = bottom left edge - 100
+      // y = effective bottom - 50
+      // 360 x 640 ?
+      // TODO : idk why width is acting weird and being truncated
+      drawPlayerBar("Boss Health", snaps.currBossHP, IM_COL32(220, 50, 50, 255), 450.0f, 600.0f, 200, 40, false);
+
+      // drawBossStatusBar("Boss Health", snaps.bossHP, IM_COL32(186, 154, 255, 255), 0, false);
+  }
 
   void UI_Manager::drawPlayerBar(
     const std::string& name,
     int value,
     ImU32 color,
+    float xOffset,
     float yOffset,
+    int sizeX, int sizeY,
     bool highlightReady) {
-      ImGui::SetNextWindowPos(ImVec2(10, yOffset));
+      ImGui::SetNextWindowPos(ImVec2(xOffset, yOffset));
       const std::string windowName = "HUD##" + name;
       ImGui::Begin(windowName.c_str(), nullptr, ImGuiWindowFlags_NoTitleBar |
                                             ImGuiWindowFlags_NoBackground |
@@ -1061,15 +1075,17 @@ namespace UIManager {
                                             ImGuiWindowFlags_NoMove);
       float hpFrac = static_cast<float>(value) / 100.0f; // 0..1
       ImGui::TextUnformatted(name.c_str());
-      ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color); // green
+      ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color); // green , ImGuiCol_ResizeGrip, ImGuiCol_PlotHistogram
       const bool flashHighlight =
         highlightReady && std::fmod(ImGui::GetTime(), 1.0) < 0.5;
       ImGui::PushStyleColor(
         ImGuiCol_Border,
         flashHighlight ? IM_COL32(255, 220, 180, 255) : IM_COL32(255, 255, 255, 80));
+
       ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
       ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, flashHighlight ? 2.0f : 1.0f);
-      ImGui::ProgressBar(hpFrac, ImVec2(150, 24));
+      ImGui::ProgressBar(hpFrac, ImVec2(sizeX, sizeY)); // 150 24
+
       if (flashHighlight) {
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         const ImVec2 min = ImGui::GetItemRectMin();
@@ -1086,6 +1102,17 @@ namespace UIManager {
       ImGui::PopStyleColor(2);
       ImGui::End();
   }
+
+  void drawBossStatusBar(const std::string& name,
+    int value,
+    ImU32 color,
+    float xOffset,
+    float yOffset) {
+
+
+  }
+
+
 
   UIActions UI_Manager::getRenderViewActions(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState) {
       ImGuiIO& io = ImGui::GetIO();

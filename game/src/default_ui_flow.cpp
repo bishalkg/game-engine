@@ -190,11 +190,21 @@ public:
       snaps.gameplayHud.playerManaPotions = player.data.player.inventory.manaPotions.count;
       snaps.gameplayHud.playerAttackUps = player.data.player.inventory.attackUps.count;
       snaps.gameplayHud.playerDefenceUps = player.data.player.inventory.defenceUps.count;
+
+
+      GameObject* boss = engine.getActiveCurrBoss();
+      if (boss) {
+        snaps.currBossHP = boss->data.enemy.healthPoints;
+      }
+
+
+
     } else {
       snaps.playerHP = 0;
       snaps.playerMana = 0;
       snaps.playerUltimate = 0;
       snaps.playerUltimateReady = false;
+      snaps.currBossHP = 0;
     }
     snaps.gameplayHud.coinCountHudAnim = resources.coinCountUIAnim.get();
     snaps.gameplayHud.gemCountHudAnim = resources.gemCountUIAnim.get();

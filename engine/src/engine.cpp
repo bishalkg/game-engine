@@ -159,6 +159,22 @@ GameObject &game_engine::Engine::getPlayer() {
   return m_gameState.player(LAYER_IDX_CHARACTERS);
 };
 
+// TODO optimize
+GameObject *game_engine::Engine::getActiveCurrBoss() {
+  for (int layerIdx = 0; layerIdx < static_cast<int>(m_gameState.layers.size()); ++layerIdx) {
+    for (int objIdx = 0; objIdx < static_cast<int>(m_gameState.layers[layerIdx].size()); ++objIdx) {
+      GameObject &gameObj = m_gameState.layers[layerIdx][objIdx]; // bring it into stack and registers to avoid multiple memory accesses
+      if (gameObj.objClass == ObjectClass::Enemy && gameObj.data.enemy.isBoss && gameObj.data.enemy.shouldDisplayHP) {
+        m_gameState.currBossLayer = layerIdx;
+        m_gameState.currBossIndex = objIdx;
+        return &m_gameState.layers[layerIdx][objIdx];
+      }
+    }
+  }
+
+  return nullptr; // TODO not sure how to do this when working with references
+}
+
 game_engine::Engine::~Engine() {
   // ensure server thread and client tear down cleanly
   m_gameRunning.store(false);

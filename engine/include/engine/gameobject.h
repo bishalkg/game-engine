@@ -83,6 +83,7 @@ struct EnemyData {
   float pendingKnockbackMagnitude;
   bool hasPendingKnockback;
   bool isBoss = false;
+  bool shouldDisplayHP = false; // when he boss is encountered display its HP
   float accelX = 30.0f;
   float distanceTrigger = 100.0f;
 
