@@ -246,13 +246,31 @@ void awardMaterialToPlayer(GameObject& player, const MaterialData& material) {
   }
 }
 
-void emitHitConfirmed(
-  const GameplaySimulationHooks& hooks,
+void recordHitConfirmed(
+  SimulationEvents& events,
   GameObjectKey attacker,
   GameObjectKey victim,
   HitStopStrength strength) {
+  events.hitConfirmed.push_back(SimulationHitConfirmedEvent{attacker, victim, strength});
+}
+
+void recordPortalTriggered(SimulationEvents& events, LevelIndex nextLevel) {
+  events.portalTriggered.push_back(SimulationPortalTriggeredEvent{nextLevel});
+}
+
+void dispatchSimulationEvents(
+  const SimulationEvents& events,
+  const GameplaySimulationHooks& hooks) {
   if (hooks.onHitConfirmed) {
-    hooks.onHitConfirmed(attacker, victim, strength);
+    for (const auto& event : events.hitConfirmed) {
+      hooks.onHitConfirmed(event.attacker, event.victim, event.strength);
+    }
+  }
+
+  if (hooks.onPortalTriggered) {
+    for (const auto& event : events.portalTriggered) {
+      hooks.onPortalTriggered(event.nextLevel);
+    }
   }
 }
 
@@ -376,6 +394,7 @@ void damagePlayer(GameObject& player, int damage) {
       player.data.player.state == PlayerState::ultimate) {
     return;
   }
+
   if (player.data.player.state == PlayerState::hurt && !player.data.player.damageTimer.isTimedOut()) {
     return;
   }
@@ -424,7 +443,524 @@ GameObject makeBulletFromPlayer(const GameObject& player, const GameState& state
   return bullet;
 }
 
-void updateDynamicObject(
+void integrateMotion(GameObject& obj, float direction, float deltaTime) {
+  obj.velocity += direction * obj.acceleration * deltaTime;
+  if (std::abs(obj.velocity.x) > obj.maxSpeedX) {
+    obj.velocity.x = (obj.velocity.x < 0.0f ? -1.0f : 1.0f) * obj.maxSpeedX;
+  }
+  obj.position += obj.velocity * deltaTime;
+}
+
+float updatePlayer(
+  GameState& state,
+  GameObject& obj,
+  const std::unordered_map<uint32_t, NetGameInput>& playerInputs,
+  float deltaTime) {
+float currDirection = 0.0f;
+auto& player = obj.data.player;
+const NetGameInput& input = inputForPlayer(playerInputs, obj.id);
+
+player.weaponTimer.step(deltaTime);
+player.healthRecoveryTimer.step(deltaTime);
+player.manaRecoveryTimer.step(deltaTime);
+player.ultimateRecoveryTimer.step(deltaTime);
+player.meleePressedThisFrame = input.meleePressed;
+player.ultimatePressedThisFrame = input.ultimatePressed;
+
+if (player.healthRecoveryTimer.isTimedOut()) {
+  player.healthRecoveryTimer.reset();
+  player.healthPoints = std::clamp(player.healthPoints + 1, 0, player.maxHealthPoints);
+}
+if (player.manaRecoveryTimer.isTimedOut()) {
+  player.manaRecoveryTimer.reset();
+  player.manaPoints = std::clamp(player.manaPoints + 1, 0, player.maxManaPoints);
+}
+if (player.ultimateRecoveryTimer.isTimedOut()) {
+  player.ultimateRecoveryTimer.reset();
+  player.ultimatePoints = std::clamp(player.ultimatePoints + 33, 0, player.maxUltimatePoints);
+}
+
+if (input.leftHeld) {
+  currDirection -= 1.0f;
+}
+if (input.rightHeld) {
+  currDirection += 1.0f;
+}
+const float desiredDirection = currDirection;
+
+const bool hasSwingFollowup =
+  static_cast<int>(obj.animations.size()) > ANIM_SWING_2 &&
+  obj.animations[ANIM_SWING_2].getFrameCount() > 0;
+const bool wantSwing = player.meleePressedThisFrame;
+const bool canSwing =
+  player.state != PlayerState::swingWeapon && player.state != PlayerState::ultimate;
+const bool canStartUltimate =
+  player.unlockedUltimateOne &&
+  player.ultimatePressedThisFrame &&
+  player.state != PlayerState::dead &&
+  player.state != PlayerState::hurt &&
+  player.state != PlayerState::ultimate &&
+  player.ultimatePoints >= player.maxUltimatePoints &&
+  hasAnimation(obj, ANIM_ULTIMATE);
+
+const auto resetSwingState = [&obj]() {
+  obj.data.player.swingStage = PlayerSwingStage::None;
+  obj.data.player.queuedFollowupSwing = false;
+  obj.data.player.meleeDamage = 10;
+};
+
+const auto restoreDefaultPlayerState = [&]() {
+  resetSwingState();
+  player.activeUltimateCastId = 0;
+  obj.collider = baseFacing(obj);
+
+  if (!obj.grounded) {
+    obj.data.player.state = PlayerState::jumping;
+    setAnimationAndPresentation(obj, ANIM_JUMP, PresentationVariant::Jump);
+    return;
+  }
+
+  if (desiredDirection != 0.0f) {
+    obj.data.player.state = PlayerState::running;
+    setAnimationAndPresentation(obj, ANIM_RUN, PresentationVariant::Run);
+    return;
+  }
+
+  obj.data.player.state = PlayerState::idle;
+  setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
+};
+
+const auto startAttack1 = [&](int attackAnimIndex, PresentationVariant attackPresentation) {
+  resetSwingState();
+  obj.data.player.state = PlayerState::swingWeapon;
+  obj.data.player.swingStage = PlayerSwingStage::Attack1;
+  setAnimationAndPresentation(obj, attackAnimIndex, attackPresentation);
+  widenColliderForSwing(obj);
+};
+
+const auto startUltimate = [&]() {
+  resetSwingState();
+  player.state = PlayerState::ultimate;
+  player.ultimatePoints = 0;
+  player.activeUltimateCastId = player.nextUltimateCastId++;
+  obj.velocity.x = 0.0f;
+  setAnimationAndPresentation(obj, ANIM_ULTIMATE, PresentationVariant::Ultimate);
+  expandColliderForUltimate(obj);
+};
+
+const auto handleAttacking = [&](int idleOrMoveAnim,
+                                 PresentationVariant idlePresentation,
+                                 int shootAnim,
+                                 PresentationVariant shootPresentation,
+                                 int attackAnim,
+                                 PresentationVariant attackPresentation,
+                                 bool handleJump) {
+  if (wantSwing && canSwing) {
+    startAttack1(attackAnim, attackPresentation);
+  } else if (input.fireHeld) {
+    setAnimation(obj, shootAnim, false);
+    setPresentation(obj, shootPresentation);
+
+    if (player.weaponTimer.isTimedOut() && player.manaPoints > 10) {
+      player.weaponTimer.reset();
+      player.manaPoints = std::clamp(player.manaPoints - 2, 0, player.maxManaPoints);
+      state.bullets.push_back(makeBulletFromPlayer(obj, state));
+    }
+  } else if (handleJump) {
+    setPresentation(obj, idlePresentation);
+    if (obj.currentAnimation != ANIM_JUMP && obj.currentAnimation != -1) {
+      setAnimation(obj, ANIM_JUMP);
+    }
+
+    if (obj.currentAnimation == ANIM_JUMP &&
+        obj.animations[ANIM_JUMP].isDone()) {
+      obj.currentAnimation = -1;
+    }
+  } else {
+    obj.animations[ANIM_SHOOT].reset();
+    obj.animations[ANIM_SLIDE_SHOOT].reset();
+    setAnimation(obj, idleOrMoveAnim, false);
+    setPresentation(obj, idlePresentation);
+  }
+};
+
+if (canStartUltimate) {
+  startUltimate();
+}
+
+switch (player.state) {
+  case PlayerState::idle: {
+    obj.collider = baseFacing(obj);
+    setPresentation(obj, PresentationVariant::Idle);
+    if (input.jumpPressed && obj.grounded) {
+      player.state = PlayerState::jumping;
+      player.jumpWindupTimer.reset();
+      player.jumpImpulseApplied = false;
+      setAnimationAndPresentation(obj, ANIM_JUMP, PresentationVariant::Jump);
+      break;
+    }
+    if (currDirection != 0.0f) {
+      player.state = PlayerState::running;
+      setAnimationAndPresentation(obj, ANIM_RUN, PresentationVariant::Run);
+    } else if (obj.velocity.x != 0.0f) {
+      const float factor = obj.velocity.x > 0.0f ? -1.5f : 1.5f;
+      const float amount = factor * obj.acceleration.x * deltaTime;
+      if (std::abs(obj.velocity.x) < std::abs(amount)) {
+        obj.velocity.x = 0.0f;
+      } else {
+        obj.velocity.x += amount;
+      }
+    }
+
+    if (wantSwing && canSwing) {
+      handleAttacking(
+        ANIM_RUN,
+        PresentationVariant::Run,
+        ANIM_RUN_ATTACK,
+        PresentationVariant::RunAttack,
+        ANIM_RUN_ATTACK,
+        PresentationVariant::RunAttack,
+        false);
+    } else {
+      handleAttacking(
+        ANIM_IDLE,
+        PresentationVariant::Idle,
+        ANIM_SHOOT,
+        PresentationVariant::Shoot,
+        ANIM_SHOOT,
+        PresentationVariant::Shoot,
+        false);
+    }
+    break;
+  }
+  case PlayerState::running: {
+    setPresentation(obj, PresentationVariant::Run);
+    if (input.jumpPressed && obj.grounded) {
+      player.state = PlayerState::jumping;
+      player.jumpWindupTimer.reset();
+      player.jumpImpulseApplied = false;
+      setAnimationAndPresentation(obj, ANIM_JUMP, PresentationVariant::Jump);
+      break;
+    }
+    if (currDirection == 0.0f) {
+      player.state = PlayerState::idle;
+    }
+
+    if (obj.velocity.x * obj.direction < 0.0f && obj.grounded) {
+      if (wantSwing && canSwing) {
+        handleAttacking(
+          ANIM_RUN,
+          PresentationVariant::Run,
+          ANIM_RUN_ATTACK,
+          PresentationVariant::RunAttack,
+          ANIM_RUN_ATTACK,
+          PresentationVariant::RunAttack,
+          false);
+      } else {
+        handleAttacking(
+          ANIM_SLIDE,
+          PresentationVariant::Slide,
+          ANIM_SLIDE_SHOOT,
+          PresentationVariant::SlideShoot,
+          ANIM_SLIDE_SHOOT,
+          PresentationVariant::SlideShoot,
+          false);
+      }
+    } else {
+      if (wantSwing && canSwing) {
+        handleAttacking(
+          ANIM_RUN,
+          PresentationVariant::Run,
+          ANIM_RUN_ATTACK,
+          PresentationVariant::RunAttack,
+          ANIM_RUN_ATTACK,
+          PresentationVariant::RunAttack,
+          false);
+      } else {
+        handleAttacking(
+          ANIM_RUN,
+          PresentationVariant::Run,
+          ANIM_RUN,
+          PresentationVariant::RunShoot,
+          ANIM_RUN,
+          PresentationVariant::RunAttack,
+          false);
+      }
+    }
+    break;
+  }
+  case PlayerState::jumping: {
+    setPresentation(obj, PresentationVariant::Jump);
+    if (!player.jumpImpulseApplied) {
+      player.jumpWindupTimer.step(deltaTime);
+      if (player.jumpWindupTimer.isTimedOut()) {
+        obj.velocity.y += Engine::JUMP_FORCE;
+        player.jumpImpulseApplied = true;
+      }
+    } else {
+      const int frameCount = obj.animations[ANIM_JUMP].getFrameCount();
+      if (!obj.grounded && obj.currentAnimation == ANIM_JUMP &&
+          obj.animations[ANIM_JUMP].currentFrame() >= frameCount - 2) {
+        obj.currentAnimation = -1;
+        obj.spriteFrame = frameCount - 1;
+        player.playLandingFrame = true;
+      }
+
+      if (obj.grounded) {
+        if (player.playLandingFrame) {
+          obj.currentAnimation = -1;
+          obj.spriteFrame = frameCount;
+          player.playLandingFrame = false;
+          break;
+        }
+        obj.velocity.y = 0.0f;
+        player.state = PlayerState::idle;
+        obj.animations[ANIM_JUMP].reset();
+      }
+    }
+
+    if (wantSwing && canSwing) {
+      handleAttacking(
+        ANIM_RUN,
+        PresentationVariant::Run,
+        ANIM_RUN_ATTACK,
+        PresentationVariant::RunAttack,
+        ANIM_RUN_ATTACK,
+        PresentationVariant::RunAttack,
+        false);
+    } else {
+      handleAttacking(
+        ANIM_JUMP,
+        PresentationVariant::Jump,
+        ANIM_JUMP,
+        PresentationVariant::JumpShoot,
+        ANIM_JUMP,
+        PresentationVariant::JumpShoot,
+        true);
+    }
+    break;
+  }
+  case PlayerState::swingWeapon: {
+    const bool isAttack1Anim =
+      obj.currentAnimation == ANIM_RUN_ATTACK || obj.currentAnimation == ANIM_SWING;
+    const bool isAttack2Anim = obj.currentAnimation == ANIM_SWING_2;
+    const bool attack1Done =
+      (obj.currentAnimation == ANIM_RUN_ATTACK && obj.animations[ANIM_RUN_ATTACK].isDone()) ||
+      (obj.currentAnimation == ANIM_SWING && obj.animations[ANIM_SWING].isDone());
+    const bool attack2Done =
+      obj.currentAnimation == ANIM_SWING_2 && obj.animations[ANIM_SWING_2].isDone();
+
+    if (obj.currentAnimation == -1 ||
+        (player.swingStage == PlayerSwingStage::Attack1 && !isAttack1Anim) ||
+        (player.swingStage == PlayerSwingStage::Attack2 && !isAttack2Anim)) {
+      restoreDefaultPlayerState();
+      break;
+    }
+
+    if (player.swingStage == PlayerSwingStage::Attack1 && hasSwingFollowup) {
+      Animation& openerAnim = obj.animations[obj.currentAnimation];
+      if (player.meleePressedThisFrame &&
+          openerAnim.currentFrame() >= openerAnim.getFrameCount() / 2) {
+        player.queuedFollowupSwing = true;
+      }
+    }
+
+    if (attack1Done && player.queuedFollowupSwing && hasSwingFollowup) {
+      if (obj.currentAnimation == ANIM_RUN_ATTACK) {
+        obj.animations[ANIM_RUN_ATTACK].reset();
+      } else if (obj.currentAnimation == ANIM_SWING) {
+        obj.animations[ANIM_SWING].reset();
+      }
+      setAnimationAndPresentation(obj, ANIM_SWING_2, PresentationVariant::Swing2);
+      player.swingStage = PlayerSwingStage::Attack2;
+      player.queuedFollowupSwing = false;
+      player.meleeDamage = 75;
+      widenColliderForSwing(obj);
+    } else if (attack1Done) {
+      if (obj.currentAnimation == ANIM_RUN_ATTACK) {
+        obj.animations[ANIM_RUN_ATTACK].reset();
+      } else if (obj.currentAnimation == ANIM_SWING) {
+        obj.animations[ANIM_SWING].reset();
+      }
+      restoreDefaultPlayerState();
+    } else if (attack2Done) {
+      obj.animations[ANIM_SWING_2].reset();
+      restoreDefaultPlayerState();
+    }
+    break;
+  }
+  case PlayerState::ultimate: {
+    currDirection = 0.0f;
+    obj.velocity.x = 0.0f;
+    expandColliderForUltimate(obj);
+    setPresentation(obj, PresentationVariant::Ultimate);
+    if (obj.currentAnimation == -1) {
+      setAnimationAndPresentation(obj, ANIM_ULTIMATE, PresentationVariant::Ultimate);
+      break;
+    }
+    if (obj.currentAnimation == ANIM_ULTIMATE &&
+        obj.animations[ANIM_ULTIMATE].isDone()) {
+      obj.animations[ANIM_ULTIMATE].reset();
+      restoreDefaultPlayerState();
+    }
+    break;
+  }
+  case PlayerState::hurt: {
+    resetSwingState();
+    player.activeUltimateCastId = 0;
+    obj.collider = baseFacing(obj);
+    if (player.damageTimer.step(deltaTime)) {
+      player.state = PlayerState::idle;
+      setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
+    }
+    break;
+  }
+  case PlayerState::dead: {
+    resetSwingState();
+    player.activeUltimateCastId = 0;
+    obj.collider = baseFacing(obj);
+    setPresentation(obj, PresentationVariant::Die);
+    obj.velocity = glm::vec2(0.0f);
+    if (obj.currentAnimation != -1 && obj.animations[obj.currentAnimation].isDone()) {
+      obj.currentAnimation = -1;
+      obj.spriteFrame = 4;
+      state.currentView = UIManager::GameView::GameOver;
+    }
+    break;
+  }
+}
+
+  return currDirection;
+}
+
+void updateProjectile(
+  GameObject& obj,
+  const GameplaySimulationHooks& hooks,
+  float deltaTime) {
+obj.data.bullet.liveTimer.step(deltaTime);
+switch (obj.data.bullet.state) {
+  case BulletState::moving: {
+    // TODO: update lifetime of projectiles here
+    setPresentation(obj, PresentationVariant::ProjectileMoving);
+    const bool outsideViewport =
+      hooks.cullProjectilesByViewport &&
+      (obj.position.x - hooks.projectileViewport.x < 0.0f ||
+       obj.position.x - hooks.projectileViewport.x > hooks.projectileViewport.w ||
+       obj.position.y - hooks.projectileViewport.y < 0.0f ||
+       obj.position.y - hooks.projectileViewport.y > hooks.projectileViewport.h);
+
+    if (outsideViewport || obj.data.bullet.liveTimer.isTimedOut()) {
+      obj.data.bullet.liveTimer.reset();
+      obj.data.bullet.state = BulletState::inactive;
+    }
+    break;
+  }
+  case BulletState::colliding:
+    setPresentation(obj, PresentationVariant::ProjectileHit);
+    if (obj.currentAnimation != -1 && obj.animations[obj.currentAnimation].isDone()) {
+      obj.data.bullet.state = BulletState::inactive;
+    }
+    break;
+  case BulletState::inactive:
+    break;
+}
+}
+
+float updateEnemy(GameState& state, GameObject& obj, float deltaTime) {
+float currDirection = 0.0f;
+auto& enemy = obj.data.enemy;
+const bool enemyFrozenByHitStop = stepEnemyHitStop(obj, deltaTime);
+
+switch (enemy.state) {
+  case EnemyState::idle: {
+    if (enemyFrozenByHitStop) {
+      setAnimation(obj, ANIM_IDLE, false);
+      setPresentation(obj, PresentationVariant::Idle);
+      break;
+    }
+
+    GameObject* target = findClosestLivingPlayer(state, obj);
+    if (!target) {
+      obj.data.enemy.shouldDisplayHP = false;
+      obj.acceleration = glm::vec2(0.0f);
+      obj.velocity.x = 0.0f;
+      setAnimation(obj, ANIM_IDLE, false);
+      setPresentation(obj, PresentationVariant::Idle);
+      break;
+    }
+
+    const glm::vec2 distToPlayer = target->position - obj.position;
+
+    if (std::abs(glm::length(distToPlayer)) < enemy.distanceTrigger) {
+      currDirection = distToPlayer.x < 0.0f ? -1.0f : 1.0f;
+      obj.acceleration = glm::vec2(enemy.accelX, 0.0f);
+      setAnimation(obj, ANIM_RUN, false);
+      setPresentation(obj, PresentationVariant::Run);
+      obj.data.enemy.shouldDisplayHP = true;
+
+
+      if (enemy.attackTimer.step(deltaTime)) {
+        enemy.state = EnemyState::attack;
+        setAnimationAndPresentation(obj, ANIM_SWING, PresentationVariant::Swing);
+        enemy.attackTimer.reset();
+        widenColliderForSwing(obj);
+      }
+    } else {
+      obj.acceleration = glm::vec2(0.0f);
+      obj.velocity.x = 0.0f;
+      setAnimation(obj, ANIM_IDLE, false);
+      setPresentation(obj, PresentationVariant::Idle);
+      obj.data.enemy.shouldDisplayHP = false;
+    }
+    break;
+  }
+  case EnemyState::attack:
+    if (enemyFrozenByHitStop) {
+      break;
+    }
+    if (enemy.idleTimer.step(deltaTime)) {
+      enemy.state = EnemyState::idle;
+      setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
+      enemy.idleTimer.reset();
+      obj.collider = baseFacing(obj);
+    }
+    break;
+  case EnemyState::hurt:
+    if (enemyFrozenByHitStop) {
+      break;
+    }
+    if (enemy.damageTimer.step(deltaTime)) {
+      enemy.state = EnemyState::idle;
+      setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
+      obj.collider = baseFacing(obj);
+    }
+    break;
+  case EnemyState::dead:
+    setPresentation(obj, PresentationVariant::Die);
+    obj.velocity = glm::vec2(0.0f);
+    if (obj.currentAnimation != -1 && obj.animations[obj.currentAnimation].isDone()) {
+      obj.currentAnimation = -1;
+      obj.spriteFrame = 18;
+    }
+    break;
+}
+
+  return currDirection;
+}
+
+void updateMaterial(GameObject& obj) {
+if (obj.data.material.state == MaterialState::collapsing) {
+  setAnimationAndPresentation(obj, ANIM_COLLECT, PresentationVariant::Collapsing, false);
+  if (obj.currentAnimation != -1 &&
+      obj.currentAnimation == ANIM_COLLECT &&
+      obj.animations[obj.currentAnimation].isDone()) {
+    obj.data.material.state = MaterialState::collected;
+    obj.currentAnimation = -1;
+  }
+}
+}
+
+float updateDynamicObject(
   GameState& state,
   GameObject& obj,
   const std::unordered_map<uint32_t, NetGameInput>& playerInputs,
@@ -441,496 +977,26 @@ void updateDynamicObject(
     obj.velocity += Engine::GRAVITY * deltaTime;
   }
 
+
   float currDirection = 0.0f;
 
-  if (obj.objClass == ObjectClass::Player) {
-    auto& player = obj.data.player;
-    const NetGameInput& input = inputForPlayer(playerInputs, obj.id);
-
-    player.weaponTimer.step(deltaTime);
-    player.healthRecoveryTimer.step(deltaTime);
-    player.manaRecoveryTimer.step(deltaTime);
-    player.ultimateRecoveryTimer.step(deltaTime);
-    player.meleePressedThisFrame = input.meleePressed;
-    player.ultimatePressedThisFrame = input.ultimatePressed;
-
-    if (player.healthRecoveryTimer.isTimedOut()) {
-      player.healthRecoveryTimer.reset();
-      player.healthPoints = std::clamp(player.healthPoints + 1, 0, player.maxHealthPoints);
-    }
-    if (player.manaRecoveryTimer.isTimedOut()) {
-      player.manaRecoveryTimer.reset();
-      player.manaPoints = std::clamp(player.manaPoints + 1, 0, player.maxManaPoints);
-    }
-    if (player.ultimateRecoveryTimer.isTimedOut()) {
-      player.ultimateRecoveryTimer.reset();
-      player.ultimatePoints = std::clamp(player.ultimatePoints + 33, 0, player.maxUltimatePoints);
-    }
-
-    if (input.leftHeld) {
-      currDirection -= 1.0f;
-    }
-    if (input.rightHeld) {
-      currDirection += 1.0f;
-    }
-    const float desiredDirection = currDirection;
-
-    const bool hasSwingFollowup =
-      static_cast<int>(obj.animations.size()) > ANIM_SWING_2 &&
-      obj.animations[ANIM_SWING_2].getFrameCount() > 0;
-    const bool wantSwing = player.meleePressedThisFrame;
-    const bool canSwing =
-      player.state != PlayerState::swingWeapon && player.state != PlayerState::ultimate;
-    const bool canStartUltimate =
-      player.unlockedUltimateOne &&
-      player.ultimatePressedThisFrame &&
-      player.state != PlayerState::dead &&
-      player.state != PlayerState::hurt &&
-      player.state != PlayerState::ultimate &&
-      player.ultimatePoints >= player.maxUltimatePoints &&
-      hasAnimation(obj, ANIM_ULTIMATE);
-
-    const auto resetSwingState = [&obj]() {
-      obj.data.player.swingStage = PlayerSwingStage::None;
-      obj.data.player.queuedFollowupSwing = false;
-      obj.data.player.meleeDamage = 10;
-    };
-
-    const auto restoreDefaultPlayerState = [&]() {
-      resetSwingState();
-      player.activeUltimateCastId = 0;
-      obj.collider = baseFacing(obj);
-
-      if (!obj.grounded) {
-        obj.data.player.state = PlayerState::jumping;
-        setAnimationAndPresentation(obj, ANIM_JUMP, PresentationVariant::Jump);
-        return;
-      }
-
-      if (desiredDirection != 0.0f) {
-        obj.data.player.state = PlayerState::running;
-        setAnimationAndPresentation(obj, ANIM_RUN, PresentationVariant::Run);
-        return;
-      }
-
-      obj.data.player.state = PlayerState::idle;
-      setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
-    };
-
-    const auto startAttack1 = [&](int attackAnimIndex, PresentationVariant attackPresentation) {
-      resetSwingState();
-      obj.data.player.state = PlayerState::swingWeapon;
-      obj.data.player.swingStage = PlayerSwingStage::Attack1;
-      setAnimationAndPresentation(obj, attackAnimIndex, attackPresentation);
-      widenColliderForSwing(obj);
-    };
-
-    const auto startUltimate = [&]() {
-      resetSwingState();
-      player.state = PlayerState::ultimate;
-      player.ultimatePoints = 0;
-      player.activeUltimateCastId = player.nextUltimateCastId++;
-      obj.velocity.x = 0.0f;
-      setAnimationAndPresentation(obj, ANIM_ULTIMATE, PresentationVariant::Ultimate);
-      expandColliderForUltimate(obj);
-    };
-
-    const auto handleAttacking = [&](int idleOrMoveAnim,
-                                     PresentationVariant idlePresentation,
-                                     int shootAnim,
-                                     PresentationVariant shootPresentation,
-                                     int attackAnim,
-                                     PresentationVariant attackPresentation,
-                                     bool handleJump) {
-      if (wantSwing && canSwing) {
-        startAttack1(attackAnim, attackPresentation);
-      } else if (input.fireHeld) {
-        setAnimation(obj, shootAnim, false);
-        setPresentation(obj, shootPresentation);
-
-        if (player.weaponTimer.isTimedOut() && player.manaPoints > 10) {
-          player.weaponTimer.reset();
-          player.manaPoints = std::clamp(player.manaPoints - 2, 0, player.maxManaPoints);
-          state.bullets.push_back(makeBulletFromPlayer(obj, state));
-        }
-      } else if (handleJump) {
-        setPresentation(obj, idlePresentation);
-        if (obj.currentAnimation != ANIM_JUMP && obj.currentAnimation != -1) {
-          setAnimation(obj, ANIM_JUMP);
-        }
-
-        if (obj.currentAnimation == ANIM_JUMP &&
-            obj.animations[ANIM_JUMP].isDone()) {
-          obj.currentAnimation = -1;
-        }
-      } else {
-        obj.animations[ANIM_SHOOT].reset();
-        obj.animations[ANIM_SLIDE_SHOOT].reset();
-        setAnimation(obj, idleOrMoveAnim, false);
-        setPresentation(obj, idlePresentation);
-      }
-    };
-
-    if (canStartUltimate) {
-      startUltimate();
-    }
-
-    switch (player.state) {
-      case PlayerState::idle: {
-        obj.collider = baseFacing(obj);
-        setPresentation(obj, PresentationVariant::Idle);
-        if (input.jumpPressed && obj.grounded) {
-          player.state = PlayerState::jumping;
-          player.jumpWindupTimer.reset();
-          player.jumpImpulseApplied = false;
-          setAnimationAndPresentation(obj, ANIM_JUMP, PresentationVariant::Jump);
-          break;
-        }
-        if (currDirection != 0.0f) {
-          player.state = PlayerState::running;
-          setAnimationAndPresentation(obj, ANIM_RUN, PresentationVariant::Run);
-        } else if (obj.velocity.x != 0.0f) {
-          const float factor = obj.velocity.x > 0.0f ? -1.5f : 1.5f;
-          const float amount = factor * obj.acceleration.x * deltaTime;
-          if (std::abs(obj.velocity.x) < std::abs(amount)) {
-            obj.velocity.x = 0.0f;
-          } else {
-            obj.velocity.x += amount;
-          }
-        }
-
-        if (wantSwing && canSwing) {
-          handleAttacking(
-            ANIM_RUN,
-            PresentationVariant::Run,
-            ANIM_RUN_ATTACK,
-            PresentationVariant::RunAttack,
-            ANIM_RUN_ATTACK,
-            PresentationVariant::RunAttack,
-            false);
-        } else {
-          handleAttacking(
-            ANIM_IDLE,
-            PresentationVariant::Idle,
-            ANIM_SHOOT,
-            PresentationVariant::Shoot,
-            ANIM_SHOOT,
-            PresentationVariant::Shoot,
-            false);
-        }
-        break;
-      }
-      case PlayerState::running: {
-        setPresentation(obj, PresentationVariant::Run);
-        if (input.jumpPressed && obj.grounded) {
-          player.state = PlayerState::jumping;
-          player.jumpWindupTimer.reset();
-          player.jumpImpulseApplied = false;
-          setAnimationAndPresentation(obj, ANIM_JUMP, PresentationVariant::Jump);
-          break;
-        }
-        if (currDirection == 0.0f) {
-          player.state = PlayerState::idle;
-        }
-
-        if (obj.velocity.x * obj.direction < 0.0f && obj.grounded) {
-          if (wantSwing && canSwing) {
-            handleAttacking(
-              ANIM_RUN,
-              PresentationVariant::Run,
-              ANIM_RUN_ATTACK,
-              PresentationVariant::RunAttack,
-              ANIM_RUN_ATTACK,
-              PresentationVariant::RunAttack,
-              false);
-          } else {
-            handleAttacking(
-              ANIM_SLIDE,
-              PresentationVariant::Slide,
-              ANIM_SLIDE_SHOOT,
-              PresentationVariant::SlideShoot,
-              ANIM_SLIDE_SHOOT,
-              PresentationVariant::SlideShoot,
-              false);
-          }
-        } else {
-          if (wantSwing && canSwing) {
-            handleAttacking(
-              ANIM_RUN,
-              PresentationVariant::Run,
-              ANIM_RUN_ATTACK,
-              PresentationVariant::RunAttack,
-              ANIM_RUN_ATTACK,
-              PresentationVariant::RunAttack,
-              false);
-          } else {
-            handleAttacking(
-              ANIM_RUN,
-              PresentationVariant::Run,
-              ANIM_RUN,
-              PresentationVariant::RunShoot,
-              ANIM_RUN,
-              PresentationVariant::RunAttack,
-              false);
-          }
-        }
-        break;
-      }
-      case PlayerState::jumping: {
-        setPresentation(obj, PresentationVariant::Jump);
-        if (!player.jumpImpulseApplied) {
-          player.jumpWindupTimer.step(deltaTime);
-          if (player.jumpWindupTimer.isTimedOut()) {
-            obj.velocity.y += Engine::JUMP_FORCE;
-            player.jumpImpulseApplied = true;
-          }
-        } else {
-          const int frameCount = obj.animations[ANIM_JUMP].getFrameCount();
-          if (!obj.grounded && obj.currentAnimation == ANIM_JUMP &&
-              obj.animations[ANIM_JUMP].currentFrame() >= frameCount - 2) {
-            obj.currentAnimation = -1;
-            obj.spriteFrame = frameCount - 1;
-            player.playLandingFrame = true;
-          }
-
-          if (obj.grounded) {
-            if (player.playLandingFrame) {
-              obj.currentAnimation = -1;
-              obj.spriteFrame = frameCount;
-              player.playLandingFrame = false;
-              break;
-            }
-            obj.velocity.y = 0.0f;
-            player.state = PlayerState::idle;
-            obj.animations[ANIM_JUMP].reset();
-          }
-        }
-
-        if (wantSwing && canSwing) {
-          handleAttacking(
-            ANIM_RUN,
-            PresentationVariant::Run,
-            ANIM_RUN_ATTACK,
-            PresentationVariant::RunAttack,
-            ANIM_RUN_ATTACK,
-            PresentationVariant::RunAttack,
-            false);
-        } else {
-          handleAttacking(
-            ANIM_JUMP,
-            PresentationVariant::Jump,
-            ANIM_JUMP,
-            PresentationVariant::JumpShoot,
-            ANIM_JUMP,
-            PresentationVariant::JumpShoot,
-            true);
-        }
-        break;
-      }
-      case PlayerState::swingWeapon: {
-        const bool isAttack1Anim =
-          obj.currentAnimation == ANIM_RUN_ATTACK || obj.currentAnimation == ANIM_SWING;
-        const bool isAttack2Anim = obj.currentAnimation == ANIM_SWING_2;
-        const bool attack1Done =
-          (obj.currentAnimation == ANIM_RUN_ATTACK && obj.animations[ANIM_RUN_ATTACK].isDone()) ||
-          (obj.currentAnimation == ANIM_SWING && obj.animations[ANIM_SWING].isDone());
-        const bool attack2Done =
-          obj.currentAnimation == ANIM_SWING_2 && obj.animations[ANIM_SWING_2].isDone();
-
-        if (obj.currentAnimation == -1 ||
-            (player.swingStage == PlayerSwingStage::Attack1 && !isAttack1Anim) ||
-            (player.swingStage == PlayerSwingStage::Attack2 && !isAttack2Anim)) {
-          restoreDefaultPlayerState();
-          break;
-        }
-
-        if (player.swingStage == PlayerSwingStage::Attack1 && hasSwingFollowup) {
-          Animation& openerAnim = obj.animations[obj.currentAnimation];
-          if (player.meleePressedThisFrame &&
-              openerAnim.currentFrame() >= openerAnim.getFrameCount() / 2) {
-            player.queuedFollowupSwing = true;
-          }
-        }
-
-        if (attack1Done && player.queuedFollowupSwing && hasSwingFollowup) {
-          if (obj.currentAnimation == ANIM_RUN_ATTACK) {
-            obj.animations[ANIM_RUN_ATTACK].reset();
-          } else if (obj.currentAnimation == ANIM_SWING) {
-            obj.animations[ANIM_SWING].reset();
-          }
-          setAnimationAndPresentation(obj, ANIM_SWING_2, PresentationVariant::Swing2);
-          player.swingStage = PlayerSwingStage::Attack2;
-          player.queuedFollowupSwing = false;
-          player.meleeDamage = 75;
-          widenColliderForSwing(obj);
-        } else if (attack1Done) {
-          if (obj.currentAnimation == ANIM_RUN_ATTACK) {
-            obj.animations[ANIM_RUN_ATTACK].reset();
-          } else if (obj.currentAnimation == ANIM_SWING) {
-            obj.animations[ANIM_SWING].reset();
-          }
-          restoreDefaultPlayerState();
-        } else if (attack2Done) {
-          obj.animations[ANIM_SWING_2].reset();
-          restoreDefaultPlayerState();
-        }
-        break;
-      }
-      case PlayerState::ultimate: {
-        currDirection = 0.0f;
-        obj.velocity.x = 0.0f;
-        expandColliderForUltimate(obj);
-        setPresentation(obj, PresentationVariant::Ultimate);
-        if (obj.currentAnimation == -1) {
-          setAnimationAndPresentation(obj, ANIM_ULTIMATE, PresentationVariant::Ultimate);
-          break;
-        }
-        if (obj.currentAnimation == ANIM_ULTIMATE &&
-            obj.animations[ANIM_ULTIMATE].isDone()) {
-          obj.animations[ANIM_ULTIMATE].reset();
-          restoreDefaultPlayerState();
-        }
-        break;
-      }
-      case PlayerState::hurt: {
-        resetSwingState();
-        player.activeUltimateCastId = 0;
-        obj.collider = baseFacing(obj);
-        if (player.damageTimer.step(deltaTime)) {
-          player.state = PlayerState::idle;
-          setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
-        }
-        break;
-      }
-      case PlayerState::dead: {
-        resetSwingState();
-        player.activeUltimateCastId = 0;
-        obj.collider = baseFacing(obj);
-        setPresentation(obj, PresentationVariant::Die);
-        obj.velocity = glm::vec2(0.0f);
-        if (obj.currentAnimation != -1 && obj.animations[obj.currentAnimation].isDone()) {
-          obj.currentAnimation = -1;
-          obj.spriteFrame = 4;
-          state.currentView = UIManager::GameView::GameOver;
-        }
-        break;
-      }
-    }
-  } else if (obj.objClass == ObjectClass::Projectile) {
-    obj.data.bullet.liveTimer.step(deltaTime);
-    switch (obj.data.bullet.state) {
-      case BulletState::moving: {
-        // TODO: update lifetime of projectiles here
-        setPresentation(obj, PresentationVariant::ProjectileMoving);
-        const bool outsideViewport =
-          hooks.cullProjectilesByViewport &&
-          (obj.position.x - hooks.projectileViewport.x < 0.0f ||
-           obj.position.x - hooks.projectileViewport.x > hooks.projectileViewport.w ||
-           obj.position.y - hooks.projectileViewport.y < 0.0f ||
-           obj.position.y - hooks.projectileViewport.y > hooks.projectileViewport.h);
-
-        if (outsideViewport || obj.data.bullet.liveTimer.isTimedOut()) {
-          obj.data.bullet.liveTimer.reset();
-          obj.data.bullet.state = BulletState::inactive;
-        }
-        break;
-      }
-      case BulletState::colliding:
-        setPresentation(obj, PresentationVariant::ProjectileHit);
-        if (obj.currentAnimation != -1 && obj.animations[obj.currentAnimation].isDone()) {
-          obj.data.bullet.state = BulletState::inactive;
-        }
-        break;
-      case BulletState::inactive:
-        break;
-    }
-  } else if (obj.objClass == ObjectClass::Enemy) {
-    auto& enemy = obj.data.enemy;
-    const bool enemyFrozenByHitStop = stepEnemyHitStop(obj, deltaTime);
-
-    switch (enemy.state) {
-      case EnemyState::idle: {
-        if (enemyFrozenByHitStop) {
-          setAnimation(obj, ANIM_IDLE, false);
-          setPresentation(obj, PresentationVariant::Idle);
-          break;
-        }
-
-        GameObject* target = findClosestLivingPlayer(state, obj);
-        if (!target) {
-          obj.data.enemy.shouldDisplayHP = false;
-          obj.acceleration = glm::vec2(0.0f);
-          obj.velocity.x = 0.0f;
-          setAnimation(obj, ANIM_IDLE, false);
-          setPresentation(obj, PresentationVariant::Idle);
-          break;
-        }
-
-        const glm::vec2 distToPlayer = target->position - obj.position;
-
-        if (std::abs(glm::length(distToPlayer)) < enemy.distanceTrigger) {
-          currDirection = distToPlayer.x < 0.0f ? -1.0f : 1.0f;
-          obj.acceleration = glm::vec2(enemy.accelX, 0.0f);
-          setAnimation(obj, ANIM_RUN, false);
-          setPresentation(obj, PresentationVariant::Run);
-          obj.data.enemy.shouldDisplayHP = true;
-
-
-          if (enemy.attackTimer.step(deltaTime)) {
-            enemy.state = EnemyState::attack;
-            setAnimationAndPresentation(obj, ANIM_SWING, PresentationVariant::Swing);
-            enemy.attackTimer.reset();
-            widenColliderForSwing(obj);
-          }
-        } else {
-          obj.acceleration = glm::vec2(0.0f);
-          obj.velocity.x = 0.0f;
-          setAnimation(obj, ANIM_IDLE, false);
-          setPresentation(obj, PresentationVariant::Idle);
-          obj.data.enemy.shouldDisplayHP = false;
-        }
-        break;
-      }
-      case EnemyState::attack:
-        if (enemyFrozenByHitStop) {
-          break;
-        }
-        if (enemy.idleTimer.step(deltaTime)) {
-          enemy.state = EnemyState::idle;
-          setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
-          enemy.idleTimer.reset();
-          obj.collider = baseFacing(obj);
-        }
-        break;
-      case EnemyState::hurt:
-        if (enemyFrozenByHitStop) {
-          break;
-        }
-        if (enemy.damageTimer.step(deltaTime)) {
-          enemy.state = EnemyState::idle;
-          setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
-          obj.collider = baseFacing(obj);
-        }
-        break;
-      case EnemyState::dead:
-        setPresentation(obj, PresentationVariant::Die);
-        obj.velocity = glm::vec2(0.0f);
-        if (obj.currentAnimation != -1 && obj.animations[obj.currentAnimation].isDone()) {
-          obj.currentAnimation = -1;
-          obj.spriteFrame = 18;
-        }
-        break;
-    }
-  } else if (obj.objClass == ObjectClass::Material) {
-    if (obj.data.material.state == MaterialState::collapsing) {
-      setAnimationAndPresentation(obj, ANIM_COLLECT, PresentationVariant::Collapsing, false);
-      if (obj.currentAnimation != -1 &&
-          obj.currentAnimation == ANIM_COLLECT &&
-          obj.animations[obj.currentAnimation].isDone()) {
-        obj.data.material.state = MaterialState::collected;
-        obj.currentAnimation = -1;
-      }
-    }
+  switch (obj.objClass) {
+    case ObjectClass::Player:
+      currDirection = updatePlayer(state, obj, playerInputs, deltaTime);
+      break;
+    case ObjectClass::Projectile:
+      updateProjectile(obj, hooks, deltaTime);
+      break;
+    case ObjectClass::Enemy:
+      currDirection = updateEnemy(state, obj, deltaTime);
+      break;
+    case ObjectClass::Material:
+      updateMaterial(obj);
+      break;
+    case ObjectClass::Level:
+    case ObjectClass::Portal:
+    case ObjectClass::Background:
+      break;
   }
 
   if (currDirection != 0.0f && obj.direction != currDirection) {
@@ -944,12 +1010,35 @@ void updateDynamicObject(
     obj.direction = currDirection;
   }
 
-  obj.velocity += currDirection * obj.acceleration * deltaTime;
-  if (std::abs(obj.velocity.x) > obj.maxSpeedX) {
-    obj.velocity.x = (obj.velocity.x < 0.0f ? -1.0f : 1.0f) * obj.maxSpeedX;
-  }
-  obj.position += obj.velocity * deltaTime;
+  return currDirection;
+
 }
+
+void updateDynamicObjects(
+  GameState& state,
+  const std::unordered_map<uint32_t, NetGameInput>& playerInputs,
+  const GameplaySimulationHooks& hooks,
+  float deltaTime,
+  std::vector<MotionIntent>& objectMotion,
+  std::vector<MotionIntent>& bulletMotion) {
+  objectMotion.clear();
+  bulletMotion.clear();
+
+  for (auto& layer : state.layers) {
+    for (auto& obj : layer) {
+      if (obj.dynamic) {
+        const float direction = updateDynamicObject(state, obj, playerInputs, hooks, deltaTime);
+        objectMotion.push_back(MotionIntent{&obj, direction});
+      }
+    }
+  }
+
+  for (auto& bullet : state.bullets) {
+    const float direction = updateDynamicObject(state, bullet, playerInputs, hooks, deltaTime);
+    bulletMotion.push_back(MotionIntent{&bullet, direction});
+  }
+}
+
 
 
 } // namespace game_engine

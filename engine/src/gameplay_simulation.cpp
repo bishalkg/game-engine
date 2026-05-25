@@ -41,40 +41,16 @@ void stepGameplaySimulation(
   const std::unordered_map<uint32_t, NetGameInput>& playerInputs,
   float deltaTime,
   const GameplaySimulationHooks& hooks) {
-  for (auto& layer : state.layers) {
-    for (auto& obj : layer) {
-      if (obj.dynamic) {
-        updateDynamicObject(state, obj, playerInputs, hooks, deltaTime);
-      }
-    }
-  }
+  SimulationEvents events;
+  std::vector<MotionIntent> objectMotion;
+  std::vector<MotionIntent> bulletMotion;
 
-  for (auto& bullet : state.bullets) {
-    updateDynamicObject(state, bullet, playerInputs, hooks, deltaTime);
-  }
-
-  for (auto& layer : state.layers) {
-    for (auto& obj : layer) {
-      if (obj.dynamic) {
-        resolveObjectCollisions(state, obj, hooks);
-      }
-    }
-  }
-
-  for (auto& bullet : state.bullets) {
-    resolveBulletCollisions(state, bullet, hooks);
-  }
-
-  state.bullets.erase(
-    std::remove_if(
-      state.bullets.begin(),
-      state.bullets.end(),
-      [](const GameObject& bullet) { return bullet.data.bullet.state == BulletState::inactive; }),
-    state.bullets.end());
-
-  purgeFinishedDeadEnemies(state);
-
-  purgeCollectedMaterials(state);
+  updateDynamicObjects(state, playerInputs, hooks, deltaTime, objectMotion, bulletMotion);
+  const PhysicsStepResult physicsResult =
+    physicsStep(state, objectMotion, bulletMotion, deltaTime);
+  applyGameplayCollisions(state, physicsResult, events);
+  purgeDeadOrCollectedObjects(state);
+  dispatchSimulationEvents(events, hooks);
 }
 
 } // namespace game_engine

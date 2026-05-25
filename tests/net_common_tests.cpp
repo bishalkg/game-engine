@@ -396,6 +396,34 @@ GameObject makeHazard() {
   return hazard;
 }
 
+GameObject makePortal(LevelIndex nextLevel = LevelIndex::LEVEL_2) {
+  GameObject portal(64, 64);
+  portal.id = 20;
+  portal.objClass = ObjectClass::Portal;
+  portal.dynamic = false;
+  portal.position = glm::vec2(0.0f, 0.0f);
+  portal.collider = SDL_FRect{0.0f, 0.0f, 100.0f, 100.0f};
+  portal.baseCollider = portal.collider;
+  portal.data.portal = PortalData(nextLevel);
+  return portal;
+}
+
+GameObject makeMaterial(MaterialType type = MaterialType::coin, uint32_t count = 3) {
+  GameObject material(32, 32);
+  material.id = 21;
+  material.objClass = ObjectClass::Material;
+  material.dynamic = true;
+  material.position = glm::vec2(0.0f, 0.0f);
+  material.collider = SDL_FRect{0.0f, 0.0f, 64.0f, 64.0f};
+  material.baseCollider = material.collider;
+  material.data.material = MaterialData(count, type);
+  material.animations.resize(14);
+  material.animations[ANIM_COLLECT] = Animation(2, 0.1f);
+  material.currentAnimation = -1;
+  material.presentationVariant = PresentationVariant::Present;
+  return material;
+}
+
 void testPassiveUltimateChargeGain() {
   auto state = makeGameplayState();
   state.layers[0].push_back(makeFloor());
@@ -712,6 +740,132 @@ void testDeadEnemyGetsPurgedAfterDeathAnimation() {
   assert(state.layers[1][0].objClass == ObjectClass::Player);
 }
 
+void testMeleeHitEmitsSingleHitEvent() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(12.0f, 100));
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
+  inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .meleePressed = true});
+
+  int hitCount = 0;
+  game_engine::GameObjectKey attacker{};
+  game_engine::GameObjectKey victim{};
+  HitStopStrength strength = HitStopStrength::Heavy;
+  game_engine::GameplaySimulationHooks hooks;
+  hooks.onHitConfirmed =
+    [&](game_engine::GameObjectKey a, game_engine::GameObjectKey v, HitStopStrength s) {
+      ++hitCount;
+      attacker = a;
+      victim = v;
+      strength = s;
+    };
+
+  game_engine::stepGameplaySimulation(state, inputs, 0.05f, hooks);
+
+  const auto& enemy = state.layers[1][1];
+  assert(hitCount == 1);
+  assert(attacker == std::make_pair(ObjectClass::Player, 1u));
+  assert(victim == std::make_pair(ObjectClass::Enemy, 2u));
+  assert(strength == HitStopStrength::Normal);
+  assert(enemy.data.enemy.healthPoints == 90);
+  assert(enemy.data.enemy.hasPendingKnockback);
+}
+
+void testProjectileHitEmitsSingleHitEventAndCollides() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(12.0f, 100));
+  state.bullets.push_back(makeProjectile(9, 12.0f, 20.0f, 1.0f));
+
+  int hitCount = 0;
+  game_engine::GameObjectKey attacker{};
+  game_engine::GameObjectKey victim{};
+  game_engine::GameplaySimulationHooks hooks;
+  hooks.onHitConfirmed =
+    [&](game_engine::GameObjectKey a, game_engine::GameObjectKey v, HitStopStrength s) {
+      ++hitCount;
+      attacker = a;
+      victim = v;
+      assert(s == HitStopStrength::Normal);
+    };
+
+  game_engine::stepGameplaySimulation(state, {}, 0.01f, hooks);
+
+  assert(hitCount == 1);
+  assert(attacker == std::make_pair(ObjectClass::Projectile, 9u));
+  assert(victim == std::make_pair(ObjectClass::Enemy, 2u));
+  assert(state.bullets.size() == 1);
+  assert(state.bullets[0].data.bullet.state == BulletState::colliding);
+  assert(state.layers[1][1].data.enemy.healthPoints == 90);
+}
+
+void testPortalEventRespectsBossBlocking() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makePortal(LevelIndex::LEVEL_3));
+  state.layers[1].push_back(makePlayer());
+
+  int portalCount = 0;
+  LevelIndex triggeredLevel = LevelIndex::LEVEL_1;
+  game_engine::GameplaySimulationHooks hooks;
+  hooks.onPortalTriggered = [&](LevelIndex nextLevel) {
+    ++portalCount;
+    triggeredLevel = nextLevel;
+  };
+
+  game_engine::stepGameplaySimulation(state, {}, 0.0f, hooks);
+  assert(portalCount == 1);
+  assert(triggeredLevel == LevelIndex::LEVEL_3);
+
+  auto blockedState = makeGameplayState();
+  blockedState.layers[0].push_back(makePortal(LevelIndex::LEVEL_3));
+  blockedState.layers[1].push_back(makePlayer());
+  blockedState.layers[1].push_back(makeEnemy(200.0f, 100));
+  blockedState.layers[1].back().data.enemy.isBoss = true;
+
+  portalCount = 0;
+  game_engine::stepGameplaySimulation(blockedState, {}, 0.0f, hooks);
+  assert(portalCount == 0);
+}
+
+void testMaterialPickupAwardsCollapsesAndPurges() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeMaterial(MaterialType::coin, 3));
+
+  game_engine::stepGameplaySimulation(state, {}, 0.0f);
+
+  assert(state.layers[1][0].data.player.inventory.coins.count == 3);
+  assert(state.layers[1][0].data.player.coinPickupCueCount == 1);
+  assert(state.layers[1][1].data.material.state == MaterialState::collapsing);
+  assert(state.layers[1][1].collider.w == 0.0f);
+
+  game_engine::stepGameplaySimulation(state, {}, 0.01f);
+  assert(state.layers[1].size() == 2);
+
+  game_engine::stepGameplaySimulation(state, {}, 0.2f);
+  assert(state.layers[1].size() == 1);
+  assert(state.layers[1][0].objClass == ObjectClass::Player);
+}
+
+void testProjectileIdStableWhenPlayerFires() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
+  inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .fireHeld = true});
+
+  game_engine::stepGameplaySimulation(state, inputs, 0.11f);
+
+  assert(state.bullets.size() == 1);
+  assert(state.bullets[0].id == 11);
+  assert(state.bullets[0].data.bullet.ownerPlayerId == 1);
+}
+
 } // namespace
 
 int main(){
@@ -732,6 +886,11 @@ int main(){
   testFatalEnemyHitDisablesColliderImmediately();
   testDeadEnemyNoLongerBlocksPlayerCollision();
   testDeadEnemyGetsPurgedAfterDeathAnimation();
+  testMeleeHitEmitsSingleHitEvent();
+  testProjectileHitEmitsSingleHitEventAndCollides();
+  testPortalEventRespectsBossBlocking();
+  testMaterialPickupAwardsCollapsesAndPurges();
+  testProjectileIdStableWhenPlayerFires();
   std::cout << "All net_common tests passed\n";
   return 0;
 }
