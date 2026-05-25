@@ -61,6 +61,8 @@ struct SpriteAssetPaths {
 struct SpriteAssets {
   SpriteAssetPaths paths;
   std::unordered_map<int, std::pair<int, float>> animSettings; // ressources::ANIM_IDLE -> {framecount, length}
+  float attack2CooldownSeconds = 0.0f;
+  float attack2RangePadding = 0.0f;
 };
 
 struct CutsceneAsset {

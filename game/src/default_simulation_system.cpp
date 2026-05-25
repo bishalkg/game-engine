@@ -169,6 +169,21 @@ void widenReplicatedColliderForSwing(GameObject& obj) {
 
 }
 
+void widenReplicatedColliderForAttack2(GameObject& obj) {
+  const auto it = ENEMY_CONFIG.find(obj.spriteType);
+  if (it == ENEMY_CONFIG.end()) {
+    widenReplicatedColliderForSwing(obj);
+    return;
+  }
+
+  SDL_FRect c = replicatedBaseFacing(obj);
+  c.w += it->second.attack2RangePadding;
+  if (obj.direction < 0.0f) {
+    c.x -= it->second.attack2RangePadding;
+  }
+  obj.collider = c;
+}
+
 void widenReplicatedColliderForUltimate(GameObject& obj) {
   const float drawW = obj.spritePixelW / obj.drawScale;
   const float drawH = obj.spritePixelH / obj.drawScale;
@@ -194,7 +209,11 @@ void syncReplicatedCollider(GameObject& obj) {
 
   if (obj.objClass == ObjectClass::Enemy) {
     if (obj.data.enemy.state == EnemyState::attack) {
-      widenReplicatedColliderForSwing(obj);
+      if (obj.currentAnimation == ANIM_SWING_2) {
+        widenReplicatedColliderForAttack2(obj);
+      } else {
+        widenReplicatedColliderForSwing(obj);
+      }
     } else {
       obj.collider = replicatedBaseFacing(obj);
     }

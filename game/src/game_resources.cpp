@@ -159,13 +159,17 @@ bool GameResources::loadLevel(
         m_currLevel->loadTexture(state.renderer, spriteAssets.paths.runTex);
       m_currLevel->texCharacterMap[character].texAttack =
         m_currLevel->loadTexture(state.renderer, spriteAssets.paths.attackTex);
+      m_currLevel->texCharacterMap[character].texAttack2 =
+        spriteAssets.paths.attackTex2.empty()
+          ? nullptr
+          : m_currLevel->loadTexture(state.renderer, spriteAssets.paths.attackTex2);
       m_currLevel->texCharacterMap[character].texHit =
         m_currLevel->loadTexture(state.renderer, spriteAssets.paths.hitTex);
       m_currLevel->texCharacterMap[character].texDie =
         m_currLevel->loadTexture(state.renderer, spriteAssets.paths.dieTex);
     }
 
-    m_currLevel->texCharacterMap[character].anims.resize(10);
+    m_currLevel->texCharacterMap[character].anims.resize(ANIM_SWING_2 + 1);
     auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
     m_currLevel->texCharacterMap[character].anims[ANIM_IDLE] =
       Animation(idleFrames, idleSeconds);
@@ -185,6 +189,12 @@ bool GameResources::loadLevel(
     auto [attackFrames, attackSeconds] = spriteAssets.animSettings.at(ANIM_SWING);
     m_currLevel->texCharacterMap[character].anims[ANIM_SWING] =
       Animation(attackFrames, attackSeconds);
+
+    if (spriteAssets.animSettings.contains(ANIM_SWING_2)) {
+      auto [attack2Frames, attack2Seconds] = spriteAssets.animSettings.at(ANIM_SWING_2);
+      m_currLevel->texCharacterMap[character].anims[ANIM_SWING_2] =
+        Animation(attack2Frames, attack2Seconds);
+    }
   }
 
   for (const SpriteType& material : assets.materialTypes) {

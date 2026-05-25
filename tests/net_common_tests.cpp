@@ -332,6 +332,7 @@ void assignEnemyAnimations(GameObject& enemy) {
   enemy.animations[ANIM_IDLE] = Animation(1, 1.0f);
   enemy.animations[ANIM_RUN] = Animation(6, 0.6f);
   enemy.animations[ANIM_SWING] = Animation(5, 0.5f);
+  enemy.animations[ANIM_SWING_2] = Animation(17, 1.2f);
   enemy.animations[ANIM_HIT] = Animation(3, 0.5f);
   enemy.animations[ANIM_DIE] = Animation(5, 0.5f);
   enemy.currentAnimation = ANIM_IDLE;
@@ -400,6 +401,19 @@ GameObject makeEnemy(float x, int health = 100) {
   enemy.data.enemy.healthPoints = health;
   assignEnemyAnimations(enemy);
   return enemy;
+}
+
+GameObject makeBossWerewolf(float x, int health = 300) {
+  GameObject boss = makeEnemy(x, health);
+  boss.spriteType = SpriteType::Boss_Werewolf;
+  boss.drawScale = 1.0f;
+  boss.colliderNorm = {.x = 0.35f, .y = 0.4f, .w = 0.30f, .h = 0.6f};
+  boss.applyScale();
+  boss.data.enemy = EnemyData(true, 0.5f, 1.0f, 1.0f, 50.0f, 100.0f, health);
+  boss.data.enemy.attack2CooldownSeconds = 6.0f;
+  boss.data.enemy.attack2RangePadding = 48.0f;
+  assignEnemyAnimations(boss);
+  return boss;
 }
 
 GameObject makeFloor() {
@@ -1020,6 +1034,103 @@ void testProjectileIdStableWhenPlayerFires() {
   assert(state.bullets[0].data.bullet.ownerPlayerId == 1);
 }
 
+void testBossWerewolfAttack2StateConfigured() {
+  const auto boss = makeBossWerewolf(70.0f);
+  assert(boss.animations[ANIM_SWING_2].getFrameCount() == 17);
+  assert(std::fabs(boss.animations[ANIM_SWING_2].getLength() - 1.2f) < 1e-5f);
+  assert(std::fabs(boss.data.enemy.attack2CooldownSeconds - 6.0f) < 1e-5f);
+  assert(std::fabs(boss.data.enemy.attack2RangePadding - 48.0f) < 1e-5f);
+}
+
+void testBossAttack2DoesNotFireBeforeCooldown() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeBossWerewolf(70.0f));
+
+  game_engine::stepGameplaySimulation(state, {}, 5.9f);
+
+  const auto& boss = state.layers[1][1];
+  assert(boss.data.enemy.state != EnemyState::attack || boss.currentAnimation != ANIM_SWING_2);
+  assert(boss.presentationVariant != PresentationVariant::Swing2);
+}
+
+void testBossAttack2UsesSwing2AndLargerCollider() {
+  auto attack1State = makeGameplayState();
+  attack1State.layers[0].push_back(makeFloor());
+  attack1State.layers[1].push_back(makePlayer());
+  attack1State.layers[1].push_back(makeBossWerewolf(70.0f));
+
+  game_engine::stepGameplaySimulation(attack1State, {}, 1.0f);
+
+  const auto& attack1Boss = attack1State.layers[1][1];
+  assert(attack1Boss.data.enemy.state == EnemyState::attack);
+  assert(attack1Boss.currentAnimation == ANIM_SWING);
+  const float attack1Width = attack1Boss.collider.w;
+
+  auto attack2State = makeGameplayState();
+  attack2State.layers[0].push_back(makeFloor());
+  attack2State.layers[1].push_back(makePlayer());
+  attack2State.layers[1].push_back(makeBossWerewolf(70.0f));
+
+  game_engine::stepGameplaySimulation(attack2State, {}, 6.0f);
+
+  const auto& attack2Boss = attack2State.layers[1][1];
+  assert(attack2Boss.data.enemy.state == EnemyState::attack);
+  assert(attack2Boss.currentAnimation == ANIM_SWING_2);
+  assert(attack2Boss.presentationVariant == PresentationVariant::Swing2);
+  assert(attack2Boss.collider.w > attack1Width);
+}
+
+void testBossAttack2OnlyStartsFromIdle() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeBossWerewolf(70.0f));
+
+  auto& boss = state.layers[1][1];
+  boss.data.enemy.state = EnemyState::attack;
+  boss.currentAnimation = ANIM_SWING;
+  boss.presentationVariant = PresentationVariant::Swing;
+  boss.data.enemy.attack2CooldownElapsedSeconds = 6.0f;
+
+  game_engine::stepGameplaySimulation(state, {}, 0.1f);
+
+  assert(state.layers[1][1].currentAnimation == ANIM_SWING);
+  assert(state.layers[1][1].presentationVariant == PresentationVariant::Swing);
+}
+
+void testBossWithoutAttack2ConfigKeepsAttack1Behavior() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(70.0f, 100));
+  state.layers[1][1].data.enemy.isBoss = true;
+
+  game_engine::stepGameplaySimulation(state, {}, 1.0f);
+
+  const auto& boss = state.layers[1][1];
+  assert(boss.data.enemy.state == EnemyState::attack);
+  assert(boss.currentAnimation == ANIM_SWING);
+  assert(boss.presentationVariant == PresentationVariant::Swing);
+}
+
+void testBossAttack2ReplicatesCurrentAnimationAndPresentation() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeBossWerewolf(70.0f));
+
+  game_engine::stepGameplaySimulation(state, {}, 6.0f);
+
+  const auto snapshot = state.extractNetSnapshot();
+  const auto key = std::make_pair(ObjectClass::Enemy, 2u);
+  assert(snapshot.m_gameObjects.contains(key));
+  const auto& boss = snapshot.m_gameObjects.at(key);
+  assert(boss.currentAnimation == static_cast<uint32_t>(ANIM_SWING_2));
+  assert(boss.presentationVariant == PresentationVariant::Swing2);
+}
+
 } // namespace
 
 int main(){
@@ -1050,6 +1161,12 @@ int main(){
   testPowerupStateExitsAfterAnimationCycle();
   testFlyingStoneUltimateUnlockPersistsThroughProgressionService();
   testProjectileIdStableWhenPlayerFires();
+  testBossWerewolfAttack2StateConfigured();
+  testBossAttack2DoesNotFireBeforeCooldown();
+  testBossAttack2UsesSwing2AndLargerCollider();
+  testBossAttack2OnlyStartsFromIdle();
+  testBossWithoutAttack2ConfigKeepsAttack1Behavior();
+  testBossAttack2ReplicatesCurrentAnimationAndPresentation();
   std::cout << "All net_common tests passed\n";
   return 0;
 }

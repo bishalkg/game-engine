@@ -83,6 +83,10 @@ struct EnemyData {
   float hitStopRemainingSeconds;
   float pendingKnockbackDirection;
   float pendingKnockbackMagnitude;
+  float attack2CooldownSeconds;
+  float attack2RangePadding;
+  float attack2CooldownElapsedSeconds;
+  float activeAttackElapsedSeconds;
   bool hasPendingKnockback;
   bool isBoss = false;
   bool shouldDisplayHP = false; // when he boss is encountered display its HP
@@ -99,6 +103,10 @@ struct EnemyData {
     hitStopRemainingSeconds = 0.0f;
     pendingKnockbackDirection = 0.0f;
     pendingKnockbackMagnitude = 0.0f;
+    attack2CooldownSeconds = 0.0f;
+    attack2RangePadding = 0.0f;
+    attack2CooldownElapsedSeconds = 0.0f;
+    activeAttackElapsedSeconds = 0.0f;
     hasPendingKnockback = false;
   };
 
@@ -111,6 +119,10 @@ struct EnemyData {
     hitStopRemainingSeconds = 0.0f;
     pendingKnockbackDirection = 0.0f;
     pendingKnockbackMagnitude = 0.0f;
+    attack2CooldownSeconds = 0.0f;
+    attack2RangePadding = 0.0f;
+    attack2CooldownElapsedSeconds = 0.0f;
+    activeAttackElapsedSeconds = 0.0f;
     hasPendingKnockback = false;
   };
 };

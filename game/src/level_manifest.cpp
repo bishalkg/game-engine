@@ -256,6 +256,7 @@ const std::unordered_map<SpriteType, SpriteAssets> ENEMY_CONFIG = {
         .walkTex = "data/enemies/Boss_Werewolf/Run.png",  // 11 frames
         .runTex = "data/enemies/Boss_Werewolf/Run.png",
         .attackTex = "data/enemies/Boss_Werewolf/Attack_1.png",
+        .attackTex2 = "data/enemies/Boss_Werewolf/Attack_2.png",
         .hitTex = "data/enemies/Boss_Werewolf/Hurt.png",
         .dieTex = "data/enemies/Boss_Werewolf/Die.png",
       },
@@ -265,7 +266,10 @@ const std::unordered_map<SpriteType, SpriteAssets> ENEMY_CONFIG = {
         { ANIM_HIT, { 9, 0.5f } },
         { ANIM_DIE , { 10, 1.0f } },
         { ANIM_SWING , { 7, 0.5f } },
+        { ANIM_SWING_2 , { 17, 1.2f } },
       },
+      .attack2CooldownSeconds = 6.0f,
+      .attack2RangePadding = 48.0f,
     },
   },
 };

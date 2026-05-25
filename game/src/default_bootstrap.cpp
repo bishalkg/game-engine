@@ -333,6 +333,8 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           float distanceTrigger = 250.0f;
           int healthPoints = 300;
           float maxSpeedX = 15;
+          float attack2CooldownSeconds = 6.0f;
+          float attack2RangePadding = 48.f;
 
           switch (spriteType) {
             case SpriteType::Boss_Werewolf: {
@@ -370,6 +372,8 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           enemy.position.x = centerX - enemy.collider.w * 0.5f;
           enemy.position.y = feetY - (enemy.collider.y + enemy.collider.h);
           enemy.data.enemy = EnemyData(true, damageResetTime, attackResetTime, idleResetTime, accelX, distanceTrigger, healthPoints);
+          enemy.data.enemy.attack2CooldownSeconds = attack2CooldownSeconds;
+          enemy.data.enemy.attack2RangePadding = attack2RangePadding;
           enemy.currentAnimation = res.ANIM_IDLE;
           enemy.presentationVariant = PresentationVariant::Idle;
           enemy.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;

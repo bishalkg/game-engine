@@ -110,6 +110,30 @@ void widenColliderForSwing(GameObject& obj) {
   obj.collider = c;
 }
 
+bool bossHasAttack2Config(const GameObject& obj) {
+  return obj.objClass == ObjectClass::Enemy &&
+         obj.data.enemy.isBoss &&
+         obj.data.enemy.attack2CooldownSeconds > 0.0f &&
+         hasAnimation(obj, ANIM_SWING_2);
+}
+
+float bossAttack2CooldownSeconds(const GameObject& obj) {
+  return obj.data.enemy.attack2CooldownSeconds;
+}
+
+float bossAttack2RangePadding(const GameObject& obj) {
+  return obj.data.enemy.attack2RangePadding;
+}
+
+void widenColliderForAttack2(GameObject& obj) {
+  SDL_FRect c = baseFacing(obj);
+  c.w += bossAttack2RangePadding(obj);
+  if (obj.direction < 0.0f) {
+    c.x -= bossAttack2RangePadding(obj);
+  }
+  obj.collider = c;
+}
+
 void expandColliderForUltimate(GameObject& obj) {
   const float drawW = obj.spritePixelW / obj.drawScale;
   const float drawH = obj.spritePixelH / obj.drawScale;
@@ -928,6 +952,15 @@ float updateEnemy(GameState& state, GameObject& obj, float deltaTime) {
 float currDirection = 0.0f;
 auto& enemy = obj.data.enemy;
 const bool enemyFrozenByHitStop = stepEnemyHitStop(obj, deltaTime);
+const bool hasAttack2 = bossHasAttack2Config(obj);
+const float attack2CooldownSeconds = bossAttack2CooldownSeconds(obj);
+const float attack2RangePadding = bossAttack2RangePadding(obj);
+
+if (hasAttack2 && enemy.state != EnemyState::dead && !enemyFrozenByHitStop) {
+  enemy.attack2CooldownElapsedSeconds = std::min(
+    attack2CooldownSeconds,
+    enemy.attack2CooldownElapsedSeconds + deltaTime);
+}
 
 switch (enemy.state) {
   case EnemyState::idle: {
@@ -948,17 +981,29 @@ switch (enemy.state) {
     }
 
     const glm::vec2 distToPlayer = target->position - obj.position;
+    const float distanceToPlayer = glm::length(distToPlayer);
+    const bool withinAttack1Range = distanceToPlayer < enemy.distanceTrigger;
+    const bool withinAttack2Range = distanceToPlayer < enemy.distanceTrigger + attack2RangePadding;
+    const bool shouldChaseTarget = withinAttack1Range || (hasAttack2 && withinAttack2Range);
 
-    if (std::abs(glm::length(distToPlayer)) < enemy.distanceTrigger) {
+    if (shouldChaseTarget) {
       currDirection = distToPlayer.x < 0.0f ? -1.0f : 1.0f;
       obj.acceleration = glm::vec2(enemy.accelX, 0.0f);
       setAnimation(obj, ANIM_RUN, false);
       setPresentation(obj, PresentationVariant::Run);
       obj.data.enemy.shouldDisplayHP = true;
 
-
-      if (enemy.attackTimer.step(deltaTime)) {
+      if (hasAttack2 &&
+          withinAttack2Range &&
+          enemy.attack2CooldownElapsedSeconds >= attack2CooldownSeconds) {
         enemy.state = EnemyState::attack;
+        enemy.activeAttackElapsedSeconds = 0.0f;
+        enemy.attack2CooldownElapsedSeconds = 0.0f;
+        setAnimationAndPresentation(obj, ANIM_SWING_2, PresentationVariant::Swing2);
+        widenColliderForAttack2(obj);
+      } else if (withinAttack1Range && enemy.attackTimer.step(deltaTime)) {
+        enemy.state = EnemyState::attack;
+        enemy.activeAttackElapsedSeconds = 0.0f;
         setAnimationAndPresentation(obj, ANIM_SWING, PresentationVariant::Swing);
         enemy.attackTimer.reset();
         widenColliderForSwing(obj);
@@ -976,8 +1021,18 @@ switch (enemy.state) {
     if (enemyFrozenByHitStop) {
       break;
     }
-    if (enemy.idleTimer.step(deltaTime)) {
+    enemy.activeAttackElapsedSeconds += deltaTime;
+    if (obj.currentAnimation == ANIM_SWING_2 &&
+        hasAnimation(obj, ANIM_SWING_2) &&
+        enemy.activeAttackElapsedSeconds >= obj.animations[ANIM_SWING_2].getLength()) {
+      obj.animations[ANIM_SWING_2].reset();
       enemy.state = EnemyState::idle;
+      enemy.activeAttackElapsedSeconds = 0.0f;
+      setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
+      obj.collider = baseFacing(obj);
+    } else if (enemy.idleTimer.step(deltaTime)) {
+      enemy.state = EnemyState::idle;
+      enemy.activeAttackElapsedSeconds = 0.0f;
       setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
       enemy.idleTimer.reset();
       obj.collider = baseFacing(obj);
@@ -989,11 +1044,13 @@ switch (enemy.state) {
     }
     if (enemy.damageTimer.step(deltaTime)) {
       enemy.state = EnemyState::idle;
+      enemy.activeAttackElapsedSeconds = 0.0f;
       setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
       obj.collider = baseFacing(obj);
     }
     break;
   case EnemyState::dead:
+    enemy.activeAttackElapsedSeconds = 0.0f;
     setPresentation(obj, PresentationVariant::Die);
     obj.velocity = glm::vec2(0.0f);
     if (obj.currentAnimation != -1 && obj.animations[obj.currentAnimation].isDone()) {
