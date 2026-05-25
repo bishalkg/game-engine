@@ -264,9 +264,9 @@ GameObject buildReplicatedObject(SimContext& ctx, const game_engine::NetGameObje
     if (const EntityResources* entityRes = findEntityResources(ctx.resources, snap.spriteType)) {
       obj.animations = entityRes->anims;
     }
-    obj.drawScale = snap.spriteType == SpriteType::FlyingStone ? 4.0f : 1.0f;
+    obj.drawScale = 1.0f;
     if (snap.spriteType == SpriteType::FlyingStone) {
-      obj.colliderNorm = {.x = 0.1f, .y = 0.0f, .w = 0.8f, .h = 1.0f};
+      obj.colliderNorm = {.x = 0.45f, .y = 0.4375f, .w = 0.1f, .h = 0.125f};
       obj.applyScale();
     } else {
       obj.collider = {.x = 0, .y = 0, .w = obj.spritePixelW, .h = obj.spritePixelH};

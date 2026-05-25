@@ -906,8 +906,8 @@ void testBossDeathSpawnsFlyingStoneOnce() {
       assert(obj.spriteType == SpriteType::FlyingStone);
       assert(obj.spritePixelW == 160.0f);
       assert(obj.spritePixelH == 128.0f);
-      assert(obj.drawScale == 4.0f);
-      assert(closeRect(obj.collider, SDL_FRect{4.0f, 0.0f, 32.0f, 32.0f}));
+      assert(obj.drawScale == 1.0f);
+      assert(closeRect(obj.collider, SDL_FRect{72.0f, 56.0f, 16.0f, 16.0f}));
     }
   }
 
@@ -960,6 +960,15 @@ void testFlyingStonePickupUnlocksPlayersAndPowerup() {
   };
 
   game_engine::stepGameplaySimulation(state, {}, 0.0f, hooks);
+
+  assert(flyingStoneEvents == 0);
+  assert(!state.layers[1][0].data.player.unlockedUltimateOne);
+  assert(!state.layers[1][1].data.player.unlockedUltimateOne);
+  assert(state.layers[1][2].data.material.state == MaterialState::present);
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
+  inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .meleePressed = true});
+  game_engine::stepGameplaySimulation(state, inputs, 0.05f, hooks);
 
   assert(flyingStoneEvents == 1);
   assert(eventLevel == LevelIndex::LEVEL_1);

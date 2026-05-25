@@ -385,8 +385,8 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           material.id = nextDynamicId++;
           material.spriteType = spriteType;
           if (spriteType == SpriteType::FlyingStone) {
-            material.drawScale = 4.0f;
-            material.colliderNorm = {.x = 0.1f, .y = 0.0f, .w = 0.8f, .h = 1.0f};
+            material.drawScale = 1.0f;
+            material.colliderNorm = {.x = 0.45f, .y = 0.4375f, .w = 0.1f, .h = 0.125f};
             material.applyScale();
           }
 

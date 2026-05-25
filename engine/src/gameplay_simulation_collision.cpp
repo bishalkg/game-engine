@@ -10,6 +10,7 @@ namespace {
 constexpr float kFlyingStoneFrameW = 160.0f;
 constexpr float kFlyingStoneFrameH = 128.0f;
 constexpr float kFlyingStoneDrawScale = 1.0f;
+constexpr SDL_FRect kFlyingStoneColliderNorm{0.45f, 0.4375f, 0.1f, 0.125f};
 
 struct FlyingStoneSpawn {
   std::size_t layerIndex = 0;
@@ -37,7 +38,7 @@ GameObject makeFlyingStoneDrop(const GameState& state, const glm::vec2& position
   stone.dynamic = true;
   stone.grounded = true;
   stone.drawScale = kFlyingStoneDrawScale;
-  stone.colliderNorm = SDL_FRect{0.1f, 0.0f, 0.8f, 1.0f};
+  stone.colliderNorm = kFlyingStoneColliderNorm;
   stone.applyScale();
   stone.position = position;
   stone.data.material = MaterialData(1, MaterialType::flyingStone);
@@ -242,10 +243,13 @@ void applyPlayerGameplayCollision(
       break;
     case ObjectClass::Material:
       if (other.data.material.state == MaterialState::present) {
-        if (player.data.player.state == PlayerState::swingWeapon && other.data.material.type == MaterialType::flyingStone) {
+        if (other.data.material.type == MaterialType::flyingStone) {
+          if (player.data.player.state != PlayerState::swingWeapon) {
+            break;
+          }
           unlockFlyingStoneRewardForAllPlayers(state);
           recordFlyingStoneCollected(events, state.currentLevelId);
-        } else if (other.data.material.type != MaterialType::flyingStone) {
+        } else {
           awardMaterialToPlayer(player, other.data.material);
         }
         clearDynamicCollider(other);
