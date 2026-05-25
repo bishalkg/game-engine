@@ -959,6 +959,39 @@ void refreshPresentation(game::GameResources& resources, game_engine::GameState&
   }
 }
 
+void resetActiveBossEncounter(game_engine::GameState& gameState) {
+  for (auto& layer : gameState.layers) {
+    for (auto& obj : layer) {
+      if (obj.objClass != ObjectClass::Enemy ||
+          !obj.data.enemy.isBoss ||
+          !obj.data.enemy.shouldDisplayHP) {
+        continue;
+      }
+
+      auto& boss = obj.data.enemy;
+      boss.healthPoints = boss.maxHealthPoints;
+      boss.shouldDisplayHP = false;
+      boss.state = EnemyState::idle;
+      boss.hitStopRemainingSeconds = 0.0f;
+      boss.pendingKnockbackDirection = 0.0f;
+      boss.pendingKnockbackMagnitude = 0.0f;
+      boss.hasPendingKnockback = false;
+
+      obj.velocity = glm::vec2(0.0f);
+      obj.presentationVariant = PresentationVariant::Idle;
+      obj.spriteFrame = 1;
+      if (ANIM_IDLE >= 0 &&
+          ANIM_IDLE < static_cast<int>(obj.animations.size()) &&
+          obj.animations[ANIM_IDLE].getFrameCount() > 0) {
+        obj.currentAnimation = ANIM_IDLE;
+        obj.animations[ANIM_IDLE].reset();
+      } else {
+        obj.currentAnimation = -1;
+      }
+    }
+  }
+}
+
 class DefaultSimulationSystem final : public game::ISimulationSystem {
 public:
   void update(
@@ -1123,11 +1156,13 @@ public:
       ctx.gameState.currentView == UIManager::GameView::GameOver &&
       previousView != UIManager::GameView::GameOver;
     if (enteredGameOver) {
+      resetActiveBossEncounter(ctx.gameState);
       engine.setAudioSoundtrack(
         resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr,
         0);
     } else if (ctx.gameState.currentView != UIManager::GameView::GameOver &&
                ctx.gameState.evaluateGameOver()) {
+      resetActiveBossEncounter(ctx.gameState);
       engine.setAudioSoundtrack(
         resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr,
         0);

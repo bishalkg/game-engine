@@ -172,6 +172,8 @@ public:
     snaps.multiplayerStatus.clear();
     snaps.showGameplayHud = false;
     snaps.gameplayHud = UIManager::GameplayHudSnapshot{};
+    snaps.currBossHP = 0;
+    snaps.maxBossHP = 0;
 
     // set player values for UI view -> TODO helpers
     if (gameState.playerLayer >= 0 &&
@@ -206,7 +208,6 @@ public:
       snaps.playerUltimate = 0;
       snaps.playerUltimateReady = false;
       snaps.maxPlayerHP = 0;
-      snaps.currBossHP = 0;
     }
     snaps.gameplayHud.coinCountHudAnim = resources.coinCountUIAnim.get();
     snaps.gameplayHud.gemCountHudAnim = resources.gemCountUIAnim.get();
