@@ -1036,11 +1036,12 @@ namespace UIManager {
   }
 
   void UI_Manager::drawStatusBars(const UISnapshots& snaps) {
-      drawPlayerBar("HP", snaps.playerHP, IM_COL32(0, 200, 0, 255), 10.0f, 10.0f, 150, 24, false);
-      drawPlayerBar("Mana", snaps.playerMana, IM_COL32(186, 154, 255, 255), 10.0f, 56.0f, 150, 24, false);
+      drawPlayerBar("HP", snaps.playerHP, snaps.maxPlayerHP, IM_COL32(0, 200, 0, 255), 10.0f, 10.0f, 150, 24, false);
+      drawPlayerBar("Mana", snaps.playerMana, snaps.maxPlayerMana, IM_COL32(186, 154, 255, 255), 10.0f, 56.0f, 150, 24, false);
       drawPlayerBar(
         "Ultimate",
         snaps.playerUltimate,
+        snaps.maxUltimatePoints,
         IM_COL32(220, 40, 40, 255),
         10.0f,
         102.0f,
@@ -1048,20 +1049,22 @@ namespace UIManager {
         snaps.playerUltimateReady);
 
 
-
+      // TODO
       // get effective bottom, and effective left edge. do
       // x = bottom left edge - 100
       // y = effective bottom - 50
       // 360 x 640 ?
-      // TODO : idk why width is acting weird and being truncated
-      drawPlayerBar("Boss Health", snaps.currBossHP, IM_COL32(220, 50, 50, 255), 450.0f, 600.0f, 200, 40, false);
-
-      // drawBossStatusBar("Boss Health", snaps.bossHP, IM_COL32(186, 154, 255, 255), 0, false);
+      if (snaps.currBossHP > 0) {
+        drawPlayerBar("Boss Health", snaps.currBossHP, snaps.maxBossHP, IM_COL32(220, 50, 50, 255), 400.0f, 620.0f, 500, 40, false);
+        float hpFrac = static_cast<float>(snaps.currBossHP) / static_cast<float>(snaps.maxBossHP);
+      }
   }
+
 
   void UI_Manager::drawPlayerBar(
     const std::string& name,
     int value,
+    int maxValue,
     ImU32 color,
     float xOffset,
     float yOffset,
@@ -1069,11 +1072,31 @@ namespace UIManager {
     bool highlightReady) {
       ImGui::SetNextWindowPos(ImVec2(xOffset, yOffset));
       const std::string windowName = "HUD##" + name;
+
+      // ImGui::BeginGroup();
       ImGui::Begin(windowName.c_str(), nullptr, ImGuiWindowFlags_NoTitleBar |
                                             ImGuiWindowFlags_NoBackground |
                                             ImGuiWindowFlags_NoResize |
-                                            ImGuiWindowFlags_NoMove);
-      float hpFrac = static_cast<float>(value) / 100.0f; // 0..1
+                                            ImGuiWindowFlags_NoMove |
+                                            ImGuiWindowFlags_NoScrollbar |
+                                          ImGuiWindowFlags_AlwaysAutoResize);
+
+         // 3. Draw the label text. We manually calculate its width.
+    // We don't use the full sizeX here; we reserve a fixed width for the text label.
+    // const float LABEL_WIDTH = 100.0f; // Define a fixed width for the text area
+    // ImGui::TextUnformatted(name.c_str());
+
+    // 4. Force the next item (the progress bar) to appear on the same line
+    // ImGui::SameLine();
+
+    // 5. Set the width of the progress bar to take up the *remaining* space,
+    // or at least, keep it within the overall sizeX constraint.
+    // The width parameter should be the difference: sizeX - LABEL_WIDTH
+    // float bar_width_calc = std::max(0.0f, (float)sizeX*2 - LABEL_WIDTH);
+
+    // ImGui::SetNextItemWidth(bar_width_calc);
+
+      float hpFrac = static_cast<float>(value) / static_cast<float>(maxValue); // 0..1
       ImGui::TextUnformatted(name.c_str());
       ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color); // green , ImGuiCol_ResizeGrip, ImGuiCol_PlotHistogram
       const bool flashHighlight =
@@ -1101,6 +1124,7 @@ namespace UIManager {
       ImGui::PopStyleVar(2);
       ImGui::PopStyleColor(2);
       ImGui::End();
+      // ImGui::EndGroup();
   }
 
   void drawBossStatusBar(const std::string& name,

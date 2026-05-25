@@ -849,6 +849,7 @@ void updateDynamicObject(
 
         GameObject* target = findClosestLivingPlayer(state, obj);
         if (!target) {
+          obj.data.enemy.shouldDisplayHP = false;
           obj.acceleration = glm::vec2(0.0f);
           obj.velocity.x = 0.0f;
           setAnimation(obj, ANIM_IDLE, false);
@@ -863,6 +864,7 @@ void updateDynamicObject(
           obj.acceleration = glm::vec2(enemy.accelX, 0.0f);
           setAnimation(obj, ANIM_RUN, false);
           setPresentation(obj, PresentationVariant::Run);
+          obj.data.enemy.shouldDisplayHP = true;
 
 
           if (enemy.attackTimer.step(deltaTime)) {
@@ -876,6 +878,7 @@ void updateDynamicObject(
           obj.velocity.x = 0.0f;
           setAnimation(obj, ANIM_IDLE, false);
           setPresentation(obj, PresentationVariant::Idle);
+          obj.data.enemy.shouldDisplayHP = false;
         }
         break;
       }

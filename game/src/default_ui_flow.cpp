@@ -180,6 +180,9 @@ public:
         gameState.playerIndex < static_cast<int>(gameState.layers[gameState.playerLayer].size())) {
       auto& player = engine.getPlayer();
       snaps.playerHP = player.data.player.healthPoints;
+      snaps.maxPlayerHP = player.data.player.maxHealthPoints;
+      snaps.maxPlayerMana = player.data.player.maxManaPoints;
+      snaps.maxUltimatePoints = player.data.player.maxUltimatePoints;
       snaps.playerMana = player.data.player.manaPoints;
       snaps.playerUltimate = player.data.player.ultimatePoints;
       snaps.playerUltimateReady =
@@ -191,19 +194,18 @@ public:
       snaps.gameplayHud.playerAttackUps = player.data.player.inventory.attackUps.count;
       snaps.gameplayHud.playerDefenceUps = player.data.player.inventory.defenceUps.count;
 
-
       GameObject* boss = engine.getActiveCurrBoss();
       if (boss) {
         snaps.currBossHP = boss->data.enemy.healthPoints;
+        snaps.maxBossHP = boss->data.enemy.maxHealthPoints;
       }
-
-
 
     } else {
       snaps.playerHP = 0;
       snaps.playerMana = 0;
       snaps.playerUltimate = 0;
       snaps.playerUltimateReady = false;
+      snaps.maxPlayerHP = 0;
       snaps.currBossHP = 0;
     }
     snaps.gameplayHud.coinCountHudAnim = resources.coinCountUIAnim.get();

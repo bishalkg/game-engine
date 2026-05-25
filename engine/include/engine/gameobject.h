@@ -75,6 +75,7 @@ struct EnemyData {
   Timer attackTimer; // how long enemy is in attack state
   Timer idleTimer; // ??
   int healthPoints;
+  int maxHealthPoints;
   int srcH, srcW;
   uint32_t lastUltimatePlayerId;
   uint32_t lastUltimateCastId;
@@ -101,6 +102,7 @@ struct EnemyData {
   };
 
   EnemyData(bool isBoss, float damageResetTime, float attackResetTime, float idleResetTime, float accelX, float distanceTrigger, int healthPoints): isBoss(isBoss), healthPoints(healthPoints), accelX(accelX), distanceTrigger(distanceTrigger), state(EnemyState::idle), damageTimer(damageResetTime), attackTimer(attackResetTime), idleTimer(idleResetTime) {
+    maxHealthPoints = healthPoints;
     srcH = 0;
     srcW = 0;
     lastUltimatePlayerId = 0;
