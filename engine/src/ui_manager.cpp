@@ -1048,14 +1048,30 @@ namespace UIManager {
         150, 24,
         snaps.playerUltimateReady);
 
+      if (snaps.currBossHP > 0) {
+
+        float scaledXOffset = 400.0f;
+        float scaledYOffset = 620.0f;
+
+        // 3) Scale & offset to current window (letterboxed)
+        int outW, outH;
+        SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
+        float scale  = std::min(outW / 640.0f, outH / 360.0f);
+
+        // scaledXOffset   = (outW - 640.0f * scale) * 0.5f;
+        // scaledYOffset   = (outH - 360.0f * scale) * 0.5f;
+        scaledXOffset   = (outW - 640.0f * scale) * 0.5f;
+        scaledYOffset   = (outH - 360.0f * scale) * 0.5f;
+
+        std::printf("scXOff %f, Yoff %f, scale %f, outW %d, outH %d \n", scaledXOffset, scaledYOffset,scale, outH, outW);
 
       // TODO
       // get effective bottom, and effective left edge. do
       // x = bottom left edge - 100
       // y = effective bottom - 50
       // 360 x 640 ?
-      if (snaps.currBossHP > 0) {
-        drawPlayerBar("Boss Health", snaps.currBossHP, snaps.maxBossHP, IM_COL32(220, 50, 50, 255), 400.0f, 620.0f, 500, 40, false);
+
+        drawPlayerBar("Boss Health", snaps.currBossHP, snaps.maxBossHP, IM_COL32(220, 50, 50, 255), scaledXOffset, scaledYOffset, 500, 40, false);
         float hpFrac = static_cast<float>(snaps.currBossHP) / static_cast<float>(snaps.maxBossHP);
       }
   }
@@ -1081,24 +1097,9 @@ namespace UIManager {
                                             ImGuiWindowFlags_NoScrollbar |
                                           ImGuiWindowFlags_AlwaysAutoResize);
 
-         // 3. Draw the label text. We manually calculate its width.
-    // We don't use the full sizeX here; we reserve a fixed width for the text label.
-    // const float LABEL_WIDTH = 100.0f; // Define a fixed width for the text area
-    // ImGui::TextUnformatted(name.c_str());
-
-    // 4. Force the next item (the progress bar) to appear on the same line
-    // ImGui::SameLine();
-
-    // 5. Set the width of the progress bar to take up the *remaining* space,
-    // or at least, keep it within the overall sizeX constraint.
-    // The width parameter should be the difference: sizeX - LABEL_WIDTH
-    // float bar_width_calc = std::max(0.0f, (float)sizeX*2 - LABEL_WIDTH);
-
-    // ImGui::SetNextItemWidth(bar_width_calc);
-
       float hpFrac = static_cast<float>(value) / static_cast<float>(maxValue); // 0..1
       ImGui::TextUnformatted(name.c_str());
-      ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color); // green , ImGuiCol_ResizeGrip, ImGuiCol_PlotHistogram
+      ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
       const bool flashHighlight =
         highlightReady && std::fmod(ImGui::GetTime(), 1.0) < 0.5;
       ImGui::PushStyleColor(
@@ -1124,7 +1125,6 @@ namespace UIManager {
       ImGui::PopStyleVar(2);
       ImGui::PopStyleColor(2);
       ImGui::End();
-      // ImGui::EndGroup();
   }
 
   void drawBossStatusBar(const std::string& name,
