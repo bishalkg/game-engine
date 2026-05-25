@@ -1048,32 +1048,49 @@ namespace UIManager {
         150, 24,
         snaps.playerUltimateReady);
 
-      if (snaps.currBossHP > 0) {
+      drawBossStatusBar(snaps);
+  }
 
-        float scaledXOffset = 400.0f;
-        float scaledYOffset = 620.0f;
-
-        // 3) Scale & offset to current window (letterboxed)
-        int outW, outH;
-        SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
-        float scale  = std::min(outW / 640.0f, outH / 360.0f);
-
-        // scaledXOffset   = (outW - 640.0f * scale) * 0.5f;
-        // scaledYOffset   = (outH - 360.0f * scale) * 0.5f;
-        scaledXOffset   = (outW - 640.0f * scale) * 0.5f;
-        scaledYOffset   = (outH - 360.0f * scale) * 0.5f;
-
-        std::printf("scXOff %f, Yoff %f, scale %f, outW %d, outH %d \n", scaledXOffset, scaledYOffset,scale, outH, outW);
-
-      // TODO
-      // get effective bottom, and effective left edge. do
-      // x = bottom left edge - 100
-      // y = effective bottom - 50
-      // 360 x 640 ?
-
-        drawPlayerBar("Boss Health", snaps.currBossHP, snaps.maxBossHP, IM_COL32(220, 50, 50, 255), scaledXOffset, scaledYOffset, 500, 40, false);
-        float hpFrac = static_cast<float>(snaps.currBossHP) / static_cast<float>(snaps.maxBossHP);
+  void UI_Manager::drawBossStatusBar(const UISnapshots& snaps) {
+      if (snaps.currBossHP <= 0 || snaps.maxBossHP <= 0) {
+        return;
       }
+
+      int outW = 0;
+      int outH = 0;
+      SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
+      if (outW <= 0 || outH <= 0) {
+        return;
+      }
+
+      constexpr float refW = 640.0f;
+      constexpr float refH = 360.0f;
+      const float scale = std::min(outW / refW, outH / refH);
+      const float gameW = refW * scale;
+      const float gameH = refH * scale;
+      const float gameLeft = (outW - gameW) * 0.5f;
+      const float gameTop = (outH - gameH) * 0.5f;
+
+      const float barW = std::min(gameW * 0.6f, 460.0f * scale);
+      const float barH = std::max(20.0f, 20.0f * scale);
+      const float bottomMargin = 320.0f * scale;
+      const float labelHeight = ImGui::GetTextLineHeightWithSpacing();
+      const float windowPaddingY = 8.0f;
+      const float estimatedWindowH = labelHeight + barH + windowPaddingY;
+
+      const float x = gameLeft + (gameW - barW) * 0.5f;
+      const float y = gameTop + gameH - bottomMargin - estimatedWindowH;
+
+      drawPlayerBar(
+        "Boss Health",
+        snaps.currBossHP,
+        snaps.maxBossHP,
+        IM_COL32(220, 50, 50, 255),
+        x,
+        y,
+        static_cast<int>(barW),
+        static_cast<int>(barH),
+        false);
   }
 
 
@@ -1126,17 +1143,6 @@ namespace UIManager {
       ImGui::PopStyleColor(2);
       ImGui::End();
   }
-
-  void drawBossStatusBar(const std::string& name,
-    int value,
-    ImU32 color,
-    float xOffset,
-    float yOffset) {
-
-
-  }
-
-
 
   UIActions UI_Manager::getRenderViewActions(GameView view, const UISnapshots& snaps, ImGuiWindowFlags flags, const game_engine::SDLState& sdlState) {
       ImGuiIO& io = ImGui::GetIO();

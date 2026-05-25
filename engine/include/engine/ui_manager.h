@@ -214,6 +214,7 @@ namespace UIManager {
         int sizeX, int sizeY,
         bool highlightReady);
       void drawStatusBars(const UISnapshots& snaps);
+      void drawBossStatusBar(const UISnapshots& snaps);
 
       void drawGameplayHudCounts(const game_engine::SDLState& sdlState);
 
