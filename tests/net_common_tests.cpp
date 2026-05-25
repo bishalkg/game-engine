@@ -7,6 +7,7 @@
 #include "engine/gameobject.h"
 #include "engine/gameplay_simulation.h"
 #include "engine/net/game_net_common.h"
+#include "game/progression_service.h"
 
 namespace {
 
@@ -57,6 +58,9 @@ bool equalSnapshots(const game_engine::NetGameObjectSnapshot& a,
     case ObjectClass::Enemy:
       return a.data.enemy.state == b.data.enemy.state &&
              a.data.enemy.healthPoints == b.data.enemy.healthPoints &&
+             a.data.enemy.maxHealthPoints == b.data.enemy.maxHealthPoints &&
+             a.data.enemy.isBoss == b.data.enemy.isBoss &&
+             a.data.enemy.shouldDisplayHP == b.data.enemy.shouldDisplayHP &&
              a.data.enemy.srcH == b.data.enemy.srcH &&
              a.data.enemy.srcW == b.data.enemy.srcW &&
              std::fabs(a.data.enemy.hitStopRemainingSeconds - b.data.enemy.hitStopRemainingSeconds) < 1e-5f &&
@@ -76,8 +80,11 @@ bool equalSnapshots(const game_engine::NetGameObjectSnapshot& a,
              a.data.level.dst.h == b.data.level.dst.h;
     case ObjectClass::Portal:
     case ObjectClass::Background:
-    case ObjectClass::Material:
       return true;
+    case ObjectClass::Material:
+      return a.data.material.count == b.data.material.count &&
+             a.data.material.state == b.data.material.state &&
+             a.data.material.type == b.data.material.type;
   }
   return false;
 }
@@ -108,13 +115,13 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   player.currentAnimation = 1;
   player.animElapsed = 0.33f;
   player.animTimedOut = false;
-  player.presentationVariant = PresentationVariant::Run;
+  player.presentationVariant = PresentationVariant::Powerup;
   player.direction = 1.f;
   player.maxSpeedX = 10.f;
   player.grounded = true;
   player.shouldFlash = false;
   new (&player.data.player) PlayerData{};
-  player.data.player.state = PlayerState::running;
+  player.data.player.state = PlayerState::powerup;
   player.data.player.healthPoints = 88;
   player.data.player.maxHealthPoints = 120;
   player.data.player.manaPoints = 42;
@@ -154,6 +161,9 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   new (&enemy.data.enemy) EnemyData{};
   enemy.data.enemy.state = EnemyState::hurt;
   enemy.data.enemy.healthPoints = 50;
+  enemy.data.enemy.maxHealthPoints = 300;
+  enemy.data.enemy.isBoss = true;
+  enemy.data.enemy.shouldDisplayHP = true;
   enemy.data.enemy.srcH = 16;
   enemy.data.enemy.srcW = 24;
   enemy.data.enemy.hitStopRemainingSeconds = 0.05f;
@@ -204,6 +214,27 @@ game_engine::NetGameStateSnapshot makeSnapshot() {
   level.data.level.src = SDL_FRect{1.f, 2.f, 3.f, 4.f};
   level.data.level.dst = SDL_FRect{5.f, 6.f, 7.f, 8.f};
   snap.m_gameObjects[{level.type, level.id}] = level;
+
+  NetGameObjectSnapshot material{};
+  material.id = 5;
+  material.layer = 1;
+  material.type = ObjectClass::Material;
+  material.spriteType = SpriteType::FlyingStone;
+  material.position = {9.f, 10.f};
+  material.velocity = {0.f, 0.f};
+  material.acceleration = {0.f, 0.f};
+  material.spriteFrame = 4;
+  material.currentAnimation = ANIM_COLLECT;
+  material.animElapsed = 0.1f;
+  material.animTimedOut = false;
+  material.presentationVariant = PresentationVariant::Collapsing;
+  material.direction = 0.f;
+  material.maxSpeedX = 0.f;
+  material.grounded = true;
+  material.shouldFlash = false;
+  new (&material.data.material) MaterialData(1, MaterialType::flyingStone);
+  material.data.material.state = MaterialState::collapsing;
+  snap.m_gameObjects[{material.type, material.id}] = material;
 
   return snap;
 }
@@ -279,7 +310,7 @@ game_engine::GameState makeGameplayState() {
 }
 
 void assignPlayerAnimations(GameObject& player) {
-  player.animations.resize(13);
+  player.animations.resize(ANIM_POWERUP + 1);
   player.animations[ANIM_IDLE] = Animation(1, 1.0f);
   player.animations[ANIM_RUN] = Animation(8, 0.6f);
   player.animations[ANIM_SHOOT] = Animation(7, 0.4f);
@@ -291,6 +322,7 @@ void assignPlayerAnimations(GameObject& player) {
   player.animations[ANIM_RUN_ATTACK] = Animation(6, 0.4f);
   player.animations[ANIM_SWING_2] = Animation(12, 0.7f);
   player.animations[ANIM_ULTIMATE] = Animation(34, 1.7f);
+  player.animations[ANIM_POWERUP] = Animation(13, 0.9f);
   player.currentAnimation = ANIM_IDLE;
   player.presentationVariant = PresentationVariant::Idle;
 }
@@ -412,6 +444,7 @@ GameObject makeMaterial(MaterialType type = MaterialType::coin, uint32_t count =
   GameObject material(32, 32);
   material.id = 21;
   material.objClass = ObjectClass::Material;
+  material.spriteType = type == MaterialType::flyingStone ? SpriteType::FlyingStone : SpriteType::Coin;
   material.dynamic = true;
   material.position = glm::vec2(0.0f, 0.0f);
   material.collider = SDL_FRect{0.0f, 0.0f, 64.0f, 64.0f};
@@ -851,6 +884,118 @@ void testMaterialPickupAwardsCollapsesAndPurges() {
   assert(state.layers[1][0].objClass == ObjectClass::Player);
 }
 
+void testBossDeathSpawnsFlyingStoneOnce() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(12.0f, 10));
+  state.layers[1][1].data.enemy.isBoss = true;
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
+  inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .meleePressed = true});
+
+  game_engine::stepGameplaySimulation(state, inputs, 0.05f);
+
+  int flyingStoneCount = 0;
+  uint32_t flyingStoneId = 0;
+  for (const auto& obj : state.layers[1]) {
+    if (obj.objClass == ObjectClass::Material &&
+        obj.data.material.type == MaterialType::flyingStone) {
+      ++flyingStoneCount;
+      flyingStoneId = obj.id;
+      assert(obj.spriteType == SpriteType::FlyingStone);
+      assert(obj.spritePixelW == 160.0f);
+      assert(obj.spritePixelH == 128.0f);
+      assert(obj.drawScale == 4.0f);
+      assert(closeRect(obj.collider, SDL_FRect{4.0f, 0.0f, 32.0f, 32.0f}));
+    }
+  }
+
+  assert(flyingStoneCount == 1);
+  assert(flyingStoneId == 11);
+
+  inputs[1].meleePressed = false;
+  game_engine::stepGameplaySimulation(state, inputs, 0.05f);
+
+  flyingStoneCount = 0;
+  for (const auto& obj : state.layers[1]) {
+    if (obj.objClass == ObjectClass::Material &&
+        obj.data.material.type == MaterialType::flyingStone) {
+      ++flyingStoneCount;
+    }
+  }
+  assert(flyingStoneCount == 1);
+}
+
+void testNonBossDeathDoesNotSpawnFlyingStone() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(12.0f, 10));
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
+  inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .meleePressed = true});
+
+  game_engine::stepGameplaySimulation(state, inputs, 0.05f);
+
+  for (const auto& obj : state.layers[1]) {
+    assert(obj.objClass != ObjectClass::Material ||
+           obj.data.material.type != MaterialType::flyingStone);
+  }
+}
+
+void testFlyingStonePickupUnlocksPlayersAndPowerup() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makePlayer(3));
+  state.layers[1].push_back(makeMaterial(MaterialType::flyingStone, 1));
+
+  int flyingStoneEvents = 0;
+  LevelIndex eventLevel = LevelIndex::LEVEL_5;
+  game_engine::GameplaySimulationHooks hooks;
+  hooks.onFlyingStoneCollected = [&](LevelIndex levelId) {
+    ++flyingStoneEvents;
+    eventLevel = levelId;
+  };
+
+  game_engine::stepGameplaySimulation(state, {}, 0.0f, hooks);
+
+  assert(flyingStoneEvents == 1);
+  assert(eventLevel == LevelIndex::LEVEL_1);
+  assert(state.layers[1][0].data.player.unlockedUltimateOne);
+  assert(state.layers[1][1].data.player.unlockedUltimateOne);
+  assert(state.layers[1][0].data.player.state == PlayerState::powerup);
+  assert(state.layers[1][1].data.player.state == PlayerState::powerup);
+  assert(state.layers[1][2].data.material.state == MaterialState::collapsing);
+  assert(state.layers[1][2].collider.w == 0.0f);
+}
+
+void testPowerupStateExitsAfterAnimationCycle() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1][0].data.player.state = PlayerState::powerup;
+  state.layers[1][0].currentAnimation = ANIM_POWERUP;
+  state.layers[1][0].presentationVariant = PresentationVariant::Powerup;
+
+  game_engine::stepGameplaySimulation(state, {}, 1.0f);
+
+  assert(state.layers[1][0].data.player.state != PlayerState::powerup);
+  assert(state.layers[1][0].presentationVariant != PresentationVariant::Powerup);
+}
+
+void testFlyingStoneUltimateUnlockPersistsThroughProgressionService() {
+  game::ProgressionService progService;
+  progService.unlockUltimateForChar(SpriteType::Player_Bonkfather, 1);
+
+  const auto bytes = progService.serealizeSaveState();
+  game::ProgressionService decoded;
+  decoded.deserealizeSaveState(bytes);
+
+  assert(decoded.isUltUnlockedForChar(SpriteType::Player_Bonkfather, 1));
+}
+
 void testProjectileIdStableWhenPlayerFires() {
   auto state = makeGameplayState();
   state.layers[0].push_back(makeFloor());
@@ -890,6 +1035,11 @@ int main(){
   testProjectileHitEmitsSingleHitEventAndCollides();
   testPortalEventRespectsBossBlocking();
   testMaterialPickupAwardsCollapsesAndPurges();
+  testBossDeathSpawnsFlyingStoneOnce();
+  testNonBossDeathDoesNotSpawnFlyingStone();
+  testFlyingStonePickupUnlocksPlayersAndPowerup();
+  testPowerupStateExitsAfterAnimationCycle();
+  testFlyingStoneUltimateUnlockPersistsThroughProgressionService();
   testProjectileIdStableWhenPlayerFires();
   std::cout << "All net_common tests passed\n";
   return 0;

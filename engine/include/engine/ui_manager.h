@@ -117,6 +117,7 @@ namespace UIManager {
     int maxBossHP;
     int playerUltimate;
     bool playerUltimateReady = false;
+    bool playerUltimateUnlocked = false;
     ImVec2 winDims;
     float deltaTime;
     float currVolume;

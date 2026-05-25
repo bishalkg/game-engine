@@ -30,7 +30,7 @@ namespace game {
 struct EntityResources {
   SDL_Texture *texIdle{}, *texWalk{}, *texRun{}, *texSlide{}, *texAttack{}, *texJump{}, *texHit{},
     *texDie{}, *texShoot{}, *texRunShoot{}, *texSlideShoot{}, *texRunAttack{}, *texAttack2{},
-    *texUltimate{};
+    *texUltimate{}, *texPowerup{};
   std::vector<Animation> anims;
 };
 
@@ -46,6 +46,8 @@ struct Level {
   std::vector<UIManager::Cutscene> cutscenes;
   MIX_Audio* backgroundAudio{nullptr};
   MIX_Track* backgroundTrack{nullptr};
+  MIX_Audio* bossAudio{nullptr};
+  MIX_Track* bossTrack{nullptr};
   MIX_Audio* gameOverAudio{nullptr};
   MIX_Track* gameOverAudioTrack{nullptr};
   MIX_Audio* audioStep{nullptr};

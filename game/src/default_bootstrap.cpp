@@ -371,17 +371,24 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
 
         if (obj.type == "Material") {
           SpriteType spriteType = MATERIAL_NAME_TO_SPRITE_TYPE.at(obj.name);
+          const int materialSpriteW = spriteType == SpriteType::FlyingStone ? 160 : 16;
+          const int materialSpriteH = spriteType == SpriteType::FlyingStone ? 128 : 16;
           GameObject material = createObject(
             1,
             1,
             res.m_currLevel->texCharacterMap.at(spriteType).texIdle, // texCharMap also has materials
             ObjectClass::Material,
-            16,
-            16,
+            materialSpriteH,
+            materialSpriteW,
             0,
             0);
           material.id = nextDynamicId++;
           material.spriteType = spriteType;
+          if (spriteType == SpriteType::FlyingStone) {
+            material.drawScale = 4.0f;
+            material.colliderNorm = {.x = 0.1f, .y = 0.0f, .w = 0.8f, .h = 1.0f};
+            material.applyScale();
+          }
 
           float feetY = objStartingPos.y;
           float centerX = objStartingPos.x;
@@ -396,6 +403,9 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
               break;
             case SpriteType::Gem:
               materialType = MaterialType::gem;
+              break;
+            case SpriteType::FlyingStone:
+              materialType = MaterialType::flyingStone;
               break;
             default:
               break;
@@ -439,11 +449,11 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
               break;
             case SpriteType::Player_Marie:
               ultOneUnlocked = pserv.isUltUnlockedForChar(SpriteType::Player_Marie, 1);
-              // TODO populate ultOneUnlocked from progressionService
-
+              player.colliderNorm = {.x = 0.30f, .y = 0.5f, .w = wFrac, .h = 0.5f};
+              player.drawScale = 2.0f;
+              break;
             case SpriteType::Player_Bonkfather:
               ultOneUnlocked = pserv.isUltUnlockedForChar(SpriteType::Player_Bonkfather, 1);
-              // TODO populate ultOneUnlocked from progressionService
               player.colliderNorm = {.x = 0.30f, .y = 0.5f, .w = wFrac, .h = 0.5f};
               player.drawScale = 2.0f;
               break;
@@ -534,9 +544,6 @@ bool switchToLevel(
 
   if (oldLevel == LevelIndex::LEVEL_1 && levelId == LevelIndex::LEVEL_2) {
     progService.markLevelComplete(oldLevel);
-
-    // TODO testing only, this will be triggered by if the boss has been defeated
-    progService.unlockUltimateForChar(gameState.selectedPlayerSprite, 1);
 
     if (preservedPlayerState.has_value()) {
       progService.updatePlayerInventory(preservedPlayerState->inventory);

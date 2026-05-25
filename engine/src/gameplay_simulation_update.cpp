@@ -242,6 +242,7 @@ void awardMaterialToPlayer(GameObject& player, const MaterialData& material) {
     case MaterialType::attackUp:
     case MaterialType::defenceUp:
     case MaterialType::none:
+    case MaterialType::flyingStone:
       break;
   }
 }
@@ -258,6 +259,14 @@ void recordPortalTriggered(SimulationEvents& events, LevelIndex nextLevel) {
   events.portalTriggered.push_back(SimulationPortalTriggeredEvent{nextLevel});
 }
 
+void recordFlyingStoneCollected(SimulationEvents& events, LevelIndex levelId) {
+  events.flyingStoneCollected.push_back(SimulationFlyingStoneCollectedEvent{levelId});
+}
+
+void recordBossDefeated(SimulationEvents& events, GameObject& boss) {
+  events.bossDefeated.push_back(SimulationBossDefeatedEvent{&boss});
+}
+
 void dispatchSimulationEvents(
   const SimulationEvents& events,
   const GameplaySimulationHooks& hooks) {
@@ -270,6 +279,33 @@ void dispatchSimulationEvents(
   if (hooks.onPortalTriggered) {
     for (const auto& event : events.portalTriggered) {
       hooks.onPortalTriggered(event.nextLevel);
+    }
+  }
+
+  if (hooks.onFlyingStoneCollected) {
+    for (const auto& event : events.flyingStoneCollected) {
+      hooks.onFlyingStoneCollected(event.levelId);
+    }
+  }
+}
+
+void unlockFlyingStoneRewardForAllPlayers(GameState& state) {
+  for (auto& layer : state.layers) {
+    for (auto& obj : layer) {
+      if (obj.objClass != ObjectClass::Player || obj.data.player.state == PlayerState::dead) {
+        continue;
+      }
+
+      obj.data.player.unlockedUltimateOne = true;
+      obj.data.player.swingStage = PlayerSwingStage::None;
+      obj.data.player.queuedFollowupSwing = false;
+      obj.data.player.activeUltimateCastId = 0;
+      if (hasAnimation(obj, ANIM_POWERUP)) {
+        obj.data.player.state = PlayerState::powerup;
+        obj.velocity.x = 0.0f;
+        obj.collider = baseFacing(obj);
+        setAnimationAndPresentation(obj, ANIM_POWERUP, PresentationVariant::Powerup);
+      }
     }
   }
 }
@@ -375,6 +411,7 @@ DamageEnemyResult damageEnemy(
   if (enemy.data.enemy.healthPoints <= 0) {
     enemy.data.enemy.healthPoints = 0;
     enemy.data.enemy.state = EnemyState::dead;
+    enemy.data.enemy.shouldDisplayHP = false;
     setAnimationAndPresentation(enemy, ANIM_DIE, PresentationVariant::Die);
     enemy.velocity = glm::vec2(0.0f);
     clearEnemyPendingKnockback(enemy);
@@ -493,13 +530,16 @@ const bool hasSwingFollowup =
   obj.animations[ANIM_SWING_2].getFrameCount() > 0;
 const bool wantSwing = player.meleePressedThisFrame;
 const bool canSwing =
-  player.state != PlayerState::swingWeapon && player.state != PlayerState::ultimate;
+  player.state != PlayerState::swingWeapon &&
+  player.state != PlayerState::ultimate &&
+  player.state != PlayerState::powerup;
 const bool canStartUltimate =
   player.unlockedUltimateOne &&
   player.ultimatePressedThisFrame &&
   player.state != PlayerState::dead &&
   player.state != PlayerState::hurt &&
   player.state != PlayerState::ultimate &&
+  player.state != PlayerState::powerup &&
   player.ultimatePoints >= player.maxUltimatePoints &&
   hasAnimation(obj, ANIM_ULTIMATE);
 
@@ -801,6 +841,24 @@ switch (player.state) {
     if (obj.currentAnimation == ANIM_ULTIMATE &&
         obj.animations[ANIM_ULTIMATE].isDone()) {
       obj.animations[ANIM_ULTIMATE].reset();
+      restoreDefaultPlayerState();
+    }
+    break;
+  }
+  case PlayerState::powerup: {
+    resetSwingState();
+    player.activeUltimateCastId = 0;
+    currDirection = 0.0f;
+    obj.velocity.x = 0.0f;
+    obj.collider = baseFacing(obj);
+    setPresentation(obj, PresentationVariant::Powerup);
+    if (obj.currentAnimation == -1 || !hasAnimation(obj, ANIM_POWERUP)) {
+      restoreDefaultPlayerState();
+      break;
+    }
+    if (obj.currentAnimation == ANIM_POWERUP &&
+        obj.animations[ANIM_POWERUP].isDone()) {
+      obj.animations[ANIM_POWERUP].reset();
       restoreDefaultPlayerState();
     }
     break;

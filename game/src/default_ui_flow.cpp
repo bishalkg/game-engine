@@ -187,6 +187,7 @@ public:
       snaps.maxUltimatePoints = player.data.player.maxUltimatePoints;
       snaps.playerMana = player.data.player.manaPoints;
       snaps.playerUltimate = player.data.player.ultimatePoints;
+      snaps.playerUltimateUnlocked = player.data.player.unlockedUltimateOne;
       snaps.playerUltimateReady =
         player.data.player.ultimatePoints >= player.data.player.maxUltimatePoints;
       snaps.gameplayHud.playerCoins = player.data.player.inventory.coins.count;
@@ -207,6 +208,7 @@ public:
       snaps.playerMana = 0;
       snaps.playerUltimate = 0;
       snaps.playerUltimateReady = false;
+      snaps.playerUltimateUnlocked = false;
       snaps.maxPlayerHP = 0;
     }
     snaps.gameplayHud.coinCountHudAnim = resources.coinCountUIAnim.get();
@@ -323,8 +325,10 @@ public:
     auto& gameState = engine.getGameState();
 
     if (actions.stopBackgroundTrack) {
-      engine.stopAudioSoundtrack(
-        resources.m_currLevel ? resources.m_currLevel->backgroundTrack : nullptr);
+      if (resources.m_currLevel) {
+        engine.stopAudioSoundtrack(resources.m_currLevel->backgroundTrack);
+        engine.stopAudioSoundtrack(resources.m_currLevel->bossTrack);
+      }
     }
     if (actions.stopGameOverSoundTrack) {
       engine.stopAudioSoundtrack(

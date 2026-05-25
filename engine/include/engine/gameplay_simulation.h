@@ -26,6 +26,7 @@ struct GameplayImpactTuning {
 struct GameplaySimulationHooks {
   std::function<void(LevelIndex)> onPortalTriggered;
   std::function<void(GameObjectKey, GameObjectKey, HitStopStrength)> onHitConfirmed;
+  std::function<void(LevelIndex)> onFlyingStoneCollected;
   bool cullProjectilesByViewport = false;
   SDL_FRect projectileViewport{};
 };

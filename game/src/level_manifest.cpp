@@ -20,6 +20,7 @@ const std::unordered_map<std::string, SpriteType> CHARACTER_NAME_TO_SPRITE_TYPE 
 const std::unordered_map<std::string, SpriteType> MATERIAL_NAME_TO_SPRITE_TYPE = {
   {"Coin", SpriteType::Coin},
   {"Gem", SpriteType::Gem},
+  {"FlyingStone", SpriteType::FlyingStone},
 };
 
 
@@ -106,6 +107,7 @@ const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
         .slideShootTex = "data/players/Marie/Attack_1.png",
         .jumpTex = "data/players/Marie/Jump_2.png",
         .ultimateTex = "data/players/Marie/Ultimate_1.png",
+        .powerupTex = "data/players/Marie/Powerup.png",
       },
       .animSettings = {
         { ANIM_IDLE,{ 6, 0.8f } },
@@ -120,6 +122,7 @@ const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
         { ANIM_SWING_2 , { 12, 0.7f } },
         { ANIM_RUN_ATTACK , { 6, 0.4f } },
         { ANIM_ULTIMATE , { 42, 1.7f } },
+        { ANIM_POWERUP , { 13, 0.9f } },
       },
     },
   },
@@ -141,6 +144,7 @@ const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
         .slideShootTex = "data/players/Bonkfather/Attack_1.png",
         .jumpTex = "data/players/Bonkfather/Jump.png",
         .ultimateTex = "data/players/Bonkfather/Ultimate_1.png",
+        .powerupTex = "data/players/Bonkfather/Powerup.png",
       },
       .animSettings = {
         { ANIM_IDLE,{ 9, 0.8f } },
@@ -155,6 +159,7 @@ const std::unordered_map<SpriteType, SpriteAssets> SPRITE_CONFIG = {
         { ANIM_SWING_2 , { 17, 0.8f } },
         { ANIM_RUN_ATTACK , { 10, 0.4f } },
         { ANIM_ULTIMATE , { 34, 1.7f } },
+        { ANIM_POWERUP , { 13, 0.9f } },
       },
     },
   },
@@ -291,6 +296,19 @@ const std::unordered_map<SpriteType, SpriteAssets> MATERIAL_CONFIG = {
       },
     },
   },
+  {
+    SpriteType::FlyingStone,
+    SpriteAssets{
+      .paths = SpriteAssetPaths{
+        .idleTex = "data/tiles/Flying_stone.png",
+        .dieTex = "data/tiles/Flying_stone.png"
+      },
+      .animSettings = {
+        { ANIM_IDLE,{ 6, 1.0f } },
+        { ANIM_COLLECT, { 6, 0.25f} },
+      },
+    },
+  },
 };
 
 const char* DEFAULT_GAME_OVER_SOUND = "data/audio/game_over.mp3";
@@ -308,10 +326,11 @@ const std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
       // .backgroundAudioPath = "data/audio/Level_1_Forest_Outside_Castle.wav",
       // .backgroundAudioPath = "data/audio/1. Dawn of Blades.wav",
       .backgroundAudioPath = "data/audio/1. Dawn of Blades.wav",
+      .bossAudioPath = "data/audio/3. Twilight March.wav",
       .gameOverAudioPath = DEFAULT_GAME_OVER_SOUND,
       .stepAudioPath = "data/audio/movement/step_grass.wav",
       .enemyTypes = { SpriteType::Minotaur_1,  SpriteType::Skeleton_Warrior, SpriteType::Boss_Evil_Clown},
-      .materialTypes = { SpriteType::Gem, SpriteType::Coin},
+      .materialTypes = { SpriteType::Gem, SpriteType::Coin, SpriteType::FlyingStone},
       .cutsceneData = {
         {
             .texPath = "data/cutscenes/text_test_3.png",
@@ -356,10 +375,11 @@ const std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
       .background2PathName = "background4a",
       .background1PathName = "background4b",
       .backgroundAudioPath = "data/audio/11. Whispers in the Fog.wav",
+      .bossAudioPath = "",
       .gameOverAudioPath = DEFAULT_GAME_OVER_SOUND,
       .stepAudioPath = "data/audio/movement/step_rock.wav",
       .enemyTypes = { SpriteType::Red_Werewolf,  SpriteType::Skeleton_Warrior,SpriteType::Skeleton_Pikeman },
-      .materialTypes = { SpriteType::Gem, SpriteType::Coin},
+      .materialTypes = { SpriteType::Gem, SpriteType::Coin, SpriteType::FlyingStone},
     },
   },
 };

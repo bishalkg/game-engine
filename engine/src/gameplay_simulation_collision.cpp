@@ -7,6 +7,69 @@
 namespace game_engine {
 namespace {
 
+constexpr float kFlyingStoneFrameW = 160.0f;
+constexpr float kFlyingStoneFrameH = 128.0f;
+constexpr float kFlyingStoneDrawScale = 1.0f;
+
+struct FlyingStoneSpawn {
+  std::size_t layerIndex = 0;
+  uint32_t bossId = 0;
+  glm::vec2 position{0.0f, 0.0f};
+};
+
+bool findObjectLayer(GameState& state, const GameObject& target, std::size_t& layerIndex) {
+  for (std::size_t idx = 0; idx < state.layers.size(); ++idx) {
+    for (const auto& obj : state.layers[idx]) {
+      if (&obj == &target) {
+        layerIndex = idx;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+GameObject makeFlyingStoneDrop(const GameState& state, const glm::vec2& position) {
+  GameObject stone(kFlyingStoneFrameH, kFlyingStoneFrameW);
+  stone.id = nextDynamicId(state);
+  stone.objClass = ObjectClass::Material;
+  stone.spriteType = SpriteType::FlyingStone;
+  stone.dynamic = true;
+  stone.grounded = true;
+  stone.drawScale = kFlyingStoneDrawScale;
+  stone.colliderNorm = SDL_FRect{0.1f, 0.0f, 0.8f, 1.0f};
+  stone.applyScale();
+  stone.position = position;
+  stone.data.material = MaterialData(1, MaterialType::flyingStone);
+  stone.currentAnimation = ANIM_IDLE;
+  stone.presentationVariant = PresentationVariant::Idle;
+  stone.animations.resize(ANIM_COLLECT + 1);
+  stone.animations[ANIM_IDLE] = Animation(6, 1.0f);
+  stone.animations[ANIM_COLLECT] = Animation(6, 0.25f);
+  stone.spriteFrame = 1;
+  return stone;
+}
+
+glm::vec2 flyingStonePositionForBoss(const GameObject& boss) {
+  const float bossDrawW = boss.spritePixelW / boss.drawScale;
+  const float bossDrawH = boss.spritePixelH / boss.drawScale;
+  const float stoneDrawW = kFlyingStoneFrameW / kFlyingStoneDrawScale;
+  const float stoneDrawH = kFlyingStoneFrameH / kFlyingStoneDrawScale;
+  return glm::vec2{
+    boss.position.x + bossDrawW * 0.5f - stoneDrawW * 0.5f,
+    boss.position.y + bossDrawH * 0.5f - stoneDrawH * 0.5f,
+  };
+}
+
+void recordBossDefeatedIfNeeded(
+  SimulationEvents& events,
+  GameObject& enemy,
+  const DamageEnemyResult& result) {
+  if (result.killed && enemy.data.enemy.isBoss) {
+    recordBossDefeated(events, enemy);
+  }
+}
+
 void defaultSolidResponse(GameObject& obj, const SDL_FRect& overlap) {
   if (overlap.w < overlap.h) {
     if (obj.velocity.x > 0.0f) {
@@ -146,6 +209,7 @@ void applyPlayerGameplayCollision(
                 {other.objClass, other.id},
                 HitStopStrength::Heavy);
             }
+            recordBossDefeatedIfNeeded(events, other, result);
           }
         } else if (player.data.player.state == PlayerState::swingWeapon) {
           const DamageEnemyResult result = damageEnemy(
@@ -165,6 +229,7 @@ void applyPlayerGameplayCollision(
               {other.objClass, other.id},
               HitStopStrength::Normal);
           }
+          recordBossDefeatedIfNeeded(events, other, result);
         } else {
           player.velocity = glm::vec2(50.0f, 0.0f) * -player.direction;
         }
@@ -177,7 +242,12 @@ void applyPlayerGameplayCollision(
       break;
     case ObjectClass::Material:
       if (other.data.material.state == MaterialState::present) {
-        awardMaterialToPlayer(player, other.data.material);
+        if (player.data.player.state == PlayerState::swingWeapon && other.data.material.type == MaterialType::flyingStone) {
+          unlockFlyingStoneRewardForAllPlayers(state);
+          recordFlyingStoneCollected(events, state.currentLevelId);
+        } else if (other.data.material.type != MaterialType::flyingStone) {
+          awardMaterialToPlayer(player, other.data.material);
+        }
         clearDynamicCollider(other);
         other.data.material.state = MaterialState::collapsing;
         switch (other.data.material.type) {
@@ -186,6 +256,8 @@ void applyPlayerGameplayCollision(
             break;
           case MaterialType::gem:
             ++player.data.player.gemPickupCueCount;
+            break;
+          case MaterialType::flyingStone:
             break;
           default:
             break;
@@ -229,6 +301,7 @@ void applyProjectileGameplayCollision(
         {other.objClass, other.id},
         HitStopStrength::Normal);
     }
+    recordBossDefeatedIfNeeded(events, other, result);
   }
 
   if (!passthrough) {
@@ -243,7 +316,8 @@ void applyEnemyGameplayCollision(
   GameState& state,
   GameObject& enemy,
   GameObject& other,
-  const SDL_FRect& overlap) {
+  const SDL_FRect& overlap,
+  SimulationEvents& events) {
   switch (other.objClass) {
     case ObjectClass::Player:
       if (enemy.data.enemy.state == EnemyState::attack) {
@@ -252,7 +326,8 @@ void applyEnemyGameplayCollision(
       break;
     case ObjectClass::Level:
       if (other.data.level.isHazard) {
-        damageEnemy(state, enemy, 50);
+        const DamageEnemyResult result = damageEnemy(state, enemy, 50);
+        recordBossDefeatedIfNeeded(events, enemy, result);
       }
       break;
     case ObjectClass::Enemy:
@@ -415,13 +490,48 @@ void applyGameplayCollisions(
         applyProjectileGameplayCollision(state, subject, other, collision.overlap, events);
         break;
       case ObjectClass::Enemy:
-        applyEnemyGameplayCollision(state, subject, other, collision.overlap);
+        applyEnemyGameplayCollision(state, subject, other, collision.overlap, events);
         break;
       case ObjectClass::Level:
       case ObjectClass::Portal:
       case ObjectClass::Background:
       case ObjectClass::Material:
         break;
+    }
+  }
+}
+
+void spawnFlyingStoneDrops(GameState& state, const SimulationEvents& events) {
+  std::vector<FlyingStoneSpawn> spawns;
+  for (const auto& event : events.bossDefeated) {
+    if (!event.boss) {
+      continue;
+    }
+
+    bool duplicate = false;
+    for (const auto& spawn : spawns) {
+      if (spawn.bossId == event.boss->id) {
+        duplicate = true;
+        break;
+      }
+    }
+    if (duplicate) {
+      continue;
+    }
+
+    std::size_t layerIndex = 0;
+    if (findObjectLayer(state, *event.boss, layerIndex)) {
+      spawns.push_back(FlyingStoneSpawn{
+        layerIndex,
+        event.boss->id,
+        flyingStonePositionForBoss(*event.boss),
+      });
+    }
+  }
+
+  for (const auto& spawn : spawns) {
+    if (spawn.layerIndex < state.layers.size()) {
+      state.layers[spawn.layerIndex].push_back(makeFlyingStoneDrop(state, spawn.position));
     }
   }
 }

@@ -23,9 +23,19 @@ struct SimulationPortalTriggeredEvent {
   LevelIndex nextLevel{LevelIndex::LEVEL_1};
 };
 
+struct SimulationFlyingStoneCollectedEvent {
+  LevelIndex levelId{LevelIndex::LEVEL_1};
+};
+
+struct SimulationBossDefeatedEvent {
+  GameObject* boss = nullptr;
+};
+
 struct SimulationEvents {
   std::vector<SimulationHitConfirmedEvent> hitConfirmed;
   std::vector<SimulationPortalTriggeredEvent> portalTriggered;
+  std::vector<SimulationFlyingStoneCollectedEvent> flyingStoneCollected;
+  std::vector<SimulationBossDefeatedEvent> bossDefeated;
 };
 
 struct MotionIntent {
@@ -82,9 +92,13 @@ void recordHitConfirmed(
   GameObjectKey victim,
   HitStopStrength strength);
 void recordPortalTriggered(SimulationEvents& events, LevelIndex nextLevel);
+void recordFlyingStoneCollected(SimulationEvents& events, LevelIndex levelId);
+void recordBossDefeated(SimulationEvents& events, GameObject& boss);
 void dispatchSimulationEvents(
   const SimulationEvents& events,
   const GameplaySimulationHooks& hooks);
+void unlockFlyingStoneRewardForAllPlayers(GameState& state);
+void spawnFlyingStoneDrops(GameState& state, const SimulationEvents& events);
 void clearEnemyPendingKnockback(GameObject& enemy);
 void queueEnemyHitImpact(
   GameObject& enemy,

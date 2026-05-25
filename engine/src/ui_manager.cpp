@@ -1038,15 +1038,17 @@ namespace UIManager {
   void UI_Manager::drawStatusBars(const UISnapshots& snaps) {
       drawPlayerBar("HP", snaps.playerHP, snaps.maxPlayerHP, IM_COL32(0, 200, 0, 255), 10.0f, 10.0f, 150, 24, false);
       drawPlayerBar("Mana", snaps.playerMana, snaps.maxPlayerMana, IM_COL32(186, 154, 255, 255), 10.0f, 56.0f, 150, 24, false);
-      drawPlayerBar(
-        "Ultimate",
-        snaps.playerUltimate,
-        snaps.maxUltimatePoints,
-        IM_COL32(220, 40, 40, 255),
-        10.0f,
-        102.0f,
-        150, 24,
-        snaps.playerUltimateReady);
+      if (snaps.playerUltimateUnlocked) {
+        drawPlayerBar(
+          "Ultimate",
+          snaps.playerUltimate,
+          snaps.maxUltimatePoints,
+          IM_COL32(220, 40, 40, 255),
+          10.0f,
+          102.0f,
+          150, 24,
+          snaps.playerUltimateReady);
+      }
 
       drawBossStatusBar(snaps);
   }

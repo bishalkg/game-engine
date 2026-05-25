@@ -6,7 +6,7 @@
 #include "engine/level_types.h"
 
 enum class PlayerState: std::uint32_t {
-  idle, running, jumping, swingWeapon, ultimate, hurt, dead
+  idle, running, jumping, swingWeapon, ultimate, hurt, dead, powerup
 };
 
 enum class PlayerSwingStage: std::uint32_t {
@@ -24,7 +24,7 @@ enum class EnemyState: std::uint32_t {
 };
 
 enum class MaterialType: std::uint32_t {
-  none, coin, gem, healthPotion, manaPotion, attackUp, defenceUp
+  none, coin, gem, healthPotion, manaPotion, attackUp, defenceUp, flyingStone
 };
 
 enum class MaterialState: std::uint32_t {
@@ -50,6 +50,7 @@ enum class PresentationVariant : std::uint32_t {
   ProjectileHit,
   Present,
   Collapsing,
+  Powerup,
   // Collected
 };
 

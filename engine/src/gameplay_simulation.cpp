@@ -49,6 +49,7 @@ void stepGameplaySimulation(
   const PhysicsStepResult physicsResult =
     physicsStep(state, objectMotion, bulletMotion, deltaTime);
   applyGameplayCollisions(state, physicsResult, events);
+  spawnFlyingStoneDrops(state, events);
   purgeDeadOrCollectedObjects(state);
   dispatchSimulationEvents(events, hooks);
 }

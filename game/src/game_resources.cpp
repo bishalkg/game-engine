@@ -30,7 +30,7 @@ GameResources::~GameResources() {
 std::pair<MIX_Audio*, MIX_Track*> GameResources::loadAudioChunk(
   const std::string& filepath,
   float gain) {
-  if (!mixer) {
+  if (!mixer || filepath.empty()) {
     return {nullptr, nullptr};
   }
 
@@ -244,9 +244,13 @@ bool GameResources::loadLevel(
         spriteAssets.paths.ultimateTex.empty()
           ? nullptr
           : m_currLevel->loadTexture(state.renderer, spriteAssets.paths.ultimateTex);
+      m_currLevel->texCharacterMap[character].texPowerup =
+        spriteAssets.paths.powerupTex.empty()
+          ? nullptr
+          : m_currLevel->loadTexture(state.renderer, spriteAssets.paths.powerupTex);
     }
 
-    m_currLevel->texCharacterMap[character].anims.resize(13);
+    m_currLevel->texCharacterMap[character].anims.resize(ANIM_POWERUP + 1);
     auto [idleFrames, idleSeconds] = spriteAssets.animSettings.at(ANIM_IDLE);
     m_currLevel->texCharacterMap[character].anims[ANIM_IDLE] =
       Animation(idleFrames, idleSeconds);
@@ -295,6 +299,12 @@ bool GameResources::loadLevel(
         Animation(ultimateFrames, ultimateSeconds);
     }
 
+    if (spriteAssets.animSettings.contains(ANIM_POWERUP)) {
+      auto [powerupFrames, powerupSeconds] = spriteAssets.animSettings.at(ANIM_POWERUP);
+      m_currLevel->texCharacterMap[character].anims[ANIM_POWERUP] =
+        Animation(powerupFrames, powerupSeconds);
+    }
+
     auto [jumpFrames, jumpSeconds] = spriteAssets.animSettings.at(ANIM_JUMP);
     m_currLevel->texCharacterMap[character].anims[ANIM_JUMP] =
       Animation(jumpFrames, jumpSeconds, 2);
@@ -302,12 +312,16 @@ bool GameResources::loadLevel(
 
   auto [backgroundAudio, backgroundTrack] =
     loadAudioChunk(assets.backgroundAudioPath, masterAudioGain);
+  auto [bossAudio, bossTrack] =
+    loadAudioChunk(assets.bossAudioPath, masterAudioGain);
   auto [gameOverAudio, gameOverAudioTrack] =
     loadAudioChunk(assets.gameOverAudioPath, masterAudioGain);
   auto [stepAudio, stepTrack] = loadAudioChunk(assets.stepAudioPath, masterAudioGain);
 
   m_currLevel->backgroundAudio = backgroundAudio;
   m_currLevel->backgroundTrack = backgroundTrack;
+  m_currLevel->bossAudio = bossAudio;
+  m_currLevel->bossTrack = bossTrack;
   m_currLevel->gameOverAudio = gameOverAudio;
   m_currLevel->gameOverAudioTrack = gameOverAudioTrack;
   m_currLevel->stepTrack = stepTrack;
@@ -324,6 +338,9 @@ void GameResources::unloadLevel() {
   if (m_currLevel->backgroundTrack && MIX_TrackPlaying(m_currLevel->backgroundTrack)) {
     MIX_StopTrack(m_currLevel->backgroundTrack, 0);
   }
+  if (m_currLevel->bossTrack && MIX_TrackPlaying(m_currLevel->bossTrack)) {
+    MIX_StopTrack(m_currLevel->bossTrack, 0);
+  }
   if (m_currLevel->gameOverAudioTrack && MIX_TrackPlaying(m_currLevel->gameOverAudioTrack)) {
     MIX_StopTrack(m_currLevel->gameOverAudioTrack, 0);
   }
@@ -333,6 +350,12 @@ void GameResources::unloadLevel() {
   }
   if (m_currLevel->backgroundAudio) {
     MIX_DestroyAudio(m_currLevel->backgroundAudio);
+  }
+  if (m_currLevel->bossTrack) {
+    MIX_DestroyTrack(m_currLevel->bossTrack);
+  }
+  if (m_currLevel->bossAudio) {
+    MIX_DestroyAudio(m_currLevel->bossAudio);
   }
   if (m_currLevel->gameOverAudioTrack) {
     MIX_DestroyTrack(m_currLevel->gameOverAudioTrack);

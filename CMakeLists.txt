@@ -106,6 +106,7 @@ target_compile_features(game PRIVATE cxx_std_23)
 
 add_executable(net_common_tests
   tests/net_common_tests.cpp
+  game/src/progression_service.cpp
 )
 
 target_include_directories(net_common_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

@@ -124,6 +124,8 @@ SDL_Texture* pickEntityTexture(
         return entityRes.texUltimate;
       }
       return entityRes.texAttack2 ? entityRes.texAttack2 : entityRes.texAttack;
+    case PresentationVariant::Powerup:
+      return entityRes.texPowerup ? entityRes.texPowerup : entityRes.texIdle;
     case PresentationVariant::Idle:
     default:
       break;
@@ -255,8 +257,21 @@ GameObject buildReplicatedObject(SimContext& ctx, const game_engine::NetGameObje
   obj.dynamic = true;
 
   if (snap.type == ObjectClass::Material) {
-    obj.drawScale = 1.0f;
-    obj.collider = {.x = 0, .y = 0, .w = obj.spritePixelW, .h = obj.spritePixelW};
+    if (snap.spriteType == SpriteType::FlyingStone) {
+      obj.spritePixelW = 160;
+      obj.spritePixelH = 128;
+    }
+    if (const EntityResources* entityRes = findEntityResources(ctx.resources, snap.spriteType)) {
+      obj.animations = entityRes->anims;
+    }
+    obj.drawScale = snap.spriteType == SpriteType::FlyingStone ? 4.0f : 1.0f;
+    if (snap.spriteType == SpriteType::FlyingStone) {
+      obj.colliderNorm = {.x = 0.1f, .y = 0.0f, .w = 0.8f, .h = 1.0f};
+      obj.applyScale();
+    } else {
+      obj.collider = {.x = 0, .y = 0, .w = obj.spritePixelW, .h = obj.spritePixelH};
+      obj.baseCollider = obj.collider;
+    }
     obj.data.material = snap.data.material;
   } else if (snap.type == ObjectClass::Projectile) {
     obj.drawScale = 2.0f;
@@ -615,6 +630,53 @@ void persistInventorySnapshot(
   game::ProgressionService& progService,
   const Inventory& inventory) {
   progService.updatePlayerInventory(inventory);
+  engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
+}
+
+bool localUltimateOneUnlocked(game_engine::GameState& gameState, uint32_t playerID) {
+  if (GameObject* player = findPlayerById(gameState, playerID)) {
+    return player->data.player.unlockedUltimateOne;
+  }
+  return false;
+}
+
+void applyLevelUnlockForFlyingStone(
+  LevelIndex levelId,
+  game_engine::GameState& gameState,
+  game::ProgressionService& progService) {
+  switch (levelId) {
+    case LevelIndex::LEVEL_1:
+      for (auto& layer : gameState.layers) {
+        for (auto& obj : layer) {
+          if (obj.objClass != ObjectClass::Player) {
+            continue;
+          }
+          obj.data.player.unlockedUltimateOne = true;
+          progService.unlockUltimateForChar(obj.spriteType, 1);
+        }
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+void persistLocalUltimateUnlockIfNew(
+  game_engine::Engine& engine,
+  game_engine::GameState& gameState,
+  game::ProgressionService& progService,
+  uint32_t playerID,
+  bool wasUnlocked) {
+  if (wasUnlocked) {
+    return;
+  }
+
+  GameObject* player = findPlayerById(gameState, playerID);
+  if (!player || !player->data.player.unlockedUltimateOne) {
+    return;
+  }
+
+  progService.unlockUltimateForChar(player->spriteType, 1);
   engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
 }
 
@@ -992,6 +1054,39 @@ void resetActiveBossEncounter(game_engine::GameState& gameState) {
   }
 }
 
+bool hasActiveBossHealthBar(const game_engine::GameState& gameState) {
+  for (const auto& layer : gameState.layers) {
+    for (const auto& obj : layer) {
+      if (obj.objClass == ObjectClass::Enemy &&
+          obj.data.enemy.isBoss &&
+          obj.data.enemy.shouldDisplayHP) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+void updateLevelCombatSoundtrack(
+  game_engine::Engine& engine,
+  game::GameResources& resources,
+  const game_engine::GameState& gameState) {
+  if (!resources.m_currLevel) {
+    return;
+  }
+
+  const bool bossActive = hasActiveBossHealthBar(gameState) &&
+                          resources.m_currLevel->bossTrack != nullptr;
+  if (bossActive) {
+    engine.stopAudioSoundtrack(resources.m_currLevel->backgroundTrack);
+    engine.setAudioSoundtrack(resources.m_currLevel->bossTrack);
+    return;
+  }
+
+  engine.stopAudioSoundtrack(resources.m_currLevel->bossTrack);
+  engine.setAudioSoundtrack(resources.m_currLevel->backgroundTrack);
+}
+
 class DefaultSimulationSystem final : public game::ISimulationSystem {
 public:
   void update(
@@ -1015,8 +1110,7 @@ public:
             ctx.gameState.currentView == UIManager::GameView::PauseMenu ||
             ctx.gameState.currentView == UIManager::GameView::ShopMenu ||
             ctx.gameState.currentView == UIManager::GameView::InventoryMenu) {
-          engine.setAudioSoundtrack(
-            resources.m_currLevel ? resources.m_currLevel->backgroundTrack : nullptr);
+          updateLevelCombatSoundtrack(engine, resources, ctx.gameState);
         }
         playLocalMultiplayerFireAudio(engine, resources, ctx.gameState, deltaTime);
 
@@ -1059,6 +1153,8 @@ public:
         const AudioStateMap before = captureAudioState(ctx.gameState);
         const InventorySnapshot beforeInventory =
           captureInventorySnapshot(ctx.gameState, client->GetPlayerID());
+        const bool localUltimateWasUnlocked =
+          localUltimateOneUnlocked(ctx.gameState, client->GetPlayerID());
 
         // read in GameState snapshot coming from the server
         client->ProcessServerMessages();
@@ -1075,6 +1171,12 @@ public:
             latestSnapshot,
             client->GetPlayerID(),
             forceFullRebuild);
+          persistLocalUltimateUnlockIfNew(
+            ctx.engine,
+            ctx.gameState,
+            ctx.progService,
+            client->GetPlayerID(),
+            localUltimateWasUnlocked);
           startReplicatedHitStop(ctx.gameState, latestSnapshot.hitStopEvent);
           if (client->NeedsFullRebuild()) {
             client->MarkFullRebuildApplied();
@@ -1098,6 +1200,7 @@ public:
             client->GetPlayerID(),
             deltaTime,
             false);
+          updateLevelCombatSoundtrack(engine, resources, ctx.gameState);
           if (ctx.gameState.playerIndex >= 0) {
             auto& player = engine.getPlayer();
             updateMapViewport(ctx, player);
@@ -1125,8 +1228,7 @@ public:
       return;
     }
 
-    engine.setAudioSoundtrack(
-      resources.m_currLevel ? resources.m_currLevel->backgroundTrack : nullptr);
+    updateLevelCombatSoundtrack(engine, resources, ctx.gameState);
 
     if (!actions.blockGameplayUpdates && ctx.gameState.playerIndex >= 0) {
       const AudioStateMap before = captureAudioState(ctx.gameState);
@@ -1144,10 +1246,15 @@ public:
           victim,
           game_engine::hitStopDurationSeconds(strength));
       };
+      hooks.onFlyingStoneCollected = [&](LevelIndex levelId) {
+        applyLevelUnlockForFlyingStone(levelId, ctx.gameState, progService);
+        engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
+      };
       hooks.cullProjectilesByViewport = true;
       hooks.projectileViewport = ctx.gameState.mapViewport;
       game_engine::stepGameplaySimulation(ctx.gameState, playerInputs, deltaTime, hooks);
       refreshPresentation(resources, ctx.gameState);
+      updateLevelCombatSoundtrack(engine, resources, ctx.gameState);
       playSimulationAudio(resources, before, ctx.gameState, engine.getPlayer().id, deltaTime, true);
       updateMapViewport(ctx, engine.getPlayer());
     }
@@ -1157,12 +1264,20 @@ public:
       previousView != UIManager::GameView::GameOver;
     if (enteredGameOver) {
       resetActiveBossEncounter(ctx.gameState);
+      if (resources.m_currLevel) {
+        engine.stopAudioSoundtrack(resources.m_currLevel->backgroundTrack);
+        engine.stopAudioSoundtrack(resources.m_currLevel->bossTrack);
+      }
       engine.setAudioSoundtrack(
         resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr,
         0);
     } else if (ctx.gameState.currentView != UIManager::GameView::GameOver &&
                ctx.gameState.evaluateGameOver()) {
       resetActiveBossEncounter(ctx.gameState);
+      if (resources.m_currLevel) {
+        engine.stopAudioSoundtrack(resources.m_currLevel->backgroundTrack);
+        engine.stopAudioSoundtrack(resources.m_currLevel->bossTrack);
+      }
       engine.setAudioSoundtrack(
         resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr,
         0);
