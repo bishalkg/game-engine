@@ -335,6 +335,15 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           float maxSpeedX = 15;
 
           switch (spriteType) {
+            case SpriteType::Boss_Werewolf: {
+              enemy.drawScale = 1.0f;
+              healthPoints = 300;
+              maxSpeedX = 25;
+              accelX = 50.0f;
+              damageResetTime = 0.5f;
+              attackResetTime = 1.0f;
+              break;
+            }
             case SpriteType::Boss_Evil_Clown: {
               enemy.drawScale = 1.0f;
               healthPoints = 300;

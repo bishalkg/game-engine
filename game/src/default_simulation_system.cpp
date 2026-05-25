@@ -969,6 +969,11 @@ void playSimulationAudio(
   for (const auto& [key, prev] : before) {
     const auto afterIt = after.find(key);
     if (afterIt == after.end()) {
+      if (key.first == ObjectClass::Material &&
+          prev.materialType == MaterialType::flyingStone &&
+          prev.materialState == MaterialState::present) {
+        flyingStoneConsumed = true;
+      }
       continue;
     }
 
@@ -1110,7 +1115,7 @@ bool isFlyingStoneVisibleInViewport(const game_engine::GameState& gameState) {
     for (const auto& obj : layer) {
       if (obj.objClass != ObjectClass::Material ||
           obj.spriteType != SpriteType::FlyingStone ||
-          obj.data.material.state != MaterialState::present) {
+          obj.data.material.state == MaterialState::collected) {
         continue;
       }
 

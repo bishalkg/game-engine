@@ -13,6 +13,7 @@ const std::unordered_map<std::string, SpriteType> CHARACTER_NAME_TO_SPRITE_TYPE 
 
 
   // Boss Characters
+  {"Boss_Werewolf", SpriteType::Boss_Werewolf},
   {"Boss_Evil_Clown", SpriteType::Boss_Evil_Clown},
   {"Boss_Purple_Dragon", SpriteType::Boss_Purple_Dragon},
 };
@@ -248,22 +249,22 @@ const std::unordered_map<SpriteType, SpriteAssets> ENEMY_CONFIG = {
     },
   },
   {
-    SpriteType::Boss_Evil_Clown,
+    SpriteType::Boss_Werewolf,
     SpriteAssets{
       .paths = SpriteAssetPaths{
-        .idleTex = "data/enemies/Red_Werewolf/Idle.png",
-        .walkTex = "data/enemies/Red_Werewolf/Walk.png",  // 11 frames
-        .runTex = "data/enemies/Red_Werewolf/Walk.png",
-        .attackTex = "data/enemies/Red_Werewolf/Attack_1.png",
-        .hitTex = "data/enemies/Red_Werewolf/Hurt.png",
-        .dieTex = "data/enemies/Red_Werewolf/Dead.png",
+        .idleTex = "data/enemies/Boss_Werewolf/Idle.png",
+        .walkTex = "data/enemies/Boss_Werewolf/Run.png",  // 11 frames
+        .runTex = "data/enemies/Boss_Werewolf/Run.png",
+        .attackTex = "data/enemies/Boss_Werewolf/Attack_1.png",
+        .hitTex = "data/enemies/Boss_Werewolf/Hurt.png",
+        .dieTex = "data/enemies/Boss_Werewolf/Die.png",
       },
       .animSettings = {
-        { ANIM_IDLE,{ 8, 1.0f } },
-        { ANIM_RUN, { 11, 1.0f } },
-        { ANIM_HIT, { 2, 0.5f } },
-        { ANIM_DIE , { 2, 0.5f } },
-        { ANIM_SWING , { 5, 1.0f } },
+        { ANIM_IDLE,{ 33, 2.0f } },
+        { ANIM_RUN, { 13, 1.0f } },
+        { ANIM_HIT, { 9, 0.5f } },
+        { ANIM_DIE , { 10, 1.0f } },
+        { ANIM_SWING , { 7, 0.5f } },
       },
     },
   },
@@ -329,7 +330,7 @@ const std::unordered_map<LevelIndex, LevelAssets> LEVEL_CONFIG = {
       .bossAudioPath = "data/audio/3. Twilight March.wav",
       .gameOverAudioPath = DEFAULT_GAME_OVER_SOUND,
       .stepAudioPath = "data/audio/movement/step_grass.wav",
-      .enemyTypes = { SpriteType::Minotaur_1,  SpriteType::Skeleton_Warrior, SpriteType::Boss_Evil_Clown},
+      .enemyTypes = { SpriteType::Minotaur_1,  SpriteType::Skeleton_Warrior, SpriteType::Boss_Werewolf},
       .materialTypes = { SpriteType::Gem, SpriteType::Coin, SpriteType::FlyingStone},
       .cutsceneData = {
         {

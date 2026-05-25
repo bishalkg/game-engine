@@ -2181,7 +2181,7 @@
   <object id="12" name="Skeleton_Warrior" type="Enemy" x="2693.39" y="259.464" width="17.1362" height="10.2817"/>
   <object id="13" name="Minotaur_1" type="Enemy" x="2940.34" y="262.928" width="17.1362" height="10.2817"/>
   <object id="15" name="Level_2" type="Portal" x="3798.73" y="408.084" width="23.0818" height="44.8038" rotation="0.902733"/>
-  <object id="118" name="Boss_Evil_Clown" type="Boss" x="3651.72" y="415.708" width="17.1362" height="10.2817"/>
+  <object id="118" name="Boss_Werewolf" type="Boss" x="3651.72" y="415.708" width="17.1362" height="10.2817"/>
   <object id="120" name="Player_Mage" type="Player" x="3435.1" y="324.214" width="9.20598" height="8.18749"/>
  </objectgroup>
  <objectgroup id="20" name="Materials">
