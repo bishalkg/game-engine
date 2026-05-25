@@ -105,17 +105,17 @@ struct GameResources {
   std::vector<UIManager::Cutscene> characterSelectScene;
 
   MIX_Audio *audioShoot{}, *audioSword1{}, *audioUltimateAttack{}, *audioShootHit{}, *audioBoneImpact{},
-    *audioProjectileEnemyHit{}, *audioEnemyDie{};
+    *audioProjectileEnemyHit{}, *audioEnemyDie{}, *audioPowerupCollect{};
   MIX_Track *shootTrack{}, *sword1Track{}, *ultimateAttackTrack{}, *hitTrack{}, *boneImpactHitTrack{},
-    *enemyProjectileHitTrack{}, *enemyDieTrack{};
+    *enemyProjectileHitTrack{}, *enemyDieTrack{}, *powerupCollectTrack{};
 
   MIX_Audio* audioJump{};
   MIX_Track* jumpTrack{};
 
   MIX_Audio *audioCoinCollect{}, *audioGemCollect{}, *audioCoinPurchase{}, *audioGemPurchase{},
-    *audioDrinkSlurp{};
+    *audioDrinkSlurp{}, *audioFloatingStone{};
   MIX_Track *coinCollectTrack{}, *gemCollectTrack{}, *coinPurchaseTrack{}, *gemPurchaseTrack{},
-    *drinkSlurpTrack{};
+    *drinkSlurpTrack{}, *floatingStoneTrack{};
 
   float m_masterAudioGain = 0.0f;
   MIX_Mixer* mixer = nullptr;

@@ -322,7 +322,7 @@ void assignPlayerAnimations(GameObject& player) {
   player.animations[ANIM_RUN_ATTACK] = Animation(6, 0.4f);
   player.animations[ANIM_SWING_2] = Animation(12, 0.7f);
   player.animations[ANIM_ULTIMATE] = Animation(34, 1.7f);
-  player.animations[ANIM_POWERUP] = Animation(13, 0.9f);
+  player.animations[ANIM_POWERUP] = Animation(13, 1.8f);
   player.currentAnimation = ANIM_IDLE;
   player.presentationVariant = PresentationVariant::Idle;
 }
@@ -988,7 +988,7 @@ void testPowerupStateExitsAfterAnimationCycle() {
   state.layers[1][0].currentAnimation = ANIM_POWERUP;
   state.layers[1][0].presentationVariant = PresentationVariant::Powerup;
 
-  game_engine::stepGameplaySimulation(state, {}, 1.0f);
+  game_engine::stepGameplaySimulation(state, {}, 2.0f);
 
   assert(state.layers[1][0].data.player.state != PlayerState::powerup);
   assert(state.layers[1][0].presentationVariant != PresentationVariant::Powerup);

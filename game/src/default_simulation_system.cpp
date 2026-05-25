@@ -26,6 +26,8 @@ struct AudioObjectState {
   PlayerState playerState = PlayerState::idle;
   EnemyState enemyState = EnemyState::idle;
   BulletState bulletState = BulletState::inactive;
+  MaterialState materialState = MaterialState::present;
+  MaterialType materialType = MaterialType::none;
   int healthPoints = 0;
   int manaPoints = 0;
   uint32_t coinPickupCueCount = 0;
@@ -582,6 +584,9 @@ AudioStateMap captureAudioState(const game_engine::GameState& gameState) {
       } else if (obj.objClass == ObjectClass::Enemy) {
         state.enemyState = obj.data.enemy.state;
         state.healthPoints = obj.data.enemy.healthPoints;
+      } else if (obj.objClass == ObjectClass::Material) {
+        state.materialState = obj.data.material.state;
+        state.materialType = obj.data.material.type;
       }
       states[{obj.objClass, obj.id}] = state;
     }
@@ -958,6 +963,7 @@ void playSimulationAudio(
   bool enemyDamaged = false;
   bool enemyDied = false;
   bool enemyDamagedByMelee = false;
+  bool flyingStoneConsumed = false;
   bool localPlayerDied = false;
   AudioStateMap after = captureAudioState(gameState);
   for (const auto& [key, prev] : before) {
@@ -982,6 +988,12 @@ void playSimulationAudio(
         enemyDied = true;
       }
     }
+    if (key.first == ObjectClass::Material &&
+        prev.materialType == MaterialType::flyingStone &&
+        prev.materialState == MaterialState::present &&
+        curr.materialState != MaterialState::present) {
+      flyingStoneConsumed = true;
+    }
     if (key.first == ObjectClass::Player &&
         key.second == localPlayerID &&
         prev.playerState != PlayerState::dead &&
@@ -995,6 +1007,12 @@ void playSimulationAudio(
   }
   if (enemyDied && resources.audioEnemyDie) {
     MIX_PlayAudio(resources.mixer, resources.audioEnemyDie);
+  }
+  if (flyingStoneConsumed &&
+      localPlayer &&
+      localPlayer->data.player.state == PlayerState::powerup &&
+      resources.audioPowerupCollect) {
+    MIX_PlayAudio(resources.mixer, resources.audioPowerupCollect);
   }
   if (enemyDamagedByMelee && resources.boneImpactHitTrack) {
     MIX_PlayTrack(resources.boneImpactHitTrack, 0);
@@ -1087,6 +1105,45 @@ void updateLevelCombatSoundtrack(
   engine.setAudioSoundtrack(resources.m_currLevel->backgroundTrack);
 }
 
+bool isFlyingStoneVisibleInViewport(const game_engine::GameState& gameState) {
+  for (const auto& layer : gameState.layers) {
+    for (const auto& obj : layer) {
+      if (obj.objClass != ObjectClass::Material ||
+          obj.spriteType != SpriteType::FlyingStone ||
+          obj.data.material.state != MaterialState::present) {
+        continue;
+      }
+
+      const SDL_FRect drawRect{
+        obj.position.x,
+        obj.position.y,
+        obj.spritePixelW / obj.drawScale,
+        obj.spritePixelH / obj.drawScale,
+      };
+      SDL_FRect overlap{};
+      if (SDL_GetRectIntersectionFloat(&drawRect, &gameState.mapViewport, &overlap)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+void updateFloatingStoneLoopAudio(
+  game_engine::Engine& engine,
+  game::GameResources& resources,
+  const game_engine::GameState& gameState) {
+  if (!resources.floatingStoneTrack) {
+    return;
+  }
+
+  if (isFlyingStoneVisibleInViewport(gameState)) {
+    engine.setAudioSoundtrack(resources.floatingStoneTrack);
+  } else {
+    engine.stopAudioSoundtrack(resources.floatingStoneTrack);
+  }
+}
+
 class DefaultSimulationSystem final : public game::ISimulationSystem {
 public:
   void update(
@@ -1101,6 +1158,7 @@ public:
     stepLocalHitStop(ctx.gameState, deltaTime);
 
     if (ctx.gameState.currentView == UIManager::GameView::LevelLoading) {
+      engine.stopAudioSoundtrack(resources.floatingStoneTrack);
       return;
     }
 
@@ -1111,6 +1169,9 @@ public:
             ctx.gameState.currentView == UIManager::GameView::ShopMenu ||
             ctx.gameState.currentView == UIManager::GameView::InventoryMenu) {
           updateLevelCombatSoundtrack(engine, resources, ctx.gameState);
+          updateFloatingStoneLoopAudio(engine, resources, ctx.gameState);
+        } else {
+          engine.stopAudioSoundtrack(resources.floatingStoneTrack);
         }
         playLocalMultiplayerFireAudio(engine, resources, ctx.gameState, deltaTime);
 
@@ -1201,6 +1262,7 @@ public:
             deltaTime,
             false);
           updateLevelCombatSoundtrack(engine, resources, ctx.gameState);
+          updateFloatingStoneLoopAudio(engine, resources, ctx.gameState);
           if (ctx.gameState.playerIndex >= 0) {
             auto& player = engine.getPlayer();
             updateMapViewport(ctx, player);
@@ -1225,10 +1287,12 @@ public:
         ctx.gameState.currentView != UIManager::GameView::PauseMenu &&
         ctx.gameState.currentView != UIManager::GameView::ShopMenu &&
         ctx.gameState.currentView != UIManager::GameView::InventoryMenu) {
+      engine.stopAudioSoundtrack(resources.floatingStoneTrack);
       return;
     }
 
     updateLevelCombatSoundtrack(engine, resources, ctx.gameState);
+    updateFloatingStoneLoopAudio(engine, resources, ctx.gameState);
 
     if (!actions.blockGameplayUpdates && ctx.gameState.playerIndex >= 0) {
       const AudioStateMap before = captureAudioState(ctx.gameState);
@@ -1255,6 +1319,7 @@ public:
       game_engine::stepGameplaySimulation(ctx.gameState, playerInputs, deltaTime, hooks);
       refreshPresentation(resources, ctx.gameState);
       updateLevelCombatSoundtrack(engine, resources, ctx.gameState);
+      updateFloatingStoneLoopAudio(engine, resources, ctx.gameState);
       playSimulationAudio(resources, before, ctx.gameState, engine.getPlayer().id, deltaTime, true);
       updateMapViewport(ctx, engine.getPlayer());
     }
@@ -1268,6 +1333,7 @@ public:
         engine.stopAudioSoundtrack(resources.m_currLevel->backgroundTrack);
         engine.stopAudioSoundtrack(resources.m_currLevel->bossTrack);
       }
+      engine.stopAudioSoundtrack(resources.floatingStoneTrack);
       engine.setAudioSoundtrack(
         resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr,
         0);
@@ -1278,6 +1344,7 @@ public:
         engine.stopAudioSoundtrack(resources.m_currLevel->backgroundTrack);
         engine.stopAudioSoundtrack(resources.m_currLevel->bossTrack);
       }
+      engine.stopAudioSoundtrack(resources.floatingStoneTrack);
       engine.setAudioSoundtrack(
         resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr,
         0);

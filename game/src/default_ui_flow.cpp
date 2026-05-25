@@ -329,6 +329,7 @@ public:
         engine.stopAudioSoundtrack(resources.m_currLevel->backgroundTrack);
         engine.stopAudioSoundtrack(resources.m_currLevel->bossTrack);
       }
+      engine.stopAudioSoundtrack(resources.floatingStoneTrack);
     }
     if (actions.stopGameOverSoundTrack) {
       engine.stopAudioSoundtrack(
