@@ -52,6 +52,21 @@ void setAnimationAndPresentation(
   setPresentation(obj, presentation);
 }
 
+bool bossBlocksPortalTransition(const GameState& state) {
+  for (const auto& layer : state.layers) {
+    for (const auto& obj : layer) {
+      if (obj.objClass == ObjectClass::Enemy &&
+          obj.data.enemy.isBoss &&
+          obj.data.enemy.state != EnemyState::dead &&
+          obj.data.enemy.healthPoints > 0) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 void syncSpriteFrame(GameObject& obj) {
   if (hasAnimation(obj, obj.currentAnimation)) {
     const int frameCount = obj.animations[obj.currentAnimation].getFrameCount();
@@ -1059,7 +1074,7 @@ void collisionResponse(
         }
         break;
       case ObjectClass::Portal:
-        if (hooks.onPortalTriggered) {
+        if (hooks.onPortalTriggered && !bossBlocksPortalTransition(state)) {
           hooks.onPortalTriggered(objB.data.portal.nextLevel);
         }
         break;
