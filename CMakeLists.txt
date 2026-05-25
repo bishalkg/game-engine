@@ -42,6 +42,8 @@ target_link_libraries(imgui PUBLIC SDL3::SDL3)
 set(ENGINE_SOURCES
   engine/src/engine.cpp
   engine/src/gameplay_simulation.cpp
+  engine/src/gameplay_simulation_collision.cpp
+  engine/src/gameplay_simulation_update.cpp
   engine/src/lan_discovery.cpp
   engine/src/ui_manager.cpp
   engine/src/game_server.cpp
