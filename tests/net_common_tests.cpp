@@ -785,6 +785,37 @@ void testFallingOntoEnemyTriggersAirPopAndStaysAirborne() {
   assert(!player.grounded);
 }
 
+void testAirborneMeleeAttackTakesPriorityOverEnemyContact() {
+  auto state = makeGameplayState();
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(0.0f, 100));
+
+  auto& player = state.layers[1][0];
+  auto& enemy = state.layers[1][1];
+  player.position.x = 0.0f;
+  player.position.y = -8.0f;
+  player.grounded = false;
+  player.data.player.state = PlayerState::jumping;
+  player.currentAnimation = ANIM_JUMP;
+  player.presentationVariant = PresentationVariant::Jump;
+  player.velocity = glm::vec2(0.0f, 10.0f);
+
+  enemy.data.enemy.state = EnemyState::attack;
+  enemy.currentAnimation = ANIM_SWING;
+  enemy.presentationVariant = PresentationVariant::Swing;
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
+  inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .meleePressed = true});
+
+  game_engine::stepGameplaySimulation(state, inputs, 0.0f);
+
+  assert(player.data.player.state == PlayerState::swingWeapon);
+  assert(player.data.player.healthPoints == 100);
+  assert(!player.data.player.hurtCooldownActive);
+  assert(enemy.data.enemy.healthPoints == 90);
+  assert(enemy.data.enemy.state == EnemyState::hurt);
+}
+
 void testHurtAnimationTransitionsIntoCooldown() {
   auto state = makeGameplayState();
   state.layers[0].push_back(makeFloor());
@@ -1169,6 +1200,29 @@ void testFlyingStonePickupUnlocksPlayersAndPowerup() {
   assert(state.layers[1][2].collider.w == 0.0f);
 }
 
+void testAirborneFlyingStonePickupTriggersPowerup() {
+  auto state = makeGameplayState();
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeMaterial(MaterialType::flyingStone, 1));
+
+  auto& player = state.layers[1][0];
+  player.position.x = 0.0f;
+  player.position.y = 0.0f;
+  player.grounded = false;
+  player.data.player.state = PlayerState::jumping;
+  player.currentAnimation = ANIM_JUMP;
+  player.presentationVariant = PresentationVariant::Jump;
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
+  inputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .meleePressed = true});
+
+  game_engine::stepGameplaySimulation(state, inputs, 0.05f);
+
+  assert(state.layers[1][0].data.player.state == PlayerState::powerup);
+  assert(state.layers[1][0].presentationVariant == PresentationVariant::Powerup);
+  assert(state.layers[1][1].data.material.state == MaterialState::collapsing);
+}
+
 void testPowerupStateExitsAfterAnimationCycle() {
   auto state = makeGameplayState();
   state.layers[0].push_back(makeFloor());
@@ -1325,6 +1379,7 @@ int main(){
   testUltimateHitUsesDelayedEnemyKnockback();
   testEnemySideHitAppliesHurtKnockbackWithoutStickyReshove();
   testFallingOntoEnemyTriggersAirPopAndStaysAirborne();
+  testAirborneMeleeAttackTakesPriorityOverEnemyContact();
   testHurtAnimationTransitionsIntoCooldown();
   testHurtCooldownAllowsMovementAndJumpButBlocksAttacks();
   testHurtCooldownIgnoresHazards();
@@ -1340,6 +1395,7 @@ int main(){
   testBossDeathSpawnsFlyingStoneOnce();
   testNonBossDeathDoesNotSpawnFlyingStone();
   testFlyingStonePickupUnlocksPlayersAndPowerup();
+  testAirborneFlyingStonePickupTriggersPowerup();
   testPowerupStateExitsAfterAnimationCycle();
   testFlyingStoneUltimateUnlockPersistsThroughProgressionService();
   testProjectileIdStableWhenPlayerFires();

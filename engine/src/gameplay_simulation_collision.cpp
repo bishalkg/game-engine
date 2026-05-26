@@ -197,6 +197,15 @@ bool projectilePassesThrough(const GameObject& projectile, const GameObject& oth
   return true;
 }
 
+bool isPlayerAttackPriorityState(const GameObject& player) {
+  if (player.objClass != ObjectClass::Player) {
+    return false;
+  }
+
+  return player.data.player.state == PlayerState::swingWeapon ||
+         player.data.player.state == PlayerState::ultimate;
+}
+
 void refreshGroundedState(GameState& state, GameObject& obj) {
   bool foundGround = false;
   for (auto& layer : state.layers) {
@@ -312,7 +321,7 @@ void applyPlayerGameplayCollision(
     case ObjectClass::Material:
       if (other.data.material.state == MaterialState::present) {
         if (other.data.material.type == MaterialType::flyingStone) {
-          if (player.data.player.state != PlayerState::swingWeapon) {
+          if (!isPlayerAttackPriorityState(player)) {
             break;
           }
           unlockFlyingStoneRewardForAllPlayers(state);
@@ -393,7 +402,8 @@ void applyEnemyGameplayCollision(
   switch (other.objClass) {
     case ObjectClass::Player:
       if (enemy.data.enemy.state == EnemyState::attack) {
-        if (!isPlayerInHurtRecovery(other) &&
+        if (!isPlayerAttackPriorityState(other) &&
+            !isPlayerInHurtRecovery(other) &&
             damagePlayer(other, 33) &&
             other.data.player.state != PlayerState::dead) {
           applyPlayerEnemyHurtImpulse(other, enemy);
