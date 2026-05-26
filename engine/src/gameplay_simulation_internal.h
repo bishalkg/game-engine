@@ -76,6 +76,10 @@ void syncSpriteFrame(GameObject& obj);
 void clearFlash(GameObject& obj, float deltaTime);
 SDL_FRect worldRect(const GameObject& obj);
 SDL_FRect baseFacing(const GameObject& obj);
+bool isPlayerInHurtRecovery(const GameObject& player);
+bool isPlayerInHurtCooldown(const GameObject& player);
+void clearPlayerCombatState(GameObject& player);
+void setPlayerLocomotionStateFromMotion(GameObject& player);
 void widenColliderForSwing(GameObject& obj);
 void expandColliderForUltimate(GameObject& obj);
 bool isUltimateDamageActive(const GameObject& obj);
@@ -117,7 +121,7 @@ DamageEnemyResult damageEnemy(
   HitStopStrength hitStopStrength = HitStopStrength::Normal,
   float knockbackDirection = 0.0f,
   float knockbackMagnitude = 0.0f);
-void damagePlayer(GameObject& player, int damage);
+bool damagePlayer(GameObject& player, int damage);
 GameObject makeBulletFromPlayer(const GameObject& player, const GameState& state);
 void integrateMotion(GameObject& obj, float direction, float deltaTime);
 float updatePlayer(

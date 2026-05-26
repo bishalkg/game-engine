@@ -512,7 +512,7 @@ void testUltimateRequiresFullMeter() {
   assert(state.layers[1][0].data.player.ultimatePoints == 99);
 }
 
-void testUltimatePreventsDamage() {
+void testUltimateIsInvincibleAgainstHazardDamage() {
   auto state = makeGameplayState();
   state.layers[0].push_back(makeFloor());
   state.layers[0].push_back(makeHazard());
@@ -526,6 +526,7 @@ void testUltimatePreventsDamage() {
   game_engine::stepGameplaySimulation(state, inputs, 0.05f);
 
   assert(state.layers[1][0].data.player.state == PlayerState::ultimate);
+  assert(!state.layers[1][0].data.player.hurtCooldownActive);
   assert(state.layers[1][0].data.player.healthPoints == 100);
 }
 
@@ -729,6 +730,180 @@ void testUltimateHitUsesDelayedEnemyKnockback() {
     game_engine::hitStopDurationSeconds(HitStopStrength::Heavy));
 
   assert(enemy.velocity.x > 0.0f);
+}
+
+void testEnemySideHitAppliesHurtKnockbackWithoutStickyReshove() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1][0].position.x = 0.0f;
+  state.layers[1].push_back(makeEnemy(0.0f, 100));
+  auto& enemy = state.layers[1][1];
+  enemy.data.enemy.state = EnemyState::attack;
+  enemy.currentAnimation = ANIM_SWING;
+  enemy.presentationVariant = PresentationVariant::Swing;
+
+  game_engine::stepGameplaySimulation(state, {}, 0.0f);
+
+  auto& player = state.layers[1][0];
+  assert(player.data.player.state == PlayerState::hurt);
+  assert(!player.data.player.hurtCooldownActive);
+  assert(player.data.player.healthPoints == 67);
+  assert(player.velocity.x < 0.0f);
+  assert(player.velocity.y < 0.0f);
+  assert(!player.grounded);
+
+  player.position.x = enemy.position.x;
+  game_engine::stepGameplaySimulation(state, {}, 0.0f);
+
+  assert(player.data.player.state == PlayerState::hurt);
+  assert(player.data.player.healthPoints == 67);
+}
+
+void testFallingOntoEnemyTriggersAirPopAndStaysAirborne() {
+  auto state = makeGameplayState();
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(0.0f, 100));
+  auto& player = state.layers[1][0];
+  auto& enemy = state.layers[1][1];
+  enemy.data.enemy.state = EnemyState::attack;
+  enemy.currentAnimation = ANIM_SWING;
+  enemy.presentationVariant = PresentationVariant::Swing;
+
+  player.position.x = 0.0f;
+  player.position.y = -20.0f;
+  player.velocity.y = 40.0f;
+  player.grounded = false;
+
+  game_engine::stepGameplaySimulation(state, {}, 0.0f);
+
+  assert(player.data.player.state == PlayerState::hurt);
+  assert(!player.data.player.hurtCooldownActive);
+  assert(player.data.player.healthPoints == 67);
+  assert(player.velocity.y < 0.0f);
+  assert(player.velocity.x < 0.0f);
+  assert(!player.grounded);
+}
+
+void testHurtAnimationTransitionsIntoCooldown() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(0.0f, 100));
+  auto& enemy = state.layers[1][1];
+  enemy.data.enemy.state = EnemyState::attack;
+  enemy.currentAnimation = ANIM_SWING;
+  enemy.presentationVariant = PresentationVariant::Swing;
+
+  game_engine::stepGameplaySimulation(state, {}, 0.0f);
+  auto& player = state.layers[1][0];
+  assert(player.data.player.state == PlayerState::hurt);
+  assert(!player.data.player.hurtCooldownActive);
+
+  game_engine::stepGameplaySimulation(state, {}, 0.41f);
+
+  assert(player.data.player.state != PlayerState::hurt);
+  assert(player.data.player.hurtCooldownActive);
+}
+
+void testHurtCooldownAllowsMovementAndJumpButBlocksAttacks() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(12.0f, 100));
+
+  auto& player = state.layers[1][0];
+  auto& enemy = state.layers[1][1];
+  player.data.player.hurtCooldownActive = true;
+  player.data.player.damageTimer.reset();
+  player.grounded = true;
+  enemy.position.x = 0.0f;
+  player.position.x = 0.0f;
+  player.position.y = 0.0f;
+
+  std::unordered_map<uint32_t, game_engine::NetGameInput> inputs;
+  inputs.emplace(
+    1,
+    game_engine::NetGameInput{
+      .playerID = 1,
+      .rightHeld = true,
+      .jumpPressed = true,
+      .fireHeld = true,
+      .meleePressed = true,
+      .ultimatePressed = true,
+    });
+
+  game_engine::stepGameplaySimulation(state, inputs, 0.05f);
+
+  assert(player.data.player.state == PlayerState::jumping);
+  assert(state.bullets.empty());
+  assert(enemy.data.enemy.healthPoints == 100);
+}
+
+void testHurtCooldownIgnoresHazards() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeHazard());
+  state.layers[1].push_back(makePlayer());
+  auto& player = state.layers[1][0];
+  player.data.player.hurtCooldownActive = true;
+  player.data.player.damageTimer.reset();
+
+  game_engine::stepGameplaySimulation(state, {}, 0.0f);
+
+  assert(player.data.player.healthPoints == 100);
+}
+
+void testHurtCooldownLetsPlayerMoveThroughEnemies() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1].push_back(makeEnemy(0.0f, 100));
+  auto& player = state.layers[1][0];
+  player.data.player.hurtCooldownActive = true;
+  player.data.player.damageTimer.reset();
+  player.position.x = 0.0f;
+  player.grounded = true;
+
+  const float beforeMove = player.position.x;
+  std::unordered_map<uint32_t, game_engine::NetGameInput> moveInputs;
+  moveInputs.emplace(1, game_engine::NetGameInput{.playerID = 1, .rightHeld = true});
+  game_engine::stepGameplaySimulation(state, moveInputs, 0.1f);
+
+  assert(player.position.x > beforeMove);
+  assert(player.data.player.healthPoints == 100);
+}
+
+void testEnemyContactDamageResumesAfterHurtWindowEnds() {
+  auto state = makeGameplayState();
+  state.layers[0].push_back(makeFloor());
+  state.layers[1].push_back(makePlayer());
+  state.layers[1][0].position.x = 0.0f;
+  state.layers[1].push_back(makeEnemy(0.0f, 100));
+  auto& enemy = state.layers[1][1];
+  enemy.data.enemy.state = EnemyState::attack;
+  enemy.currentAnimation = ANIM_SWING;
+  enemy.presentationVariant = PresentationVariant::Swing;
+
+  game_engine::stepGameplaySimulation(state, {}, 0.0f);
+
+  auto& player = state.layers[1][0];
+  assert(player.data.player.healthPoints == 67);
+  assert(player.data.player.state == PlayerState::hurt);
+  assert(!player.data.player.hurtCooldownActive);
+
+  game_engine::stepGameplaySimulation(state, {}, 0.41f);
+  assert(player.data.player.hurtCooldownActive);
+  game_engine::stepGameplaySimulation(state, {}, 0.5f);
+  assert(!player.data.player.hurtCooldownActive);
+  player.position.x = enemy.position.x;
+  player.position.y = enemy.position.y;
+  player.grounded = true;
+  player.velocity = glm::vec2(0.0f);
+
+  game_engine::stepGameplaySimulation(state, {}, 0.0f);
+
+  assert(player.data.player.healthPoints == 34);
+  assert(player.data.player.state == PlayerState::hurt);
 }
 
 void testFatalEnemyHitDisablesColliderImmediately() {
@@ -1140,7 +1315,7 @@ int main(){
   testPassiveUltimateChargeGain();
   testKillRewardGainFromMelee();
   testUltimateRequiresFullMeter();
-  testUltimatePreventsDamage();
+  testUltimateIsInvincibleAgainstHazardDamage();
   testUltimateOnlyHitsEnemyOncePerCast();
   testUltimateColliderResetsAfterAnimation();
   testEnemyKnockbackDelayedUntilHitStopEnds();
@@ -1148,6 +1323,13 @@ int main(){
   testAirborneSwingDoesNotSideTeleportAroundEnemy();
   testProjectileHitUsesDelayedEnemyKnockback();
   testUltimateHitUsesDelayedEnemyKnockback();
+  testEnemySideHitAppliesHurtKnockbackWithoutStickyReshove();
+  testFallingOntoEnemyTriggersAirPopAndStaysAirborne();
+  testHurtAnimationTransitionsIntoCooldown();
+  testHurtCooldownAllowsMovementAndJumpButBlocksAttacks();
+  testHurtCooldownIgnoresHazards();
+  testHurtCooldownLetsPlayerMoveThroughEnemies();
+  testEnemyContactDamageResumesAfterHurtWindowEnds();
   testFatalEnemyHitDisablesColliderImmediately();
   testDeadEnemyNoLongerBlocksPlayerCollision();
   testDeadEnemyGetsPurgedAfterDeathAnimation();

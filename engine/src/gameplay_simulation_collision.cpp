@@ -123,6 +123,63 @@ bool shouldBlockSwingPassThrough(
   return rectA.y < enemyMiddleBottom && (rectA.y + rectA.h) > enemyMiddleTop;
 }
 
+float horizontalDirectionAwayFromEnemy(const GameObject& player, const GameObject& enemy) {
+  const SDL_FRect playerRect = collisionRect(player, enemy.objClass);
+  const SDL_FRect enemyRect = collisionRect(enemy, player.objClass);
+  const float playerCenterX = playerRect.x + playerRect.w * 0.5f;
+  const float enemyCenterX = enemyRect.x + enemyRect.w * 0.5f;
+  if (playerCenterX > enemyCenterX) {
+    return 1.0f;
+  }
+  if (playerCenterX < enemyCenterX) {
+    return -1.0f;
+  }
+  return player.direction >= 0.0f ? 1.0f : -1.0f;
+}
+
+bool isFallingOntoEnemy(
+  const GameObject& player,
+  const GameObject& enemy) {
+  if (player.velocity.y <= 0.0f) {
+    return false;
+  }
+
+  const SDL_FRect playerRect = collisionRect(player, enemy.objClass);
+  const SDL_FRect enemyRect = collisionRect(enemy, player.objClass);
+  const float playerFeet = playerRect.y + playerRect.h;
+  const float playerLowerBodyTop = playerRect.y + playerRect.h * 0.6f;
+  const float enemyUpperBodyBottom = enemyRect.y + enemyRect.h * 0.35f;
+  const float horizontalOverlapLeft = std::max(playerRect.x, enemyRect.x);
+  const float horizontalOverlapRight = std::min(playerRect.x + playerRect.w, enemyRect.x + enemyRect.w);
+  return horizontalOverlapRight > horizontalOverlapLeft &&
+         playerLowerBodyTop < enemyUpperBodyBottom &&
+         playerFeet > enemyRect.y;
+}
+
+void applyPlayerEnemyHurtImpulse(GameObject& player, const GameObject& enemy) {
+  if (player.objClass != ObjectClass::Player ||
+      player.data.player.state == PlayerState::dead) {
+    return;
+  }
+
+  constexpr float kSideKnockbackX = 180.0f;
+  constexpr float kSideLiftY = -160.0f;
+  constexpr float kAirPopKnockbackX = 120.0f;
+  constexpr float kAirPopLiftY = -250.0f;
+
+  const float awayX = horizontalDirectionAwayFromEnemy(player, enemy);
+  if (isFallingOntoEnemy(player, enemy)) {
+    player.velocity.x = awayX * kAirPopKnockbackX;
+    player.velocity.y = kAirPopLiftY;
+    player.grounded = false;
+    return;
+  }
+
+  player.velocity.x = awayX * kSideKnockbackX;
+  player.velocity.y = std::min(player.velocity.y, kSideLiftY);
+  player.grounded = false;
+}
+
 bool projectilePassesThrough(const GameObject& projectile, const GameObject& other) {
   (void)projectile;
   switch (other.objClass) {
@@ -167,6 +224,11 @@ void refreshGroundedState(GameState& state, GameObject& obj) {
   if (obj.grounded != foundGround) {
     obj.grounded = foundGround;
     if (foundGround && obj.objClass == ObjectClass::Player && !obj.data.player.playLandingFrame) {
+      if (obj.data.player.state == PlayerState::hurt ||
+          obj.data.player.state == PlayerState::dead ||
+          obj.data.player.state == PlayerState::ultimate) {
+        return;
+      }
       obj.data.player.state = PlayerState::running;
       if (obj.data.player.jumpImpulseApplied) {
         obj.data.player.state = PlayerState::idle;
@@ -191,6 +253,9 @@ void applyPlayerGameplayCollision(
       break;
     case ObjectClass::Enemy:
       if (other.data.enemy.state != EnemyState::dead) {
+        if (isPlayerInHurtRecovery(player)) {
+          break;
+        }
         if (player.data.player.state == PlayerState::ultimate) {
           if (isUltimateDamageActive(player)) {
             const DamageEnemyResult result = damageEnemy(
@@ -232,7 +297,10 @@ void applyPlayerGameplayCollision(
           }
           recordBossDefeatedIfNeeded(events, other, result);
         } else {
-          player.velocity = glm::vec2(50.0f, 0.0f) * -player.direction;
+          if (damagePlayer(player, 33) &&
+              player.data.player.state != PlayerState::dead) {
+            applyPlayerEnemyHurtImpulse(player, other);
+          }
         }
       }
       break;
@@ -325,7 +393,11 @@ void applyEnemyGameplayCollision(
   switch (other.objClass) {
     case ObjectClass::Player:
       if (enemy.data.enemy.state == EnemyState::attack) {
-        damagePlayer(other, 33);
+        if (!isPlayerInHurtRecovery(other) &&
+            damagePlayer(other, 33) &&
+            other.data.player.state != PlayerState::dead) {
+          applyPlayerEnemyHurtImpulse(other, enemy);
+        }
       }
       break;
     case ObjectClass::Level:

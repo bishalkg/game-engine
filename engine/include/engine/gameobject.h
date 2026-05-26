@@ -188,6 +188,7 @@ struct PlayerData {
   Timer ultimateRecoveryTimer;
   Timer weaponTimer;
   Timer jumpWindupTimer;
+  bool hurtCooldownActive = false;
   bool jumpImpulseApplied;
   bool playLandingFrame = false;
   PlayerSwingStage swingStage = PlayerSwingStage::None;

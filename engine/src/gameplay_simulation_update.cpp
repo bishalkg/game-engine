@@ -98,6 +98,53 @@ SDL_FRect baseFacing(const GameObject& obj) {
   return c;
 }
 
+bool isPlayerInHurtCooldown(const GameObject& player) {
+  return player.objClass == ObjectClass::Player &&
+         player.data.player.hurtCooldownActive;
+}
+
+bool isPlayerInHurtRecovery(const GameObject& player) {
+  return player.objClass == ObjectClass::Player &&
+         (player.data.player.state == PlayerState::hurt ||
+          player.data.player.hurtCooldownActive);
+}
+
+void clearPlayerCombatState(GameObject& player) {
+  if (player.objClass != ObjectClass::Player) {
+    return;
+  }
+
+  auto& data = player.data.player;
+  data.swingStage = PlayerSwingStage::None;
+  data.queuedFollowupSwing = false;
+  data.meleeDamage = 10;
+  data.activeUltimateCastId = 0;
+  player.collider = baseFacing(player);
+}
+
+void setPlayerLocomotionStateFromMotion(GameObject& player) {
+  if (player.objClass != ObjectClass::Player ||
+      player.data.player.state == PlayerState::dead) {
+    return;
+  }
+
+  player.collider = baseFacing(player);
+  if (!player.grounded) {
+    player.data.player.state = PlayerState::jumping;
+    setAnimationAndPresentation(player, ANIM_JUMP, PresentationVariant::Jump, false);
+    return;
+  }
+
+  if (std::abs(player.velocity.x) > 1e-3f) {
+    player.data.player.state = PlayerState::running;
+    setAnimationAndPresentation(player, ANIM_RUN, PresentationVariant::Run, false);
+    return;
+  }
+
+  player.data.player.state = PlayerState::idle;
+  setAnimationAndPresentation(player, ANIM_IDLE, PresentationVariant::Idle, false);
+}
+
 void widenColliderForSwing(GameObject& obj) {
   const float drawW = obj.spritePixelW / obj.drawScale;
   const float extra = 0.2f * drawW;
@@ -449,30 +496,38 @@ DamageEnemyResult damageEnemy(
   return result;
 }
 
-void damagePlayer(GameObject& player, int damage) {
+bool damagePlayer(GameObject& player, int damage) {
   if (player.objClass != ObjectClass::Player ||
-      player.data.player.state == PlayerState::dead ||
-      player.data.player.state == PlayerState::ultimate) {
-    return;
+      player.data.player.state == PlayerState::dead) {
+    return false;
   }
 
-  if (player.data.player.state == PlayerState::hurt && !player.data.player.damageTimer.isTimedOut()) {
-    return;
+  if (player.data.player.state == PlayerState::ultimate ||
+      player.data.player.state == PlayerState::hurt ||
+      player.data.player.hurtCooldownActive) {
+    return false;
   }
 
   player.shouldFlash = true;
   player.flashTimer.reset();
-  player.data.player.state = PlayerState::hurt;
-  setAnimationAndPresentation(player, ANIM_HIT, PresentationVariant::Hit);
   player.data.player.healthPoints -= damage;
-  player.data.player.damageTimer.reset();
 
   if (player.data.player.healthPoints <= 0) {
     player.data.player.healthPoints = 0;
+    player.data.player.hurtCooldownActive = false;
     player.data.player.state = PlayerState::dead;
     setAnimationAndPresentation(player, ANIM_DIE, PresentationVariant::Die);
     player.velocity = glm::vec2(0.0f);
+    clearPlayerCombatState(player);
+    return true;
   }
+
+  player.data.player.hurtCooldownActive = false;
+  player.data.player.damageTimer.reset();
+  clearPlayerCombatState(player);
+  player.data.player.state = PlayerState::hurt;
+  setAnimationAndPresentation(player, ANIM_HIT, PresentationVariant::Hit);
+  return true;
 }
 
 GameObject makeBulletFromPlayer(const GameObject& player, const GameState& state) {
@@ -521,12 +576,29 @@ float currDirection = 0.0f;
 auto& player = obj.data.player;
 const NetGameInput& input = inputForPlayer(playerInputs, obj.id);
 
+if (player.hurtCooldownActive) {
+  player.damageTimer.step(deltaTime);
+  if (player.damageTimer.isTimedOut()) {
+    player.hurtCooldownActive = false;
+    player.damageTimer.reset();
+  }
+}
+const bool hurtCooldownActive = player.hurtCooldownActive;
+
+if (hurtCooldownActive &&
+    (player.state == PlayerState::swingWeapon ||
+     player.state == PlayerState::ultimate ||
+     player.state == PlayerState::powerup)) {
+  clearPlayerCombatState(obj);
+  setPlayerLocomotionStateFromMotion(obj);
+}
+
 player.weaponTimer.step(deltaTime);
 player.healthRecoveryTimer.step(deltaTime);
 player.manaRecoveryTimer.step(deltaTime);
 player.ultimateRecoveryTimer.step(deltaTime);
-player.meleePressedThisFrame = input.meleePressed;
-player.ultimatePressedThisFrame = input.ultimatePressed;
+player.meleePressedThisFrame = input.meleePressed && !hurtCooldownActive;
+player.ultimatePressedThisFrame = input.ultimatePressed && !hurtCooldownActive;
 
 if (player.healthRecoveryTimer.isTimedOut()) {
   player.healthRecoveryTimer.reset();
@@ -548,16 +620,19 @@ if (input.rightHeld) {
   currDirection += 1.0f;
 }
 const float desiredDirection = currDirection;
+const bool wantFire = input.fireHeld && !hurtCooldownActive;
 
 const bool hasSwingFollowup =
   static_cast<int>(obj.animations.size()) > ANIM_SWING_2 &&
   obj.animations[ANIM_SWING_2].getFrameCount() > 0;
 const bool wantSwing = player.meleePressedThisFrame;
 const bool canSwing =
+  !hurtCooldownActive &&
   player.state != PlayerState::swingWeapon &&
   player.state != PlayerState::ultimate &&
   player.state != PlayerState::powerup;
 const bool canStartUltimate =
+  !hurtCooldownActive &&
   player.unlockedUltimateOne &&
   player.ultimatePressedThisFrame &&
   player.state != PlayerState::dead &&
@@ -568,9 +643,7 @@ const bool canStartUltimate =
   hasAnimation(obj, ANIM_ULTIMATE);
 
 const auto resetSwingState = [&obj]() {
-  obj.data.player.swingStage = PlayerSwingStage::None;
-  obj.data.player.queuedFollowupSwing = false;
-  obj.data.player.meleeDamage = 10;
+  clearPlayerCombatState(obj);
 };
 
 const auto restoreDefaultPlayerState = [&]() {
@@ -621,7 +694,7 @@ const auto handleAttacking = [&](int idleOrMoveAnim,
                                  bool handleJump) {
   if (wantSwing && canSwing) {
     startAttack1(attackAnim, attackPresentation);
-  } else if (input.fireHeld) {
+  } else if (wantFire) {
     setAnimation(obj, shootAnim, false);
     setPresentation(obj, shootPresentation);
 
@@ -891,9 +964,17 @@ switch (player.state) {
     resetSwingState();
     player.activeUltimateCastId = 0;
     obj.collider = baseFacing(obj);
-    if (player.damageTimer.step(deltaTime)) {
-      player.state = PlayerState::idle;
-      setAnimationAndPresentation(obj, ANIM_IDLE, PresentationVariant::Idle);
+    setPresentation(obj, PresentationVariant::Hit);
+    if (obj.currentAnimation == -1) {
+      setAnimationAndPresentation(obj, ANIM_HIT, PresentationVariant::Hit);
+      break;
+    }
+    if (obj.currentAnimation == ANIM_HIT &&
+        obj.animations[ANIM_HIT].isDone()) {
+      obj.animations[ANIM_HIT].reset();
+      player.hurtCooldownActive = true;
+      player.damageTimer.reset();
+      setPlayerLocomotionStateFromMotion(obj);
     }
     break;
   }
