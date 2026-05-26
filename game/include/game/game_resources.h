@@ -30,7 +30,7 @@ namespace game {
 struct EntityResources {
   SDL_Texture *texIdle{}, *texWalk{}, *texRun{}, *texSlide{}, *texAttack{}, *texJump{}, *texHit{},
     *texDie{}, *texShoot{}, *texRunShoot{}, *texSlideShoot{}, *texRunAttack{}, *texAttack2{},
-    *texUltimate{};
+    *texUltimate{}, *texPowerup{};
   std::vector<Animation> anims;
 };
 
@@ -46,6 +46,8 @@ struct Level {
   std::vector<UIManager::Cutscene> cutscenes;
   MIX_Audio* backgroundAudio{nullptr};
   MIX_Track* backgroundTrack{nullptr};
+  MIX_Audio* bossAudio{nullptr};
+  MIX_Track* bossTrack{nullptr};
   MIX_Audio* gameOverAudio{nullptr};
   MIX_Track* gameOverAudioTrack{nullptr};
   MIX_Audio* audioStep{nullptr};
@@ -103,17 +105,17 @@ struct GameResources {
   std::vector<UIManager::Cutscene> characterSelectScene;
 
   MIX_Audio *audioShoot{}, *audioSword1{}, *audioUltimateAttack{}, *audioShootHit{}, *audioBoneImpact{},
-    *audioProjectileEnemyHit{}, *audioEnemyDie{};
+    *audioProjectileEnemyHit{}, *audioEnemyDie{}, *audioPowerupCollect{};
   MIX_Track *shootTrack{}, *sword1Track{}, *ultimateAttackTrack{}, *hitTrack{}, *boneImpactHitTrack{},
-    *enemyProjectileHitTrack{}, *enemyDieTrack{};
+    *enemyProjectileHitTrack{}, *enemyDieTrack{}, *powerupCollectTrack{};
 
   MIX_Audio* audioJump{};
   MIX_Track* jumpTrack{};
 
   MIX_Audio *audioCoinCollect{}, *audioGemCollect{}, *audioCoinPurchase{}, *audioGemPurchase{},
-    *audioDrinkSlurp{};
+    *audioDrinkSlurp{}, *audioFloatingStone{};
   MIX_Track *coinCollectTrack{}, *gemCollectTrack{}, *coinPurchaseTrack{}, *gemPurchaseTrack{},
-    *drinkSlurpTrack{};
+    *drinkSlurpTrack{}, *floatingStoneTrack{};
 
   float m_masterAudioGain = 0.0f;
   MIX_Mixer* mixer = nullptr;

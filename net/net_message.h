@@ -200,6 +200,7 @@ namespace net
       i += sz; // move pointer to next chunk of data
     };
 
+
     // the input to the ByteWrite will deconstruct the struct and write byte by byte each type
     // but where you define how many bytes each piece of data
     std::uint8_t read_u8() { std::uint8_t v; read_bytes(&v, sizeof(v)); return v; };

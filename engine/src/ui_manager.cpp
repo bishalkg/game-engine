@@ -559,7 +559,7 @@ namespace UIManager {
         wantsHandCursor = true;
       }
 
-      drawPlayerStatusBars(snaps);
+      drawStatusBars(snaps);
 
       if (snaps.togglePauseGameplay) {
          act.nextView = GameView::Playing;
@@ -632,7 +632,7 @@ namespace UIManager {
         wantsHandCursor = true;
       }
 
-      drawPlayerStatusBars(snaps);
+      drawStatusBars(snaps);
 
       return act;
   }
@@ -694,7 +694,7 @@ namespace UIManager {
         wantsHandCursor = true;
       }
 
-      drawPlayerStatusBars(snaps);
+      drawStatusBars(snaps);
 
       return act;
   }
@@ -1030,46 +1030,105 @@ namespace UIManager {
       ImGui::PopStyleVar(2);
       ImGui::End();
 
-      drawPlayerStatusBars(snaps);
+      drawStatusBars(snaps);
 
       return act;
   }
 
-  void UI_Manager::drawPlayerStatusBars(const UISnapshots& snaps) {
-      drawPlayerBar("HP", snaps.playerHP, IM_COL32(0, 200, 0, 255), 10.0f, false);
-      drawPlayerBar("Mana", snaps.playerMana, IM_COL32(186, 154, 255, 255), 56.0f, false);
+  void UI_Manager::drawStatusBars(const UISnapshots& snaps) {
+      drawPlayerBar("HP", snaps.playerHP, snaps.maxPlayerHP, IM_COL32(0, 200, 0, 255), 10.0f, 10.0f, 150, 24, false);
+      drawPlayerBar("Mana", snaps.playerMana, snaps.maxPlayerMana, IM_COL32(186, 154, 255, 255), 10.0f, 56.0f, 150, 24, false);
+      if (snaps.playerUltimateUnlocked) {
+        drawPlayerBar(
+          "Ultimate",
+          snaps.playerUltimate,
+          snaps.maxUltimatePoints,
+          IM_COL32(220, 40, 40, 255),
+          10.0f,
+          102.0f,
+          150, 24,
+          snaps.playerUltimateReady);
+      }
+
+      drawBossStatusBar(snaps);
+  }
+
+  void UI_Manager::drawBossStatusBar(const UISnapshots& snaps) {
+      if (snaps.currBossHP <= 0 || snaps.maxBossHP <= 0) {
+        return;
+      }
+
+      int outW = 0;
+      int outH = 0;
+      SDL_GetRenderOutputSize(sdlState.renderer, &outW, &outH);
+      if (outW <= 0 || outH <= 0) {
+        return;
+      }
+
+      constexpr float refW = 640.0f;
+      constexpr float refH = 360.0f;
+      const float scale = std::min(outW / refW, outH / refH);
+      const float gameW = refW * scale;
+      const float gameH = refH * scale;
+      const float gameLeft = (outW - gameW) * 0.5f;
+      const float gameTop = (outH - gameH) * 0.5f;
+
+      const float barW = std::min(gameW * 0.6f, 460.0f * scale);
+      const float barH = std::max(20.0f, 20.0f * scale);
+      const float bottomMargin = 320.0f * scale;
+      const float labelHeight = ImGui::GetTextLineHeightWithSpacing();
+      const float windowPaddingY = 8.0f;
+      const float estimatedWindowH = labelHeight + barH + windowPaddingY;
+
+      const float x = gameLeft + (gameW - barW) * 0.5f;
+      const float y = gameTop + gameH - bottomMargin - estimatedWindowH;
+
       drawPlayerBar(
-        "Ultimate",
-        snaps.playerUltimate,
-        IM_COL32(220, 40, 40, 255),
-        102.0f,
-        snaps.playerUltimateReady);
+        "Boss Health",
+        snaps.currBossHP,
+        snaps.maxBossHP,
+        IM_COL32(220, 50, 50, 255),
+        x,
+        y,
+        static_cast<int>(barW),
+        static_cast<int>(barH),
+        false);
   }
 
 
   void UI_Manager::drawPlayerBar(
     const std::string& name,
     int value,
+    int maxValue,
     ImU32 color,
+    float xOffset,
     float yOffset,
+    int sizeX, int sizeY,
     bool highlightReady) {
-      ImGui::SetNextWindowPos(ImVec2(10, yOffset));
+      ImGui::SetNextWindowPos(ImVec2(xOffset, yOffset));
       const std::string windowName = "HUD##" + name;
+
+      // ImGui::BeginGroup();
       ImGui::Begin(windowName.c_str(), nullptr, ImGuiWindowFlags_NoTitleBar |
                                             ImGuiWindowFlags_NoBackground |
                                             ImGuiWindowFlags_NoResize |
-                                            ImGuiWindowFlags_NoMove);
-      float hpFrac = static_cast<float>(value) / 100.0f; // 0..1
+                                            ImGuiWindowFlags_NoMove |
+                                            ImGuiWindowFlags_NoScrollbar |
+                                          ImGuiWindowFlags_AlwaysAutoResize);
+
+      float hpFrac = static_cast<float>(value) / static_cast<float>(maxValue); // 0..1
       ImGui::TextUnformatted(name.c_str());
-      ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color); // green
+      ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
       const bool flashHighlight =
         highlightReady && std::fmod(ImGui::GetTime(), 1.0) < 0.5;
       ImGui::PushStyleColor(
         ImGuiCol_Border,
         flashHighlight ? IM_COL32(255, 220, 180, 255) : IM_COL32(255, 255, 255, 80));
+
       ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
       ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, flashHighlight ? 2.0f : 1.0f);
-      ImGui::ProgressBar(hpFrac, ImVec2(150, 24));
+      ImGui::ProgressBar(hpFrac, ImVec2(sizeX, sizeY)); // 150 24
+
       if (flashHighlight) {
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         const ImVec2 min = ImGui::GetItemRectMin();

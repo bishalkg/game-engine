@@ -6,7 +6,7 @@
 #include "engine/level_types.h"
 
 enum class PlayerState: std::uint32_t {
-  idle, running, jumping, swingWeapon, ultimate, hurt, dead
+  idle, running, jumping, swingWeapon, ultimate, hurt, dead, powerup
 };
 
 enum class PlayerSwingStage: std::uint32_t {
@@ -24,7 +24,7 @@ enum class EnemyState: std::uint32_t {
 };
 
 enum class MaterialType: std::uint32_t {
-  none, coin, gem, healthPotion, manaPotion, attackUp, defenceUp
+  none, coin, gem, healthPotion, manaPotion, attackUp, defenceUp, flyingStone
 };
 
 enum class MaterialState: std::uint32_t {
@@ -50,6 +50,7 @@ enum class PresentationVariant : std::uint32_t {
   ProjectileHit,
   Present,
   Collapsing,
+  Powerup,
   // Collected
 };
 
@@ -71,17 +72,26 @@ struct PortalData {
 
 struct EnemyData {
   EnemyState state;
-  Timer damageTimer;
-  Timer attackTimer;
-  Timer idleTimer;
+  Timer damageTimer; // how long enemy is in hurt state
+  Timer attackTimer; // how long enemy is in attack state
+  Timer idleTimer; // ??
   int healthPoints;
+  int maxHealthPoints;
   int srcH, srcW;
   uint32_t lastUltimatePlayerId;
   uint32_t lastUltimateCastId;
   float hitStopRemainingSeconds;
   float pendingKnockbackDirection;
   float pendingKnockbackMagnitude;
+  float attack2CooldownSeconds;
+  float attack2RangePadding;
+  float attack2CooldownElapsedSeconds;
+  float activeAttackElapsedSeconds;
   bool hasPendingKnockback;
+  bool isBoss = false;
+  bool shouldDisplayHP = false; // when he boss is encountered display its HP
+  float accelX = 30.0f;
+  float distanceTrigger = 100.0f;
 
 
   EnemyData(): state(EnemyState::idle), damageTimer(0.4f), attackTimer(1.0), idleTimer(1.0) {
@@ -93,6 +103,26 @@ struct EnemyData {
     hitStopRemainingSeconds = 0.0f;
     pendingKnockbackDirection = 0.0f;
     pendingKnockbackMagnitude = 0.0f;
+    attack2CooldownSeconds = 0.0f;
+    attack2RangePadding = 0.0f;
+    attack2CooldownElapsedSeconds = 0.0f;
+    activeAttackElapsedSeconds = 0.0f;
+    hasPendingKnockback = false;
+  };
+
+  EnemyData(bool isBoss, float damageResetTime, float attackResetTime, float idleResetTime, float accelX, float distanceTrigger, int healthPoints): isBoss(isBoss), healthPoints(healthPoints), accelX(accelX), distanceTrigger(distanceTrigger), state(EnemyState::idle), damageTimer(damageResetTime), attackTimer(attackResetTime), idleTimer(idleResetTime) {
+    maxHealthPoints = healthPoints;
+    srcH = 0;
+    srcW = 0;
+    lastUltimatePlayerId = 0;
+    lastUltimateCastId = 0;
+    hitStopRemainingSeconds = 0.0f;
+    pendingKnockbackDirection = 0.0f;
+    pendingKnockbackMagnitude = 0.0f;
+    attack2CooldownSeconds = 0.0f;
+    attack2RangePadding = 0.0f;
+    attack2CooldownElapsedSeconds = 0.0f;
+    activeAttackElapsedSeconds = 0.0f;
     hasPendingKnockback = false;
   };
 };
@@ -158,6 +188,7 @@ struct PlayerData {
   Timer ultimateRecoveryTimer;
   Timer weaponTimer;
   Timer jumpWindupTimer;
+  bool hurtCooldownActive = false;
   bool jumpImpulseApplied;
   bool playLandingFrame = false;
   PlayerSwingStage swingStage = PlayerSwingStage::None;

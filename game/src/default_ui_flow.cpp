@@ -172,6 +172,8 @@ public:
     snaps.multiplayerStatus.clear();
     snaps.showGameplayHud = false;
     snaps.gameplayHud = UIManager::GameplayHudSnapshot{};
+    snaps.currBossHP = 0;
+    snaps.maxBossHP = 0;
 
     // set player values for UI view -> TODO helpers
     if (gameState.playerLayer >= 0 &&
@@ -180,8 +182,12 @@ public:
         gameState.playerIndex < static_cast<int>(gameState.layers[gameState.playerLayer].size())) {
       auto& player = engine.getPlayer();
       snaps.playerHP = player.data.player.healthPoints;
+      snaps.maxPlayerHP = player.data.player.maxHealthPoints;
+      snaps.maxPlayerMana = player.data.player.maxManaPoints;
+      snaps.maxUltimatePoints = player.data.player.maxUltimatePoints;
       snaps.playerMana = player.data.player.manaPoints;
       snaps.playerUltimate = player.data.player.ultimatePoints;
+      snaps.playerUltimateUnlocked = player.data.player.unlockedUltimateOne;
       snaps.playerUltimateReady =
         player.data.player.ultimatePoints >= player.data.player.maxUltimatePoints;
       snaps.gameplayHud.playerCoins = player.data.player.inventory.coins.count;
@@ -190,11 +196,20 @@ public:
       snaps.gameplayHud.playerManaPotions = player.data.player.inventory.manaPotions.count;
       snaps.gameplayHud.playerAttackUps = player.data.player.inventory.attackUps.count;
       snaps.gameplayHud.playerDefenceUps = player.data.player.inventory.defenceUps.count;
+
+      GameObject* boss = engine.getActiveCurrBoss();
+      if (boss) {
+        snaps.currBossHP = boss->data.enemy.healthPoints;
+        snaps.maxBossHP = boss->data.enemy.maxHealthPoints;
+      }
+
     } else {
       snaps.playerHP = 0;
       snaps.playerMana = 0;
       snaps.playerUltimate = 0;
       snaps.playerUltimateReady = false;
+      snaps.playerUltimateUnlocked = false;
+      snaps.maxPlayerHP = 0;
     }
     snaps.gameplayHud.coinCountHudAnim = resources.coinCountUIAnim.get();
     snaps.gameplayHud.gemCountHudAnim = resources.gemCountUIAnim.get();
@@ -310,8 +325,11 @@ public:
     auto& gameState = engine.getGameState();
 
     if (actions.stopBackgroundTrack) {
-      engine.stopAudioSoundtrack(
-        resources.m_currLevel ? resources.m_currLevel->backgroundTrack : nullptr);
+      if (resources.m_currLevel) {
+        engine.stopAudioSoundtrack(resources.m_currLevel->backgroundTrack);
+        engine.stopAudioSoundtrack(resources.m_currLevel->bossTrack);
+      }
+      engine.stopAudioSoundtrack(resources.floatingStoneTrack);
     }
     if (actions.stopGameOverSoundTrack) {
       engine.stopAudioSoundtrack(

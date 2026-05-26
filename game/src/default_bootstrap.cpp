@@ -312,19 +312,96 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
           newLayer.push_back(std::move(enemy));
         }
 
+        if (obj.type == "Boss") {
+          SpriteType spriteType = CHARACTER_NAME_TO_SPRITE_TYPE.at(obj.name);
+          GameObject enemy = createObject(
+            1,
+            1,
+            res.m_currLevel->texCharacterMap.at(spriteType).texIdle,
+            ObjectClass::Enemy,
+            128,
+            128,
+            0,
+            0);
+          enemy.id = nextDynamicId++;
+          enemy.spriteType = spriteType;
+
+          float damageResetTime = 0.3f;
+          float attackResetTime = 0.5f;
+          float idleResetTime = 1.0f;
+          float accelX = 40.0f;
+          float distanceTrigger = 250.0f;
+          int healthPoints = 300;
+          float maxSpeedX = 15;
+          float attack2CooldownSeconds = 6.0f;
+          float attack2RangePadding = 48.f;
+
+          switch (spriteType) {
+            case SpriteType::Boss_Werewolf: {
+              enemy.drawScale = 1.0f;
+              healthPoints = 300;
+              maxSpeedX = 25;
+              accelX = 50.0f;
+              damageResetTime = 0.5f;
+              attackResetTime = 1.0f;
+              break;
+            }
+            case SpriteType::Boss_Evil_Clown: {
+              enemy.drawScale = 1.0f;
+              healthPoints = 300;
+              maxSpeedX = 25;
+              accelX = 50.0f;
+              break;
+            }
+            case SpriteType::Boss_Purple_Dragon: {
+              enemy.drawScale = 0.50f;
+              int healthPoints = 1000;
+              accelX = 60.0f;
+              break;
+            }
+            default:
+              enemy.drawScale = 4.0f;
+              break;
+          }
+          float wFrac = 0.30f;
+          enemy.colliderNorm = {.x = 0.35f, .y = 0.4f, .w = wFrac, .h = 0.6f};
+          enemy.applyScale();
+
+          float feetY = objStartingPos.y;
+          float centerX = objStartingPos.x;
+          enemy.position.x = centerX - enemy.collider.w * 0.5f;
+          enemy.position.y = feetY - (enemy.collider.y + enemy.collider.h);
+          enemy.data.enemy = EnemyData(true, damageResetTime, attackResetTime, idleResetTime, accelX, distanceTrigger, healthPoints);
+          enemy.data.enemy.attack2CooldownSeconds = attack2CooldownSeconds;
+          enemy.data.enemy.attack2RangePadding = attack2RangePadding;
+          enemy.currentAnimation = res.ANIM_IDLE;
+          enemy.presentationVariant = PresentationVariant::Idle;
+          enemy.animations = res.m_currLevel->texCharacterMap.at(spriteType).anims;
+          enemy.dynamic = true;
+          enemy.maxSpeedX = maxSpeedX;
+          newLayer.push_back(std::move(enemy));
+        }
+
         if (obj.type == "Material") {
           SpriteType spriteType = MATERIAL_NAME_TO_SPRITE_TYPE.at(obj.name);
+          const int materialSpriteW = spriteType == SpriteType::FlyingStone ? 160 : 16;
+          const int materialSpriteH = spriteType == SpriteType::FlyingStone ? 128 : 16;
           GameObject material = createObject(
             1,
             1,
             res.m_currLevel->texCharacterMap.at(spriteType).texIdle, // texCharMap also has materials
             ObjectClass::Material,
-            16,
-            16,
+            materialSpriteH,
+            materialSpriteW,
             0,
             0);
           material.id = nextDynamicId++;
           material.spriteType = spriteType;
+          if (spriteType == SpriteType::FlyingStone) {
+            material.drawScale = 1.0f;
+            material.colliderNorm = {.x = 0.45f, .y = 0.4375f, .w = 0.1f, .h = 0.125f};
+            material.applyScale();
+          }
 
           float feetY = objStartingPos.y;
           float centerX = objStartingPos.x;
@@ -339,6 +416,9 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
               break;
             case SpriteType::Gem:
               materialType = MaterialType::gem;
+              break;
+            case SpriteType::FlyingStone:
+              materialType = MaterialType::flyingStone;
               break;
             default:
               break;
@@ -382,11 +462,11 @@ bool initAllTiles(Engine& engine, GameResources& resources, GameState& newGameSt
               break;
             case SpriteType::Player_Marie:
               ultOneUnlocked = pserv.isUltUnlockedForChar(SpriteType::Player_Marie, 1);
-              // TODO populate ultOneUnlocked from progressionService
-
+              player.colliderNorm = {.x = 0.30f, .y = 0.5f, .w = wFrac, .h = 0.5f};
+              player.drawScale = 2.0f;
+              break;
             case SpriteType::Player_Bonkfather:
               ultOneUnlocked = pserv.isUltUnlockedForChar(SpriteType::Player_Bonkfather, 1);
-              // TODO populate ultOneUnlocked from progressionService
               player.colliderNorm = {.x = 0.30f, .y = 0.5f, .w = wFrac, .h = 0.5f};
               player.drawScale = 2.0f;
               break;
@@ -477,7 +557,6 @@ bool switchToLevel(
 
   if (oldLevel == LevelIndex::LEVEL_1 && levelId == LevelIndex::LEVEL_2) {
     progService.markLevelComplete(oldLevel);
-    progService.unlockUltimateForChar(gameState.selectedPlayerSprite, 1); // TODO testing only
 
     if (preservedPlayerState.has_value()) {
       progService.updatePlayerInventory(preservedPlayerState->inventory);

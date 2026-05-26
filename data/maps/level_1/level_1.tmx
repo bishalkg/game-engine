@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="120" height="17" tilewidth="32" tileheight="32" infinite="0" nextlayerid="21" nextobjectid="118">
+<map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="120" height="17" tilewidth="32" tileheight="32" infinite="0" nextlayerid="21" nextobjectid="121">
  <editorsettings>
   <export format="tmx"/>
  </editorsettings>
@@ -1744,12 +1744,12 @@
   </tile>
   <tile id="66">
    <objectgroup draworder="index" id="2">
-    <object id="1" x="0" y="11.2698" width="32" height="20.7302"/>
+    <object id="1" x="0" y="7.77494" width="32" height="21.4947"/>
    </objectgroup>
   </tile>
   <tile id="67">
    <objectgroup draworder="index" id="2">
-    <object id="2" x="0" y="8.88889" width="32" height="23.1111"/>
+    <object id="2" x="0" y="7.90596" width="32" height="23.1111"/>
    </objectgroup>
   </tile>
   <tile id="69">
@@ -1805,7 +1805,7 @@
   <tile id="85">
    <objectgroup draworder="index" id="2">
     <object id="1" x="0" y="80" width="32" height="20.6984"/>
-    <object id="2" x="0" y="8" width="32" height="23.7121"/>
+    <object id="2" x="0.109214" y="8.32764" width="32" height="23.7121"/>
    </objectgroup>
   </tile>
   <tile id="87">
@@ -1833,9 +1833,19 @@
     <object id="1" x="0" y="11.9365" width="32" height="20.0635"/>
    </objectgroup>
   </tile>
+  <tile id="102">
+   <objectgroup draworder="index" id="2">
+    <object id="1" x="0" y="0" width="32" height="32"/>
+   </objectgroup>
+  </tile>
   <tile id="103">
    <objectgroup draworder="index" id="2">
     <object id="1" x="0" y="8" width="32" height="21.3651"/>
+   </objectgroup>
+  </tile>
+  <tile id="104">
+   <objectgroup draworder="index" id="2">
+    <object id="1" x="-0.109214" y="2.94879" width="32" height="29.1604"/>
    </objectgroup>
   </tile>
   <tile id="106">
@@ -2181,7 +2191,8 @@
   <object id="12" name="Skeleton_Warrior" type="Enemy" x="2693.39" y="259.464" width="17.1362" height="10.2817"/>
   <object id="13" name="Minotaur_1" type="Enemy" x="2940.34" y="262.928" width="17.1362" height="10.2817"/>
   <object id="15" name="Level_2" type="Portal" x="3798.73" y="408.084" width="23.0818" height="44.8038" rotation="0.902733"/>
-  <object id="117" name="Player_Mage" type="Player" x="3066.08" y="280.983" width="9.20598" height="8.18749"/>
+  <object id="118" name="Boss_Werewolf" type="Boss" x="3651.72" y="415.708" width="17.1362" height="10.2817"/>
+  <object id="120" name="Player_Mage" type="Player" x="3435.1" y="324.214" width="9.20598" height="8.18749"/>
  </objectgroup>
  <objectgroup id="20" name="Materials">
   <object id="17" name="Coin" type="Material" x="142.478" y="351.711"/>

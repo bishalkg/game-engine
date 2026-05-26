@@ -42,6 +42,8 @@ target_link_libraries(imgui PUBLIC SDL3::SDL3)
 set(ENGINE_SOURCES
   engine/src/engine.cpp
   engine/src/gameplay_simulation.cpp
+  engine/src/gameplay_simulation_collision.cpp
+  engine/src/gameplay_simulation_update.cpp
   engine/src/lan_discovery.cpp
   engine/src/ui_manager.cpp
   engine/src/game_server.cpp
@@ -104,6 +106,7 @@ target_compile_features(game PRIVATE cxx_std_23)
 
 add_executable(net_common_tests
   tests/net_common_tests.cpp
+  game/src/progression_service.cpp
 )
 
 target_include_directories(net_common_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

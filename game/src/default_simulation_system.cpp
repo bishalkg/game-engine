@@ -26,6 +26,8 @@ struct AudioObjectState {
   PlayerState playerState = PlayerState::idle;
   EnemyState enemyState = EnemyState::idle;
   BulletState bulletState = BulletState::inactive;
+  MaterialState materialState = MaterialState::present;
+  MaterialType materialType = MaterialType::none;
   int healthPoints = 0;
   int manaPoints = 0;
   uint32_t coinPickupCueCount = 0;
@@ -124,6 +126,8 @@ SDL_Texture* pickEntityTexture(
         return entityRes.texUltimate;
       }
       return entityRes.texAttack2 ? entityRes.texAttack2 : entityRes.texAttack;
+    case PresentationVariant::Powerup:
+      return entityRes.texPowerup ? entityRes.texPowerup : entityRes.texIdle;
     case PresentationVariant::Idle:
     default:
       break;
@@ -165,6 +169,21 @@ void widenReplicatedColliderForSwing(GameObject& obj) {
 
 }
 
+void widenReplicatedColliderForAttack2(GameObject& obj) {
+  const auto it = ENEMY_CONFIG.find(obj.spriteType);
+  if (it == ENEMY_CONFIG.end()) {
+    widenReplicatedColliderForSwing(obj);
+    return;
+  }
+
+  SDL_FRect c = replicatedBaseFacing(obj);
+  c.w += it->second.attack2RangePadding;
+  if (obj.direction < 0.0f) {
+    c.x -= it->second.attack2RangePadding;
+  }
+  obj.collider = c;
+}
+
 void widenReplicatedColliderForUltimate(GameObject& obj) {
   const float drawW = obj.spritePixelW / obj.drawScale;
   const float drawH = obj.spritePixelH / obj.drawScale;
@@ -190,7 +209,11 @@ void syncReplicatedCollider(GameObject& obj) {
 
   if (obj.objClass == ObjectClass::Enemy) {
     if (obj.data.enemy.state == EnemyState::attack) {
-      widenReplicatedColliderForSwing(obj);
+      if (obj.currentAnimation == ANIM_SWING_2) {
+        widenReplicatedColliderForAttack2(obj);
+      } else {
+        widenReplicatedColliderForSwing(obj);
+      }
     } else {
       obj.collider = replicatedBaseFacing(obj);
     }
@@ -255,8 +278,21 @@ GameObject buildReplicatedObject(SimContext& ctx, const game_engine::NetGameObje
   obj.dynamic = true;
 
   if (snap.type == ObjectClass::Material) {
+    if (snap.spriteType == SpriteType::FlyingStone) {
+      obj.spritePixelW = 160;
+      obj.spritePixelH = 128;
+    }
+    if (const EntityResources* entityRes = findEntityResources(ctx.resources, snap.spriteType)) {
+      obj.animations = entityRes->anims;
+    }
     obj.drawScale = 1.0f;
-    obj.collider = {.x = 0, .y = 0, .w = obj.spritePixelW, .h = obj.spritePixelW};
+    if (snap.spriteType == SpriteType::FlyingStone) {
+      obj.colliderNorm = {.x = 0.45f, .y = 0.4375f, .w = 0.1f, .h = 0.125f};
+      obj.applyScale();
+    } else {
+      obj.collider = {.x = 0, .y = 0, .w = obj.spritePixelW, .h = obj.spritePixelH};
+      obj.baseCollider = obj.collider;
+    }
     obj.data.material = snap.data.material;
   } else if (snap.type == ObjectClass::Projectile) {
     obj.drawScale = 2.0f;
@@ -567,6 +603,9 @@ AudioStateMap captureAudioState(const game_engine::GameState& gameState) {
       } else if (obj.objClass == ObjectClass::Enemy) {
         state.enemyState = obj.data.enemy.state;
         state.healthPoints = obj.data.enemy.healthPoints;
+      } else if (obj.objClass == ObjectClass::Material) {
+        state.materialState = obj.data.material.state;
+        state.materialType = obj.data.material.type;
       }
       states[{obj.objClass, obj.id}] = state;
     }
@@ -615,6 +654,53 @@ void persistInventorySnapshot(
   game::ProgressionService& progService,
   const Inventory& inventory) {
   progService.updatePlayerInventory(inventory);
+  engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
+}
+
+bool localUltimateOneUnlocked(game_engine::GameState& gameState, uint32_t playerID) {
+  if (GameObject* player = findPlayerById(gameState, playerID)) {
+    return player->data.player.unlockedUltimateOne;
+  }
+  return false;
+}
+
+void applyLevelUnlockForFlyingStone(
+  LevelIndex levelId,
+  game_engine::GameState& gameState,
+  game::ProgressionService& progService) {
+  switch (levelId) {
+    case LevelIndex::LEVEL_1:
+      for (auto& layer : gameState.layers) {
+        for (auto& obj : layer) {
+          if (obj.objClass != ObjectClass::Player) {
+            continue;
+          }
+          obj.data.player.unlockedUltimateOne = true;
+          progService.unlockUltimateForChar(obj.spriteType, 1);
+        }
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+void persistLocalUltimateUnlockIfNew(
+  game_engine::Engine& engine,
+  game_engine::GameState& gameState,
+  game::ProgressionService& progService,
+  uint32_t playerID,
+  bool wasUnlocked) {
+  if (wasUnlocked) {
+    return;
+  }
+
+  GameObject* player = findPlayerById(gameState, playerID);
+  if (!player || !player->data.player.unlockedUltimateOne) {
+    return;
+  }
+
+  progService.unlockUltimateForChar(player->spriteType, 1);
   engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
 }
 
@@ -896,11 +982,17 @@ void playSimulationAudio(
   bool enemyDamaged = false;
   bool enemyDied = false;
   bool enemyDamagedByMelee = false;
+  bool flyingStoneConsumed = false;
   bool localPlayerDied = false;
   AudioStateMap after = captureAudioState(gameState);
   for (const auto& [key, prev] : before) {
     const auto afterIt = after.find(key);
     if (afterIt == after.end()) {
+      if (key.first == ObjectClass::Material &&
+          prev.materialType == MaterialType::flyingStone &&
+          prev.materialState == MaterialState::present) {
+        flyingStoneConsumed = true;
+      }
       continue;
     }
 
@@ -920,6 +1012,12 @@ void playSimulationAudio(
         enemyDied = true;
       }
     }
+    if (key.first == ObjectClass::Material &&
+        prev.materialType == MaterialType::flyingStone &&
+        prev.materialState == MaterialState::present &&
+        curr.materialState != MaterialState::present) {
+      flyingStoneConsumed = true;
+    }
     if (key.first == ObjectClass::Player &&
         key.second == localPlayerID &&
         prev.playerState != PlayerState::dead &&
@@ -933,6 +1031,12 @@ void playSimulationAudio(
   }
   if (enemyDied && resources.audioEnemyDie) {
     MIX_PlayAudio(resources.mixer, resources.audioEnemyDie);
+  }
+  if (flyingStoneConsumed &&
+      localPlayer &&
+      localPlayer->data.player.state == PlayerState::powerup &&
+      resources.audioPowerupCollect) {
+    MIX_PlayAudio(resources.mixer, resources.audioPowerupCollect);
   }
   if (enemyDamagedByMelee && resources.boneImpactHitTrack) {
     MIX_PlayTrack(resources.boneImpactHitTrack, 0);
@@ -959,6 +1063,111 @@ void refreshPresentation(game::GameResources& resources, game_engine::GameState&
   }
 }
 
+void resetActiveBossEncounter(game_engine::GameState& gameState) {
+  for (auto& layer : gameState.layers) {
+    for (auto& obj : layer) {
+      if (obj.objClass != ObjectClass::Enemy ||
+          !obj.data.enemy.isBoss ||
+          !obj.data.enemy.shouldDisplayHP) {
+        continue;
+      }
+
+      auto& boss = obj.data.enemy;
+      boss.healthPoints = boss.maxHealthPoints;
+      boss.shouldDisplayHP = false;
+      boss.state = EnemyState::idle;
+      boss.hitStopRemainingSeconds = 0.0f;
+      boss.pendingKnockbackDirection = 0.0f;
+      boss.pendingKnockbackMagnitude = 0.0f;
+      boss.hasPendingKnockback = false;
+
+      obj.velocity = glm::vec2(0.0f);
+      obj.presentationVariant = PresentationVariant::Idle;
+      obj.spriteFrame = 1;
+      if (ANIM_IDLE >= 0 &&
+          ANIM_IDLE < static_cast<int>(obj.animations.size()) &&
+          obj.animations[ANIM_IDLE].getFrameCount() > 0) {
+        obj.currentAnimation = ANIM_IDLE;
+        obj.animations[ANIM_IDLE].reset();
+      } else {
+        obj.currentAnimation = -1;
+      }
+    }
+  }
+}
+
+bool hasActiveBossHealthBar(const game_engine::GameState& gameState) {
+  for (const auto& layer : gameState.layers) {
+    for (const auto& obj : layer) {
+      if (obj.objClass == ObjectClass::Enemy &&
+          obj.data.enemy.isBoss &&
+          obj.data.enemy.shouldDisplayHP) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+void updateLevelCombatSoundtrack(
+  game_engine::Engine& engine,
+  game::GameResources& resources,
+  const game_engine::GameState& gameState) {
+  if (!resources.m_currLevel) {
+    return;
+  }
+
+  const bool bossActive = hasActiveBossHealthBar(gameState) &&
+                          resources.m_currLevel->bossTrack != nullptr;
+  if (bossActive) {
+    engine.stopAudioSoundtrack(resources.m_currLevel->backgroundTrack);
+    engine.setAudioSoundtrack(resources.m_currLevel->bossTrack);
+    return;
+  }
+
+  engine.stopAudioSoundtrack(resources.m_currLevel->bossTrack);
+  engine.setAudioSoundtrack(resources.m_currLevel->backgroundTrack);
+}
+
+bool isFlyingStoneVisibleInViewport(const game_engine::GameState& gameState) {
+  for (const auto& layer : gameState.layers) {
+    for (const auto& obj : layer) {
+      if (obj.objClass != ObjectClass::Material ||
+          obj.spriteType != SpriteType::FlyingStone ||
+          obj.data.material.state == MaterialState::collected) {
+        continue;
+      }
+
+      const SDL_FRect drawRect{
+        obj.position.x,
+        obj.position.y,
+        obj.spritePixelW / obj.drawScale,
+        obj.spritePixelH / obj.drawScale,
+      };
+      SDL_FRect overlap{};
+      if (SDL_GetRectIntersectionFloat(&drawRect, &gameState.mapViewport, &overlap)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+void updateFloatingStoneLoopAudio(
+  game_engine::Engine& engine,
+  game::GameResources& resources,
+  const game_engine::GameState& gameState) {
+  if (!resources.floatingStoneTrack) {
+    return;
+  }
+
+  if (isFlyingStoneVisibleInViewport(gameState)) {
+    engine.setAudioSoundtrack(resources.floatingStoneTrack);
+  } else {
+    engine.stopAudioSoundtrack(resources.floatingStoneTrack);
+  }
+}
+
 class DefaultSimulationSystem final : public game::ISimulationSystem {
 public:
   void update(
@@ -973,6 +1182,7 @@ public:
     stepLocalHitStop(ctx.gameState, deltaTime);
 
     if (ctx.gameState.currentView == UIManager::GameView::LevelLoading) {
+      engine.stopAudioSoundtrack(resources.floatingStoneTrack);
       return;
     }
 
@@ -982,8 +1192,10 @@ public:
             ctx.gameState.currentView == UIManager::GameView::PauseMenu ||
             ctx.gameState.currentView == UIManager::GameView::ShopMenu ||
             ctx.gameState.currentView == UIManager::GameView::InventoryMenu) {
-          engine.setAudioSoundtrack(
-            resources.m_currLevel ? resources.m_currLevel->backgroundTrack : nullptr);
+          updateLevelCombatSoundtrack(engine, resources, ctx.gameState);
+          updateFloatingStoneLoopAudio(engine, resources, ctx.gameState);
+        } else {
+          engine.stopAudioSoundtrack(resources.floatingStoneTrack);
         }
         playLocalMultiplayerFireAudio(engine, resources, ctx.gameState, deltaTime);
 
@@ -1026,6 +1238,8 @@ public:
         const AudioStateMap before = captureAudioState(ctx.gameState);
         const InventorySnapshot beforeInventory =
           captureInventorySnapshot(ctx.gameState, client->GetPlayerID());
+        const bool localUltimateWasUnlocked =
+          localUltimateOneUnlocked(ctx.gameState, client->GetPlayerID());
 
         // read in GameState snapshot coming from the server
         client->ProcessServerMessages();
@@ -1042,6 +1256,12 @@ public:
             latestSnapshot,
             client->GetPlayerID(),
             forceFullRebuild);
+          persistLocalUltimateUnlockIfNew(
+            ctx.engine,
+            ctx.gameState,
+            ctx.progService,
+            client->GetPlayerID(),
+            localUltimateWasUnlocked);
           startReplicatedHitStop(ctx.gameState, latestSnapshot.hitStopEvent);
           if (client->NeedsFullRebuild()) {
             client->MarkFullRebuildApplied();
@@ -1065,6 +1285,8 @@ public:
             client->GetPlayerID(),
             deltaTime,
             false);
+          updateLevelCombatSoundtrack(engine, resources, ctx.gameState);
+          updateFloatingStoneLoopAudio(engine, resources, ctx.gameState);
           if (ctx.gameState.playerIndex >= 0) {
             auto& player = engine.getPlayer();
             updateMapViewport(ctx, player);
@@ -1089,11 +1311,12 @@ public:
         ctx.gameState.currentView != UIManager::GameView::PauseMenu &&
         ctx.gameState.currentView != UIManager::GameView::ShopMenu &&
         ctx.gameState.currentView != UIManager::GameView::InventoryMenu) {
+      engine.stopAudioSoundtrack(resources.floatingStoneTrack);
       return;
     }
 
-    engine.setAudioSoundtrack(
-      resources.m_currLevel ? resources.m_currLevel->backgroundTrack : nullptr);
+    updateLevelCombatSoundtrack(engine, resources, ctx.gameState);
+    updateFloatingStoneLoopAudio(engine, resources, ctx.gameState);
 
     if (!actions.blockGameplayUpdates && ctx.gameState.playerIndex >= 0) {
       const AudioStateMap before = captureAudioState(ctx.gameState);
@@ -1111,10 +1334,16 @@ public:
           victim,
           game_engine::hitStopDurationSeconds(strength));
       };
+      hooks.onFlyingStoneCollected = [&](LevelIndex levelId) {
+        applyLevelUnlockForFlyingStone(levelId, ctx.gameState, progService);
+        engine.writeToSlotPath("slot_1", progService.serealizeSaveState());
+      };
       hooks.cullProjectilesByViewport = true;
       hooks.projectileViewport = ctx.gameState.mapViewport;
       game_engine::stepGameplaySimulation(ctx.gameState, playerInputs, deltaTime, hooks);
       refreshPresentation(resources, ctx.gameState);
+      updateLevelCombatSoundtrack(engine, resources, ctx.gameState);
+      updateFloatingStoneLoopAudio(engine, resources, ctx.gameState);
       playSimulationAudio(resources, before, ctx.gameState, engine.getPlayer().id, deltaTime, true);
       updateMapViewport(ctx, engine.getPlayer());
     }
@@ -1123,11 +1352,23 @@ public:
       ctx.gameState.currentView == UIManager::GameView::GameOver &&
       previousView != UIManager::GameView::GameOver;
     if (enteredGameOver) {
+      resetActiveBossEncounter(ctx.gameState);
+      if (resources.m_currLevel) {
+        engine.stopAudioSoundtrack(resources.m_currLevel->backgroundTrack);
+        engine.stopAudioSoundtrack(resources.m_currLevel->bossTrack);
+      }
+      engine.stopAudioSoundtrack(resources.floatingStoneTrack);
       engine.setAudioSoundtrack(
         resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr,
         0);
     } else if (ctx.gameState.currentView != UIManager::GameView::GameOver &&
                ctx.gameState.evaluateGameOver()) {
+      resetActiveBossEncounter(ctx.gameState);
+      if (resources.m_currLevel) {
+        engine.stopAudioSoundtrack(resources.m_currLevel->backgroundTrack);
+        engine.stopAudioSoundtrack(resources.m_currLevel->bossTrack);
+      }
+      engine.stopAudioSoundtrack(resources.floatingStoneTrack);
       engine.setAudioSoundtrack(
         resources.m_currLevel ? resources.m_currLevel->gameOverAudioTrack : nullptr,
         0);

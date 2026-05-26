@@ -21,7 +21,7 @@
 
 namespace game_engine {
 
-  static constexpr std::uint16_t VERSION = 9;
+  static constexpr std::uint16_t VERSION = 11;
   static constexpr std::uint16_t MSG_SNAPSHOT = 1;
 
   // use std::ByteWriter, ByteReader to write and read GameStateSnapshot
@@ -317,6 +317,9 @@ namespace game_engine {
           case ObjectClass::Enemy: {
             w.write_enum<EnemyState>(obj.data.enemy.state);
             w.write_u32(static_cast<uint32_t>(obj.data.enemy.healthPoints));
+            w.write_u32(static_cast<uint32_t>(obj.data.enemy.maxHealthPoints));
+            w.write_bool(obj.data.enemy.isBoss);
+            w.write_bool(obj.data.enemy.shouldDisplayHP);
             w.write_u32(static_cast<uint32_t>(obj.data.enemy.srcH));
             w.write_u32(static_cast<uint32_t>(obj.data.enemy.srcW));
             w.write_float(obj.data.enemy.hitStopRemainingSeconds);
@@ -421,6 +424,9 @@ namespace game_engine {
             new (&obj.data.enemy) EnemyData{}; // set active member
             obj.data.enemy.state = r.read_enum<EnemyState>();
             obj.data.enemy.healthPoints = r.read_u32();
+            obj.data.enemy.maxHealthPoints = r.read_u32();
+            obj.data.enemy.isBoss = r.read_bool();
+            obj.data.enemy.shouldDisplayHP = r.read_bool();
             obj.data.enemy.srcH = r.read_u32();
             obj.data.enemy.srcW = r.read_u32();
             obj.data.enemy.hitStopRemainingSeconds = r.read_float();

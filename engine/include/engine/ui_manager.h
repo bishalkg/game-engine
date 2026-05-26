@@ -109,9 +109,15 @@ namespace UIManager {
   struct UISnapshots {
     LoadingSnapshot loading; /* add title/pause data */
     int playerHP;
+    int maxPlayerHP;
+    int maxPlayerMana;
+    int maxUltimatePoints;
     int playerMana;
+    int currBossHP;
+    int maxBossHP;
     int playerUltimate;
     bool playerUltimateReady = false;
+    bool playerUltimateUnlocked = false;
     ImVec2 winDims;
     float deltaTime;
     float currVolume;
@@ -202,10 +208,14 @@ namespace UIManager {
       void drawPlayerBar(
         const std::string& name,
         int value,
+        int maxValue,
         ImU32 color,
+        float xOffset,
         float yOffset,
+        int sizeX, int sizeY,
         bool highlightReady);
-      void drawPlayerStatusBars(const UISnapshots& snaps);
+      void drawStatusBars(const UISnapshots& snaps);
+      void drawBossStatusBar(const UISnapshots& snaps);
 
       void drawGameplayHudCounts(const game_engine::SDLState& sdlState);
 

@@ -27,13 +27,14 @@ const int ANIM_RUN_ATTACK = 10;
 const int ANIM_SWING_2 = 11;
 const int ANIM_ULTIMATE = 12;
 const int ANIM_COLLECT = 13;
+const int ANIM_POWERUP = 14;
 
 enum class SpriteType: std::uint32_t {
   // Characters
-  Player_Knight, Player_Mage, Minotaur_1, Skeleton_Warrior, Red_Werewolf, Player_Marie, Skeleton_Pikeman, Player_Bonkfather,
+  Player_Knight, Player_Mage, Minotaur_1, Skeleton_Warrior, Red_Werewolf, Player_Marie, Skeleton_Pikeman, Player_Bonkfather, Boss_Werewolf, Boss_Evil_Clown, Boss_Purple_Dragon,
 
   // Materials
-  Coin, Gem
+  Coin, Gem, FlyingStone
 };
 
 struct SpriteAssetPaths {
@@ -53,12 +54,15 @@ struct SpriteAssetPaths {
   std::string slideShootTex;
   std::string jumpTex;
   std::string ultimateTex;
+  std::string powerupTex;
 
 };
 
 struct SpriteAssets {
   SpriteAssetPaths paths;
   std::unordered_map<int, std::pair<int, float>> animSettings; // ressources::ANIM_IDLE -> {framecount, length}
+  float attack2CooldownSeconds = 0.0f;
+  float attack2RangePadding = 0.0f;
 };
 
 struct CutsceneAsset {
@@ -81,6 +85,7 @@ struct LevelAssets {
   std::string background2PathName; //Flora1x32
   std::string background1PathName; //Flora1x32
   std::string backgroundAudioPath; // data/audio/Level_3_Final_Floor.wav
+  std::string bossAudioPath;
   std::string gameOverAudioPath;
   std::string stepAudioPath;
   std::vector<SpriteType> enemyTypes;
