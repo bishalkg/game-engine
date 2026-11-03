@@ -1,7 +1,7 @@
 # 2D Game Engine
 
 2D SDL3-based game project split into an `engine` static library and a `game` app.
-It is meant to be used alongside `Tiled` to create levels and `Asperite` to create textures.
+It is meant to be used alongside `Tiled` to create levels and `Aseprite` to create textures.
 
 ## Repo Layout
 
